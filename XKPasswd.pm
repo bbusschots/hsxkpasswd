@@ -1,7 +1,9 @@
 package XKPasswd;
 
 use strict;
+use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
+use English qw( -no_match_vars ); # for more readable code
 
 # Copyright (c) 2014, Bart Busschots T/A Bartificer Web Solutions
 # All rights reserved.
@@ -25,18 +27,253 @@ use Carp; # for nicer 'exception' handling for users of the module
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# The views and conclusions contained in the software and documentation are those
-# of the authors and should not be interpreted as representing official policies, 
-# either expressed or implied, of the FreeBSD Project.
 
 #==============================================================================
 # Code
 #==============================================================================
 
 #
-# Constructor
+# Constants
 #
+
+# version info
+use version; our $VERSION = qv('2.1_01');
+
+# utility variables
+my $_CLASS = 'XKPasswd';
+
+#
+# Constructor -----------------------------------------------------------------
+#
+
+#####-SUB-######################################################################
+# Type       : CONSTRUCTOR (CLASS)
+# Purpose    : Instantiate an object of type XKPasswd
+# Returns    : An object of type XKPasswd
+# Arguments  : 1. OPTIONAL - a configuration hashref
+#              2. OPTIONAL - a true value to enter debug mode
+# Throws     : Croaks if the function is called in an invalid way, or with an invalid config
+# Notes      : For valid configuarion options see POD documentation below
+# See Also   :
+sub new{
+    my $class = shift;
+    my $config = shift;
+    my $debug = shift;
+    
+    # validate args
+    unless($class && $class eq $_CLASS){
+        croak((caller 0)[3].'() - invalid invocation of constructor');
+    }
+    
+    # initialise the object
+    my $instance = {
+        # 'public' instance variables
+        debug => 0,
+        # 'PRIVATE' internal variables
+        _CONFIG => {},
+        _CACHE_DICTIONARY_FULL => [], # a cache of all words found in the dictionary file
+        _CACHE_DICTIONARY_LIMITED => [], # a cache of all the words found in the dictionary file that meet the length criteria
+        _CACHE_RANDOM => [], # a cache of random numbers (as floating points between 0 and 1)
+    };
+    if($debug){
+        $instance->{debug} = 1;
+    }
+    bless $instance, $class;
+    
+    # if no config was passed, use a default one
+    unless($config){
+        $config = default_config();
+    }
+    
+    # load the config
+    $instance->load_config($config);
+    
+    # return the initialised object
+    return $instance;
+}
+
+#
+# Public Class (Static) functions ---------------------------------------------
+#
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : generate a config hashref populated with the default values
+# Returns    : a hashref
+# Arguments  : NONE
+# Throws     : NOTHING
+# Notes      :
+# See Also   :
+sub default_config{
+    # no need to check how this function was invoked, it just spits out a hashref
+    return {
+        dictionary_file_path => 'dict.txt', # defaults to a file called dict.txt in the current working directory
+        symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ?}],
+        word_length_min => 4,
+        word_length_max => 8,
+        separator_character => 'RANDOM',
+        padding_digits_before => 2,
+        padding_digits_after => 2,
+        padding_type => 'FIXED',
+        padding_character => 'RANDOM',
+        padding_characters_before => 2,
+        padding_characters_after => 2,
+        case_transform => 'NONE',
+    };
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : validate a config hashref
+# Returns    : 1 if the config is valid, 0 otherwise
+# Arguments  : 1. a hashref to validate
+#              2. OPTIONAL - a true value to throw exception on error
+# Throws     : Croaks on invalid args, or on error if second arg is truthy
+# Notes      :
+# See Also   :
+## no critic (ProhibitExcessComplexity);
+sub is_valid_config{
+    my $class = shift;
+    my $config = shift;
+    my $carp = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        croak((caller 0)[3].'() - invalid invocation of class method');
+    }
+    unless($config && ref $config eq 'HASH'){
+        croak((caller 0)[3].'() - invalid arguments');
+    }
+    
+    #
+    # check the keys
+    #
+    
+    # the dictionary
+    unless($config->{dictionary_file_path} && -f $config->{dictionary_file_path}){
+        croak('Invalid or missing dictionary_file_path - must a valid file path') if $carp;
+        return 0;
+    }
+    
+    # the symbol alphabet
+    unless($config->{symbol_alphabet} && ref $config->{symbol_alphabet} eq 'ARRAY' && scalar $config->{symbol_alphabet} >= 5){
+        croak('Invalid or missing symbol_alphabet - must be an array ref contianing at least 5 elements') if $carp;
+        return 0;
+    }
+    
+    # the word length restrictions
+    unless($config->{word_length_min} && $config->{word_length_min} =~ m/^\d+$/sx && $config->{word_length_min} > 3){
+        croak('Invalid or missing word_length_min - must be an integer greater than 3') if $carp;
+        return 0;
+    }
+    unless($config->{word_length_max} && $config->{word_length_max} =~ m/^\d+$/sx && $config->{word_length_max} > 3){
+        croak('Invalid or missing word_length_max - must be an integer greater than 3') if $carp;
+        return 0;
+    }
+    if($config->{word_length_max} < $config->{word_length_min}){
+        croak('word_length_max must be greater than or equal to word_length_min') if $carp;
+        return 0;
+    }
+    
+    # the separator character
+    unless($config->{separator_character} && $config->{separator_character} =~ m/^[.]|(NONE)|(RANDOM)$/sx){
+        croak(q{Invalid or missing separator_character - must be a single character, 'NONE' or 'RANDOM'}) if $carp;
+        return 0;
+    }
+    
+    # padding digits
+    unless(defined $config->{padding_digits_before} && $config->{padding_digits_before} =~ m/^\d+$/sx){
+        croak('Invalid or missing padding_digits_before - must be an integer greater than or equal to 0') if $carp;
+        return 0;
+    }
+    unless(defined $config->{padding_digits_after} && $config->{padding_digits_after} =~ m/^\d+$/sx){
+        croak('Invalid or missing padding_digits_after - must be an integer greater than or equal to 0') if $carp;
+        return 0;
+    }
+    
+    # padding characters
+    unless($config->{padding_type} && $config->{padding_type} =~ m/^(NONE)|(FIXED)|(ADAPTIVE)$/sx){
+        croak(q{Invalid or missing padding_type - must be 'NONE', 'FIXED', or 'ADAPTIVE'}) if $carp;
+        return 0;
+    }
+    if($config->{padding_type} eq 'FIXED'){
+        unless($config->{padding_characters_before} && $config->{padding_characters_before} =~ m/^\d+$/sx && $config->{padding_characters_before} > 1){
+            croak(q{Invalid or missing padding_characters_before (required by padding_type='FIXED') - must be a positive integer}) if $carp;
+            return 0;
+        }
+        unless($config->{padding_characters_after} && $config->{padding_characters_after} =~ m/^\d+$/sx && $config->{padding_characters_after} > 1){
+            croak(q{Invalid or missing padding_characters_after (required by padding_type='FIXED') - must be a positive integer}) if $carp;
+            return 0;
+        }
+    }elsif($config->{padding_type} eq 'ADAPTIVE'){
+        unless($config->{pad_to_length} && $config->{pad_to_length} =~ m/^\d+$/sx && $config->{pad_to_length} >= 12){
+            croak(q{Invalid or missing pad_to_length (required by padding_type='ADAPTIVE') - must be an integer greater than or equal to 12}) if $carp;
+            return 0;
+        }
+    }
+    
+    # case transformations
+    unless($config->{case_transform} && $config->{case_transform} =~ m/^(NONE)|(UPPER)|(LOWER)|(CAPITALISE)|(INVERSE)|(RANDOM)$/sx){
+        croak(q{Invalid or missing case_transform - must be 'NONE', 'UPPER', 'LOWER', 'CAPITALISE', 'INVERSE', or 'RANDOM'}) if $carp;
+        return 0;
+    }
+    
+    # if we got this far, all is well, so return true
+    return 1;
+}
+## use critic
+
+#
+# Public Instance functions ---------------------------------------------------
+#
+
+#####-SUB-######################################################################
+# Type       : INSTANCE
+# Purpose    : Load a configuration hashref into the instance
+# Returns    : The instance - to facilitate function chaining
+# Arguments  : 1. a configuartion hashref
+# Throws     : Croaks if the function is called in an invalid way, with invalid
+#              arguments, or with an invalid config
+# Notes      : For valid configuarion options see POD documentation below
+# See Also   :
+sub load_config{
+    my $self = shift;
+    my $config = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS) && $config){
+        croak((caller 0)[3].'() - invalid arguments - no source passed');
+    }
+    unless($config && ref $config eq 'HASH'){
+        croak((caller 0)[3].'() - invalid arguments - must pass the config as a hashref');
+    }
+    eval{
+        $_CLASS->is_valid_config($config, 1); # returns 1 if valid
+    }or do{
+        my $msg = (caller 0)[3].'() - invoked with invalid hashref';
+        if($self->{debug}){
+            $msg .= " ($EVAL_ERROR)";
+        }
+        croak($msg);
+    };
+    
+    # save the config into the instance
+    $self->{_CONFIG} = $config;
+    
+    # init the dictionary caches
+    # TO DO
+    
+    # return a reference to self to facilitate function chaining
+    return $self;
+}
+
+#
+# 'Private' functions ---------------------------------------------------------
+#
+
+
+1; # because Perl is just a little bit odd :)
+__END__
 
 #==============================================================================
 # User Documentation
@@ -48,13 +285,22 @@ XKPasswd - A secure memorable password generator
 
 =head1 VERSION
 
-This documentation refers to XKPasswd version 2.0.1.
+This documentation refers to XKPasswd version 2.1.1.
 
 =head1 SYNOPSIS
 
     use XKPasswd;
 
-    # TO DO - ADD CODE EXAMPLES
+    # get a default config hashref
+    my $config = XKPasswd->default_config();
+
+    # make any desired alterations
+    $config->{dictionary_file_path} = '/usr/share/dict/words';
+
+    # instantiate an XKPasswd object
+    my $xkpasswd = XKPasswd->new($config);
+
+    # TO DO - finish example
 
 =head1 DESCRIPTION
 
@@ -202,6 +448,41 @@ This module has no known incompatibilities.
 There are no known bugs in this module.
 
 Please report problems to Bart Busschots (L<mailto:bart@bartificer.net>) Patches are welcome.
+
+=head1 LICENCE AND COPYRIGHT
+
+Copyright (c) 2014, Bart Busschots T/A Bartificer Web Solutions
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+=over 4
+
+=item 1.
+
+Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer. 
+
+=item 2.
+
+Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+=back
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 
 =head1 AUTHOR
 

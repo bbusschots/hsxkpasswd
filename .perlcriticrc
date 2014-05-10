@@ -1,0 +1,92 @@
+#
+# Global settings
+#
+
+
+# set the default severity to 1
+severity = 1
+# set the output format so that it shows the package that is generating the error
+verbose = [%p] %m at line %l, column %c.  %e.  (Severity: %s)\n
+
+
+#
+# packages where we are setting custom options
+#
+
+
+# allow if and unless to be used in their postfix form
+[ControlStructures::ProhibitPostfixControls]
+allow = if unless
+
+
+# allow the backtick opperator, but only when it's results are being read
+[InputOutput::ProhibitBacktickOperators]
+only_in_void_context = 1
+
+
+# force the output of system calls to be read, except for print and system
+# also promopted from severity 1 to 2
+[InputOutput::RequireCheckedSyscalls]
+severity = 2
+functions = :builtins
+exclude_functions = print system close sleep
+
+
+# allow nesting to 8 levels - consider default of 3 for programs, but often need more for scripts
+[ControlStructures::ProhibitDeepNests]
+max_nests = 8
+
+
+# allow the punctuation variable needed for 'good' slurping
+[Variables::ProhibitPunctuationVars]
+allow = $/
+
+
+# allow ony a few select package variables
+[Variables::ProhibitPackageVars]
+packages = DBI
+
+
+#
+# promote the following from severity 1 to 2
+#
+[ValuesAndExpressions::ProhibitInterpolationOfLiterals]
+severity = 2
+[RegularExpressions::ProhibitEscapedMetacharacters]
+severity = 2
+[InputOutput::RequireBracedFileHandleWithPrint]
+severity = 2
+
+
+#
+# Exclude pakages that are not relevant in our environment
+#
+
+
+# Excludes from levels 2-5
+#[-Miscellanea::RequireRcsKeywords]
+[-Modules::ProhibitExcessMainComplexity]
+[-Modules::RequireVersionVar]
+[-ControlStructures::ProhibitUnlessBlocks]
+[-RegularExpressions::RequireLineBoundaryMatching]
+[-ValuesAndExpressions::ProhibitMagicNumbers]
+[-InputOutput::RequireCheckedClose]
+
+
+# Excludes from level 1
+[-CodeLayout::RequireTidyCode]
+# prohibiting white space is good in theory but the implementation messes up on completely blank lines
+# makes Komodo edit impossible to use, so reluctantly excluding this one out.
+[-CodeLayout::ProhibitTrailingWhitespace]
+
+
+# Excludes from level 3
+# I just disagree with Conway about the ease of reading if! and unless
+[-ControlStructures::ProhibitNegativeExpressionsInUnlessAndUntilConditions]
+
+
+#
+# Customise POD requirements
+#
+[Documentation::RequirePodSections]
+lib_sections    = NAME | VERSION | SYNOPSIS | DESCRIPTION | SUBROUTINES/METHODS | CONFIGURATION AND ENVIRONMENT | DEPENDENCIES | INCOMPATIBILITIES | BUGS AND LIMITATIONS | AUTHOR | LICENCE AND COPYRIGHT
