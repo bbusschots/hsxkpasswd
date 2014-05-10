@@ -5,35 +5,18 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use English qw( -no_match_vars ); # for more readable code
 
-# Copyright (c) 2014, Bart Busschots T/A Bartificer Web Solutions
-# All rights reserved.
+# Copyright (c) 2014, Bart Busschots T/A Bartificer Web Solutions All rights
+# reserved.
 #
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-# 1. Redistributions of source code must retain the above copyright notice, this
-#    list of conditions and the following disclaimer. 
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-#    this list of conditions and the following disclaimer in the documentation
-#    and/or other materials provided with the distribution.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-# ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# Code released under the FreeBSD license (included in the POD at the bottom of
+# this file)
 
 #==============================================================================
 # Code
 #==============================================================================
 
 #
-# Constants
+# 'Constants'------------------------------------------------------------------
 #
 
 # version info
@@ -211,6 +194,12 @@ sub is_valid_config{
             return 0;
         }
     }
+    if($config->{padding_type} eq 'FIXED' || $config->{padding_type} eq 'ADAPTIVE'){
+        unless($config->{padding_character} && $config->{padding_character} =~ m/^[.]|(NONE)|(RANDOM)$/sx){
+            croak(q{Invalid or missing padding_character - must be a single character, 'NONE' or 'RANDOM'}) if $carp;
+            return 0;
+        }
+    }
     
     # case transformations
     unless($config->{case_transform} && $config->{case_transform} =~ m/^(NONE)|(UPPER)|(LOWER)|(CAPITALISE)|(INVERSE)|(RANDOM)$/sx){
@@ -320,7 +309,7 @@ even thousands of words, then combine just a few of those with a randomly
 chosen but easy to remember symbol character, and perhaps pad it front
 and back with a few digits and repeated symbols.
 
-You only need to rember the words, two symbols, and, if you choose, a few
+You only need to remember the words, two symbols, and, if you choose, a few
 digits, and assuming an average word length of 6, you end up with a 37
 character password something like:
 
@@ -390,7 +379,7 @@ four random digits, and finally picking one more random symbol to pad the front
 and back of the password with, how much randomness is left?
 
 To do the math we first need to tie down the size of our dictionary, and the
-number of symbols to be chosing from. To make the math easy, lets say our
+number of symbols to be choosing from. To make the math easy, lets say our
 dictionary contains one thousand words, and we are choosing symbols from a set
 of ten.
 
@@ -411,14 +400,152 @@ to about 100 words.
 A more realistic scenario would be that the attacker might know you used
 XKPasswd, but not what dictionary you used, or what settings you used. In this
 case the attacker will need to try many more possible passwords to cover
-variations in padding lenght, dictionary content, and text transformations.
+variations in padding length, dictionary content, and text transformations.
 The math on this is too complex for this manual, but will fall somewhere 
-between the 1 X 10^18 permutaitons of the worst-case, and the 1.51 x 10^73
+between the 1 X 10^18 permutations of the worst-case, and the 1.51 x 10^73
 permutations of the best-case.
 
 =head1 SUBROUTINES/METHODS
 
+=head2 DICTIONARY FILES
+
 TO DO
+
+=head2 CONFIGURATION HASHREFS
+
+A number of subroutines require a configuration harshref as an argument. The
+following are the valid keys for that hashref, what they mean, and what values
+are valid for each.
+
+=over 4
+
+=item *
+
+C<case_transform> - the alterations that should be made to the case of the
+letters in the randomly chosen words that make up the bulk of the randomly
+generated passwords. The following are the only valid values for this key:
+
+=over 4
+
+=item -
+
+C<NONE> - the capitalisation used in the randomly generated password will be
+the same as it is in the dictionary file.
+
+=item -
+
+C<UPPER> - all letters in all the words will be converted to upper case. B<Use
+of this option is strongly discouraged for security reasons.>
+
+=item -
+
+C<LOWER> - all letters in all the words will be converted to lower case. B<Use
+of this option is strongly discouraged for security reasons.>
+
+=item -
+
+C<CAPITALISE> - the first letter in every word will be converted to upper case,
+all other letters will be converted to lower case.
+
+=item -
+
+C<INVERSE> - the first letter in every word will be converted to lower case,
+all other letters will be converted to upper case.
+
+=item -
+
+C<RANDOM> - each word will be randomly converted to all upper case or all lower
+case.
+
+=back
+
+=item *
+
+C<dictionary_file_path> - a string containing the path to the dictionary file
+to be used when generating passwords. The path must exist and point to a
+regular file.
+
+=item *
+
+C<pad_to_length> - the total desired length of the password when using adaptive
+padding (C<padding_type> set to C<ADAPTIVE>). The value must be a positive
+integer greater than or equal to 12 (for security reasons).
+
+=item *
+
+C<padding_character> - the character to use when padding the front and/or back
+of the randomly generated password. Acceptable values are a single character,
+or, the special values C<NONE> (indicating that no separator should be used),
+or C<RANDOM>, indicating that a character should be chosen at random from the
+C<symbol_alphabet>. This key is only needed if C<padding_type> is set to
+C<FIXED> or C<ADAPTIVE>.
+
+=item *
+
+C<padding_characters_before> & C<padding_characters_after> - the number of
+symbols to pad the front and end of the randomly generated password with. The
+values must be integers greater than or equal to zero. These keys are only
+needed if C<padding_type> is set to C<FIXED>.
+
+=item *
+
+C<padding_digits_before> & C<padding_digits_after> - the number of random
+digits to include before and after the randomly chosen words making up the bulk
+of the randomly generated password. Values must be integers greater than or
+equal to zero.
+
+=item *
+
+C<padding_type> - the type of symbol padding to be added at the start and/or
+end of the randomly generated password. The only valid values for this key are
+the following:
+
+=over 4
+
+=item -
+
+C<NONE> - do not pad the generated password with any symbol characters.
+
+=item -
+
+C<FIXED> - a specified number of symbols will be added to the front and/or
+back of the randomly generated password. If this option is chosen, you must
+also specify the keys C<padding_character>, C<padding_characters_before> &
+C<padding_characters_after>.
+
+=item -
+
+C<ADAPTIVE> - no symbols will be added to the start of the randomly generated
+password, and the appropriate number of symbols will be added to the end to
+make the generated password exactly a certain length. The desired length is
+specified with the key C<pad_to_length>, which is required if this padding type
+is specified.
+
+=back
+
+=item *
+
+C<separator_character> - the character to use to separate the words in the
+generated password. Acceptable values are a single character, or, the special
+values C<NONE> (indicating that no separator should be used), or C<RANDOM>,
+indicating that a character should be chosen at random from the
+C<symbol_alphabet>.
+
+=item *
+
+C<symbol_alphabet> - an arrayref containing at least five single characters as
+scalars. This alphabet will be used when selecting random characters to act as
+the separator between words, or the padding at the start and/or end of
+generated passwords.
+
+=item *
+
+C<word_length_min> & C<word_length_max> - the minimum and maximum length of the
+words that will make up the generated password. The two keys can hold equal
+values, but C<word_length_max> may not be smaller than C<word_length_min>. For
+security reasons, both values must be greater than three.
+
+=back
 
 =head1 DIAGNOSTICS
 
@@ -426,7 +553,7 @@ TO DO
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-TO DO - may not be needed, depends on whether or not configuation file support
+TO DO - may not be needed, depends on whether or not configuration file support
 gets added
 
 =head1 DEPENDENCIES
