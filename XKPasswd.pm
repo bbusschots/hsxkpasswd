@@ -83,7 +83,7 @@ sub new{
 # Type       : CLASS
 # Purpose    : generate a config hashref populated with the default values
 # Returns    : a hashref
-# Arguments  : NONE
+# Arguments  : 1. OPTIONAL - keys to over-ride when assembling the config - TO DO
 # Throws     : NOTHING
 # Notes      :
 # See Also   :
@@ -112,7 +112,8 @@ sub default_config{
 # Arguments  : 1. a hashref to validate
 #              2. OPTIONAL - a true value to throw exception on error
 # Throws     : Croaks on invalid args, or on error if second arg is truthy
-# Notes      :
+# Notes      : This function needs to be updated each time a new valid config
+#              key is added to the library.
 # See Also   :
 ## no critic (ProhibitExcessComplexity);
 sub is_valid_config{
@@ -132,24 +133,30 @@ sub is_valid_config{
     # check the keys
     #
     
-    # the dictionary
-    unless($config->{dictionary_file_path} && -f $config->{dictionary_file_path}){
+    # the dictionary - SCALAR
+    unless(defined $config->{dictionary_file_path} && ref $config->{dictionary_file_path} eq q{} && -f $config->{dictionary_file_path}){
         croak('Invalid or missing dictionary_file_path - must a valid file path') if $carp;
         return 0;
     }
     
-    # the symbol alphabet
-    unless($config->{symbol_alphabet} && ref $config->{symbol_alphabet} eq 'ARRAY' && scalar $config->{symbol_alphabet} >= 5){
-        croak('Invalid or missing symbol_alphabet - must be an array ref contianing at least 5 elements') if $carp;
+    # the symbol alphabet - ARRAYREF of SCALARS
+    unless(defined $config->{symbol_alphabet} && ref $config->{symbol_alphabet} eq 'ARRAY' && scalar $config->{symbol_alphabet} >= 5){
+        croak('Invalid or missing symbol_alphabet - must be an array ref contianing at least 5 single-character scalars') if $carp;
         return 0;
     }
+    foreach my $symbol (@{$config->{symbol_alphabet}}){
+        unless(ref $symbol eq q{} && $symbol =~ m/^.$/sx){
+            croak('Invalid entry found in symbol_alphabet - each entry must be a scalar containing exactly 1 character') if $carp;
+        return 0;
+        }
+    }
     
-    # the word length restrictions
-    unless($config->{word_length_min} && $config->{word_length_min} =~ m/^\d+$/sx && $config->{word_length_min} > 3){
+    # the word length restrictions - SCALARS
+    unless(defined $config->{word_length_min} && ref $config->{word_length_min} eq q{} && $config->{word_length_min} =~ m/^\d+$/sx && $config->{word_length_min} > 3){
         croak('Invalid or missing word_length_min - must be an integer greater than 3') if $carp;
         return 0;
     }
-    unless($config->{word_length_max} && $config->{word_length_max} =~ m/^\d+$/sx && $config->{word_length_max} > 3){
+    unless(defined $config->{word_length_max} && ref $config->{word_length_max} eq q{} && $config->{word_length_max} =~ m/^\d+$/sx && $config->{word_length_max} > 3){
         croak('Invalid or missing word_length_max - must be an integer greater than 3') if $carp;
         return 0;
     }
@@ -158,51 +165,51 @@ sub is_valid_config{
         return 0;
     }
     
-    # the separator character
-    unless($config->{separator_character} && $config->{separator_character} =~ m/^[.]|(NONE)|(RANDOM)$/sx){
+    # the separator character - SCALAR
+    unless(defined $config->{separator_character} && ref $config->{separator_character} eq q{} && $config->{separator_character} =~ m/^[.]|(NONE)|(RANDOM)$/sx){
         croak(q{Invalid or missing separator_character - must be a single character, 'NONE' or 'RANDOM'}) if $carp;
         return 0;
     }
     
-    # padding digits
-    unless(defined $config->{padding_digits_before} && $config->{padding_digits_before} =~ m/^\d+$/sx){
+    # padding digits - SCALARS
+    unless(defined $config->{padding_digits_before} && ref $config->{padding_digits_before} eq q{} && $config->{padding_digits_before} =~ m/^\d+$/sx){
         croak('Invalid or missing padding_digits_before - must be an integer greater than or equal to 0') if $carp;
         return 0;
     }
-    unless(defined $config->{padding_digits_after} && $config->{padding_digits_after} =~ m/^\d+$/sx){
+    unless(defined $config->{padding_digits_after} && ref $config->{padding_digits_after} eq q{} && $config->{padding_digits_after} =~ m/^\d+$/sx){
         croak('Invalid or missing padding_digits_after - must be an integer greater than or equal to 0') if $carp;
         return 0;
     }
     
-    # padding characters
-    unless($config->{padding_type} && $config->{padding_type} =~ m/^(NONE)|(FIXED)|(ADAPTIVE)$/sx){
+    # padding characters - SCALARS
+    unless(defined $config->{padding_type} && ref $config->{padding_type} eq q{} && $config->{padding_type} =~ m/^(NONE)|(FIXED)|(ADAPTIVE)$/sx){
         croak(q{Invalid or missing padding_type - must be 'NONE', 'FIXED', or 'ADAPTIVE'}) if $carp;
         return 0;
     }
     if($config->{padding_type} eq 'FIXED'){
-        unless($config->{padding_characters_before} && $config->{padding_characters_before} =~ m/^\d+$/sx && $config->{padding_characters_before} > 1){
+        unless(defined $config->{padding_characters_before} && ref $config->{padding_characters_before} eq q{} && $config->{padding_characters_before} =~ m/^\d+$/sx && $config->{padding_characters_before} >= 1){
             croak(q{Invalid or missing padding_characters_before (required by padding_type='FIXED') - must be a positive integer}) if $carp;
             return 0;
         }
-        unless($config->{padding_characters_after} && $config->{padding_characters_after} =~ m/^\d+$/sx && $config->{padding_characters_after} > 1){
+        unless(defined $config->{padding_characters_after} && ref $config->{padding_characters_after} eq q{} && $config->{padding_characters_after} =~ m/^\d+$/sx && $config->{padding_characters_after} >= 1){
             croak(q{Invalid or missing padding_characters_after (required by padding_type='FIXED') - must be a positive integer}) if $carp;
             return 0;
         }
     }elsif($config->{padding_type} eq 'ADAPTIVE'){
-        unless($config->{pad_to_length} && $config->{pad_to_length} =~ m/^\d+$/sx && $config->{pad_to_length} >= 12){
+        unless(defined $config->{pad_to_length} && ref $config->{pad_to_length} eq q{} && $config->{pad_to_length} =~ m/^\d+$/sx && $config->{pad_to_length} >= 12){
             croak(q{Invalid or missing pad_to_length (required by padding_type='ADAPTIVE') - must be an integer greater than or equal to 12}) if $carp;
             return 0;
         }
     }
     if($config->{padding_type} eq 'FIXED' || $config->{padding_type} eq 'ADAPTIVE'){
-        unless($config->{padding_character} && $config->{padding_character} =~ m/^[.]|(NONE)|(RANDOM)$/sx){
-            croak(q{Invalid or missing padding_character - must be a single character, 'NONE' or 'RANDOM'}) if $carp;
+        unless(defined $config->{padding_character} && ref $config->{padding_character} eq q{} && $config->{padding_character} =~ m/^[.]|(NONE)|(RANDOM)|(SEPARATOR)$/sx){
+            croak(q{Invalid or missing padding_character - must be a single character, 'NONE', 'RANDOM', or 'SEPARATOR'}) if $carp;
             return 0;
         }
     }
     
-    # case transformations
-    unless($config->{case_transform} && $config->{case_transform} =~ m/^(NONE)|(UPPER)|(LOWER)|(CAPITALISE)|(INVERSE)|(RANDOM)$/sx){
+    # case transformation - SCALAR
+    unless(defined $config->{case_transform} && ref $config->{case_transform} eq q{} && $config->{case_transform} =~ m/^(NONE)|(UPPER)|(LOWER)|(CAPITALISE)|(INVERSE)|(RANDOM)$/sx){
         croak(q{Invalid or missing case_transform - must be 'NONE', 'UPPER', 'LOWER', 'CAPITALISE', 'INVERSE', or 'RANDOM'}) if $carp;
         return 0;
     }
@@ -218,39 +225,53 @@ sub is_valid_config{
 
 #####-SUB-######################################################################
 # Type       : INSTANCE
-# Purpose    : Load a configuration hashref into the instance
-# Returns    : The instance - to facilitate function chaining
-# Arguments  : 1. a configuartion hashref
+# Purpose    : Get a clone of the current config from an instance, or load a
+#              new config into the instance.
+# Returns    : A config hashref if called with no arguments, or, the instance
+#              if called with a hashref (to facilitate function chaining)
+# Arguments  : 1. OPTIONAL - a configuartion hashref
 # Throws     : Croaks if the function is called in an invalid way, with invalid
 #              arguments, or with an invalid config
 # Notes      : For valid configuarion options see POD documentation below
 # See Also   :
-sub load_config{
+sub config{
     my $self = shift;
     my $config = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS) && $config){
-        croak((caller 0)[3].'() - invalid arguments - no source passed');
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
     }
-    unless($config && ref $config eq 'HASH'){
-        croak((caller 0)[3].'() - invalid arguments - must pass the config as a hashref');
-    }
-    eval{
-        $_CLASS->is_valid_config($config, 1); # returns 1 if valid
-    }or do{
-        my $msg = (caller 0)[3].'() - invoked with invalid hashref';
-        if($self->{debug}){
-            $msg .= " ($EVAL_ERROR)";
+    
+    # decide if we're a 'getter' or a 'setter'
+    if(!(defined $config)){
+        # we are a getter - simply return a clone of our config
+        return $self._clone_config();
+    }else{
+        # we are a setter
+        
+        # ensure the config passed is a hashref
+        unless($config && ref $config eq 'HASH'){
+            croak((caller 0)[3].'() - invalid arguments - the config passed must be a hashref');
         }
-        croak($msg);
-    };
-    
-    # save the config into the instance
-    $self->{_CONFIG} = $config;
-    
-    # init the dictionary caches
-    # TO DO
+        
+        # validate the passed config hashref
+        eval{
+            $_CLASS->is_valid_config($config, 1); # returns 1 if valid
+        }or do{
+            my $msg = (caller 0)[3].'() - invoked with invalid config';
+            if($self->{debug}){
+                $msg .= " ($EVAL_ERROR)";
+            }
+            croak($msg);
+        };
+        
+        # save a clone of the passed config into the instance
+        # TO DO
+        
+        # init the dictionary caches
+        # TO DO
+    }
     
     # return a reference to self to facilitate function chaining
     return $self;
@@ -260,6 +281,59 @@ sub load_config{
 # 'Private' functions ---------------------------------------------------------
 #
 
+#####-SUB-######################################################################
+# Type       : INSTANCE ('PRIVATE')
+# Purpose    : Clone the instance's config hashref
+# Returns    : a hashref
+# Arguments  : NONE
+# Throws     : Croaks if called in an invalid way
+# Notes      : This function needs to be updated each time a new valid config
+#              key is added to the library.
+# See Also   :
+sub _clone_config{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    
+    # build the clone - clone all valid keys, if they exist in the running config
+    # scalar keys (required and optional) can be coppied straight over
+    my $clone = {
+        dictionary_file_path => $self->{_CONFIG}->{dictionary_file_path},
+        word_length_min => $self->{_CONFIG}->{word_length_min},
+        word_length_max => $self->{_CONFIG}->{word_length_max},
+        separator_character => $self->{_CONFIG}->{separator_character},
+        padding_digits_before => $self->{_CONFIG}->{padding_digits_before},
+        padding_digits_after => $self->{_CONFIG}->{padding_digits_after},
+        padding_characters_before => $self->{_CONFIG}->{padding_characters_before},
+        padding_characters_after => $self->{_CONFIG}->{padding_characters_after},
+        pad_to_length => $self->{_CONFIG}->{pad_to_length},
+        padding_character => $self->{_CONFIG}->{padding_character},
+        case_transform => $self->{_CONFIG}->{case_transform},
+    };
+    
+    
+    # deal with the non-scarlar keys
+    $clone->{symbol_alphabet} = [];
+    foreach my $symbol (@{$self->{_CONFIG}->{symbol_alphabet}}){
+        push @{$clone->{symbol_alphabet}}, $symbol;
+    }
+    
+    # if, and only if, debugging, validate the cloned config so errors in the
+    # cloning code will trigger an exception
+    if($self->{debug}){
+        eval{
+            $_CLASS->is_valid_config($clone, 1); # returns 1 if valid
+        }or do{
+            croak((caller 0)[3].'() - cloning error ('.$EVAL_ERROR.')');
+        };
+    }
+    
+    # return the clone
+    return $clone;
+}
 
 1; # because Perl is just a little bit odd :)
 __END__
@@ -423,7 +497,8 @@ are valid for each.
 
 C<case_transform> - the alterations that should be made to the case of the
 letters in the randomly chosen words that make up the bulk of the randomly
-generated passwords. The following are the only valid values for this key:
+generated passwords. Must be a scalar, and the only valid values for this key
+are:
 
 =over 4
 
@@ -459,46 +534,53 @@ case.
 
 =back
 
+The default value returned by C<default_config()> is C<NONE>.
+
 =item *
 
-C<dictionary_file_path> - a string containing the path to the dictionary file
+C<dictionary_file_path> - a scalar containing the path to the dictionary file
 to be used when generating passwords. The path must exist and point to a
-regular file.
+regular file. The default value for this key returned by C<default_config()>
+is C<dict.txt>.
 
 =item *
 
 C<pad_to_length> - the total desired length of the password when using adaptive
-padding (C<padding_type> set to C<ADAPTIVE>). The value must be a positive
-integer greater than or equal to 12 (for security reasons).
+padding (C<padding_type> set to C<ADAPTIVE>). Must be a scalar with an integer
+values greater than or equal to 12 (for security reasons).
 
 =item *
 
 C<padding_character> - the character to use when padding the front and/or back
-of the randomly generated password. Acceptable values are a single character,
-or, the special values C<NONE> (indicating that no separator should be used),
-or C<RANDOM>, indicating that a character should be chosen at random from the
-C<symbol_alphabet>. This key is only needed if C<padding_type> is set to
-C<FIXED> or C<ADAPTIVE>.
+of the randomly generated password. Must be a scalar containing either a single
+character or one of the special values C<NONE> (indicating that no separator
+should be used), C<RANDOM> (indicating that a character should be chosen at
+random from the C<symbol_alphabet>), or C<SEPARATOR> (use the same character
+used to separate the words). This key is only needed if C<padding_type> is set
+to C<FIXED> or C<ADAPTIVE>. The default value returned by C<default_config> is
+C<RANDOM>.
 
 =item *
 
 C<padding_characters_before> & C<padding_characters_after> - the number of
-symbols to pad the front and end of the randomly generated password with. The
-values must be integers greater than or equal to zero. These keys are only
-needed if C<padding_type> is set to C<FIXED>.
+symbols to pad the front and end of the randomly generated password with. Must
+be a scalar with an integer value greater than or equal to zero. These keys are
+only needed if C<padding_type> is set to C<FIXED>. The default value returned
+by C<default_config()> for both these keys is 2.
 
 =item *
 
 C<padding_digits_before> & C<padding_digits_after> - the number of random
 digits to include before and after the randomly chosen words making up the bulk
-of the randomly generated password. Values must be integers greater than or
-equal to zero.
+of the randomly generated password. Must be scalars containing integer values
+greater than or equal to zero. The default value returned by
+C<default_config()> for both these keys is 2. 
 
 =item *
 
 C<padding_type> - the type of symbol padding to be added at the start and/or
-end of the randomly generated password. The only valid values for this key are
-the following:
+end of the randomly generated password. Must be a scalar with one of the
+following values:
 
 =over 4
 
@@ -523,27 +605,32 @@ is specified.
 
 =back
 
+The default value returned by C<default_config()> is C<FIXED>.
+
 =item *
 
 C<separator_character> - the character to use to separate the words in the
-generated password. Acceptable values are a single character, or, the special
-values C<NONE> (indicating that no separator should be used), or C<RANDOM>,
-indicating that a character should be chosen at random from the
-C<symbol_alphabet>.
+generated password. Must be a scalar, and acceptable values are a single
+character, or, the special values C<NONE> (indicating that no separator should
+be used), or C<RANDOM>, indicating that a character should be chosen at random
+from the C<symbol_alphabet>. The default value returned by C<default_config()>
+is C<RANDOM>.
 
 =item *
 
 C<symbol_alphabet> - an arrayref containing at least five single characters as
 scalars. This alphabet will be used when selecting random characters to act as
 the separator between words, or the padding at the start and/or end of
-generated passwords.
+generated passwords. The default value returned by C<default_config()> is
+C<[qw{! @ $ % ^ & * - _ + = : | ~ ?}]>
 
 =item *
 
 C<word_length_min> & C<word_length_max> - the minimum and maximum length of the
-words that will make up the generated password. The two keys can hold equal
-values, but C<word_length_max> may not be smaller than C<word_length_min>. For
-security reasons, both values must be greater than three.
+words that will make up the generated password. The two keys must be scalars,
+and can hold equal values, but C<word_length_max> may not be smaller than
+C<word_length_min>. For security reasons, both values must be greater than 3.
+The default values returned by C<default_config()> is are 4 & 8.
 
 =back
 
