@@ -288,6 +288,53 @@ sub default_config{
 
 #####-SUB-######################################################################
 # Type       : CLASS
+# Purpose    : Clone a config hashref
+# Returns    : a hashref
+# Arguments  : 1. the config hashref to clone
+# Throws     : Croaks if called in an invalid way, or with an invalid config.
+# Notes      : This function needs to be updated each time a new valid config
+#              key is added to the library.
+# See Also   :
+sub clone_config{
+    my $class = shift;
+    my $config = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        croak((caller 0)[3].'() - invalid invocation of class method');
+    }
+    unless(defined $config && $_CLASS->is_valid_config($config)){
+        croak((caller 0)[3].'() - invalid args - a valid config hashref must be passed');
+    }
+    
+    # build the clone - clone all valid keys, if they exist in the running config
+    # scalar keys (required and optional) can be coppied straight over
+    my $clone = {
+        dictionary_file_path => $config->{dictionary_file_path},
+        word_length_min => $config->{word_length_min},
+        word_length_max => $config->{word_length_max},
+        separator_character => $config->{separator_character},
+        padding_digits_before => $config->{padding_digits_before},
+        padding_digits_after => $config->{padding_digits_after},
+        padding_characters_before => $config->{padding_characters_before},
+        padding_characters_after => $config->{padding_characters_after},
+        pad_to_length => $config->{pad_to_length},
+        padding_character => $config->{padding_character},
+        case_transform => $config->{case_transform},
+    };
+    
+    # deal with the non-scarlar keys
+    $clone->{symbol_alphabet} = [];
+    foreach my $symbol (@{$config->{symbol_alphabet}}){
+        push @{$clone->{symbol_alphabet}}, $symbol;
+    }
+    
+    # return the clone
+    return $clone;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
 # Purpose    : validate a config hashref
 # Returns    : 1 if the config is valid, 0 otherwise
 # Arguments  : 1. a hashref to validate
@@ -422,7 +469,7 @@ sub config{
         };
         
         # save a clone of the passed config into the instance
-        # TO DO
+        $self->{_CONFIG} = $_CLASS->clone_config($config);
         
         # init the dictionary caches
         # TO DO
@@ -442,8 +489,7 @@ sub config{
 # Returns    : a hashref
 # Arguments  : NONE
 # Throws     : Croaks if called in an invalid way
-# Notes      : This function needs to be updated each time a new valid config
-#              key is added to the library.
+# Notes      :
 # See Also   :
 sub _clone_config{
     my $self = shift;
@@ -453,28 +499,8 @@ sub _clone_config{
         croak((caller 0)[3].'() - invalid invocation of instance method');
     }
     
-    # build the clone - clone all valid keys, if they exist in the running config
-    # scalar keys (required and optional) can be coppied straight over
-    my $clone = {
-        dictionary_file_path => $self->{_CONFIG}->{dictionary_file_path},
-        word_length_min => $self->{_CONFIG}->{word_length_min},
-        word_length_max => $self->{_CONFIG}->{word_length_max},
-        separator_character => $self->{_CONFIG}->{separator_character},
-        padding_digits_before => $self->{_CONFIG}->{padding_digits_before},
-        padding_digits_after => $self->{_CONFIG}->{padding_digits_after},
-        padding_characters_before => $self->{_CONFIG}->{padding_characters_before},
-        padding_characters_after => $self->{_CONFIG}->{padding_characters_after},
-        pad_to_length => $self->{_CONFIG}->{pad_to_length},
-        padding_character => $self->{_CONFIG}->{padding_character},
-        case_transform => $self->{_CONFIG}->{case_transform},
-    };
-    
-    
-    # deal with the non-scarlar keys
-    $clone->{symbol_alphabet} = [];
-    foreach my $symbol (@{$self->{_CONFIG}->{symbol_alphabet}}){
-        push @{$clone->{symbol_alphabet}}, $symbol;
-    }
+    # build the clone
+    my $clone = $_CLASS->clone_config($self->{_CONFIG});
     
     # if, and only if, debugging, validate the cloned config so errors in the
     # cloning code will trigger an exception
@@ -879,6 +905,15 @@ that the function should croak on error rather than return 0;
     }or do{
         print "ERROR - config is invalid because: $EVAL_ERROR\n";
     }
+
+=head2 clone_config()
+
+    my $clone = XKPasswd->clone_config($config);
+    
+This function must be called via the package name, and must be passed a valid
+config hashref. The function returns a hashref.
+
+The function Croaks if called in and invalid way, or, with an invalid config.
 
 =head2 config()
 
