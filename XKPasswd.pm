@@ -25,6 +25,143 @@ use version; our $VERSION = qv('2.1_01');
 # utility variables
 my $_CLASS = 'XKPasswd';
 
+# config key definitions
+my $_KEYS = {
+    dictionary_file_path => {
+        req => 1,
+        ref => q{}, # SCALAR
+        validate => sub { # file must exist
+            my $key = shift;
+            unless(-f $key){ return 0; }
+            return 1;
+        },
+        desc => 'A scalar containing a valid file path',
+    },
+    symbol_alphabet => {
+        req => 1,
+        ref => 'ARRAY', # ARRAY REF
+        validate => sub { # at least 5 scalar elements
+            my $key = shift;
+            unless(scalar @{$key} >= 5){ return 0; }
+            foreach my $symbol (@{$key}){
+                unless(ref $symbol eq q{} && $symbol =~ m/^.$/sx){ return 0; }
+            }
+            return 1;
+        },
+        desc => 'An array ref containing at least 5 single-character scalars',
+    },
+    word_length_min => {
+        req => 1,
+        ref => q{}, # SCALAR
+        validate => sub { # int > 3
+            my $key = shift;
+            unless($key =~ m/^\d+$/sx && $key > 3){ return 0; }
+            return 1;
+        },
+        desc => 'A scalar containing an integer greater than three',
+    },
+    word_length_max => {
+        req => 1,
+        ref => q{}, # SCALAR
+        validate => sub { # int > 3
+            my $key = shift;
+            unless($key =~ m/^\d+$/sx && $key > 3){ return 0; }
+            return 1;
+        },
+        desc => 'A scalar containing an integer greater than three',
+    },
+    separator_character => {
+        req => 1,
+        ref => q{}, # SCALAR
+        validate => sub {
+            my $key = shift;
+            unless($key =~ m/^[.]|(NONE)|(RANDOM)$/sx){ return 0; }
+            return 1;
+        },
+        desc => q{A scalar containing a single character, or the special value 'NONE' or 'RANDOM'},
+    },
+    padding_digits_before => {
+        req => 1,
+        ref => q{}, # SCALAR
+        validate => sub { # an int >= 0
+            my $key = shift;
+            unless($key =~ m/^\d+$/sx){ return 0; }
+            return 1;
+        },
+        desc => 'A scalar containing an integer value greater than or equal to zero',
+    },
+    padding_digits_after => {
+        req => 1,
+        ref => q{}, # SCALAR
+        validate => sub { # an int >= 0
+            my $key = shift;
+            unless($key =~ m/^\d+$/sx){ return 0; }
+            return 1;
+        },
+        desc => 'A scalar containing an integer value greater than or equal to zero',
+    },
+    padding_type => {
+        req => 1,
+        ref => q{}, # SCALAR
+        validate => sub {
+            my $key = shift;
+            unless($key =~ m/^(NONE)|(FIXED)|(ADAPTIVE)$/sx){ return 0; }
+            return 1;
+        },
+        desc => q{A scalar containg one of the values 'NONE', 'FIXED', or 'ADAPTIVE'},
+    },
+    padding_characters_before => {
+        req => 0,
+        ref => q{}, # SCALAR
+        validate => sub { # positive integer
+            my $key = shift;
+            unless($key =~ m/^\d+$/sx && $key >= 1){ return 0; }
+            return 1;
+        },
+        desc => 'A scalar containing an integer value greater than or equal to one',
+    },
+    padding_characters_after => {
+        req => 0,
+        ref => q{}, # SCALAR
+        validate => sub { # positive integer
+            my $key = shift;
+            unless($key =~ m/^\d+$/sx && $key >= 1){ return 0; }
+            return 1;
+        },
+        desc => 'A scalar containing an integer value greater than or equal to one',
+    },
+    pad_to_length => {
+        req => 0,
+        ref => q{}, # SCALAR
+        validate => sub { # positive integer >= 12
+            my $key = shift;
+            unless($key =~ m/^\d+$/sx && $key >= 12){ return 0; }
+            return 1;
+        },
+        desc => 'A scalar containing an integer value greater than or equal to twelve',
+    },
+    padding_character => {
+        req => 0,
+        ref => q{}, # SCALAR
+        validate => sub {
+            my $key = shift;
+            unless($key =~ m/^[.]|(NONE)|(RANDOM)|(SEPARATOR)$/sx){return 0; }
+            return 1;
+        },
+        desc => q{A scalar containing a single character or one of the special values 'NONE', 'RANDOM', or 'SEPARATOR'},
+    },
+    case_transform => {
+        req => 0,
+        ref => q{}, # SCALAR
+        validate => sub {
+            my $key = shift;
+            unless($key =~ m/^(NONE)|(UPPER)|(LOWER)|(CAPITALISE)|(INVERSE)|(RANDOM)$/sx){ return 0; }
+            return 1;
+        },
+        desc => q{a scalar containing one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERSE', or 'RANDOM'}
+    },
+};
+
 #
 # Constructor -----------------------------------------------------------------
 #
@@ -69,7 +206,7 @@ sub new{
     }
     
     # load the config
-    $instance->load_config($config);
+    $instance->config($config);
     
     # return the initialised object
     return $instance;
@@ -83,13 +220,29 @@ sub new{
 # Type       : CLASS
 # Purpose    : generate a config hashref populated with the default values
 # Returns    : a hashref
-# Arguments  : 1. OPTIONAL - keys to over-ride when assembling the config - TO DO
-# Throws     : NOTHING
+# Arguments  : 1. OPTIONAL - a hashref with config keys to over-ride when
+#                 assembling the config
+# Throws     : Croaks if invoked in an invalid way. If passed overrides also
+#              Croaks if the resulting config is invalid, and Carps if passed
+#              on each invalid key passed in the overrides hashref.
 # Notes      :
 # See Also   :
 sub default_config{
-    # no need to check how this function was invoked, it just spits out a hashref
-    return {
+    my $class = shift;
+    my $overrides = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        croak((caller 0)[3].'() - invalid invocation of class method');
+    }
+    if(defined $overrides){
+        unless(ref $overrides eq 'HASH'){
+            croak((caller 0)[3].'() - invalid args, overrides must be passed as a hashref');
+        }
+    }
+    
+    # build the default config
+    my $config = {
         dictionary_file_path => 'dict.txt', # defaults to a file called dict.txt in the current working directory
         symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ?}],
         word_length_min => 4,
@@ -103,6 +256,34 @@ sub default_config{
         padding_characters_after => 2,
         case_transform => 'NONE',
     };
+    
+    # if overrides were passed, apply them and validate
+    if(defined $overrides){
+        foreach my $key (keys %{$overrides}){
+            # ensure the key is valid - skip it if not
+            unless(defined $_KEYS->{$key}){
+                carp("Skinning invalid key=$key");
+                next;
+            }
+            
+            # ensure the value is valid
+            eval{
+                $_CLASS->_validate_key($key, $overrides->{$key}, 1); # returns 1 if valid
+            }or do{
+                carp("Skinning key=$key because of invalid value. Expected: $_KEYS->{$key}->{desc}");
+                next;
+            };
+            
+            # save the key into the config
+            $config->{$key} = $overrides->{$key};
+        }
+        unless($_CLASS->is_valid_config($config)){
+            croak('The default config combined with the specified overrides has resulted in an inalid config');
+        }
+    }
+    
+    # return the config
+    return $config;
 }
 
 #####-SUB-######################################################################
@@ -119,7 +300,7 @@ sub default_config{
 sub is_valid_config{
     my $class = shift;
     my $config = shift;
-    my $carp = shift;
+    my $croak = shift;
     
     # validate the args
     unless($class && $class eq $_CLASS){
@@ -133,85 +314,59 @@ sub is_valid_config{
     # check the keys
     #
     
-    # the dictionary - SCALAR
-    unless(defined $config->{dictionary_file_path} && ref $config->{dictionary_file_path} eq q{} && -f $config->{dictionary_file_path}){
-        croak('Invalid or missing dictionary_file_path - must a valid file path') if $carp;
-        return 0;
-    }
+    my @keys = sort keys %{$_KEYS};
     
-    # the symbol alphabet - ARRAYREF of SCALARS
-    unless(defined $config->{symbol_alphabet} && ref $config->{symbol_alphabet} eq 'ARRAY' && scalar $config->{symbol_alphabet} >= 5){
-        croak('Invalid or missing symbol_alphabet - must be an array ref contianing at least 5 single-character scalars') if $carp;
-        return 0;
-    }
-    foreach my $symbol (@{$config->{symbol_alphabet}}){
-        unless(ref $symbol eq q{} && $symbol =~ m/^.$/sx){
-            croak('Invalid entry found in symbol_alphabet - each entry must be a scalar containing exactly 1 character') if $carp;
-        return 0;
+    # first ensure all required keys are present
+    foreach my $key (@keys){
+        # skip non-required keys
+        next unless $_KEYS->{$key}->{req};
+        
+        # make sure the passed config contains the key
+        unless(defined $config->{$key}){
+            croak("Required key=$key not defined") if $croak;
+            return 0;
         }
     }
     
-    # the word length restrictions - SCALARS
-    unless(defined $config->{word_length_min} && ref $config->{word_length_min} eq q{} && $config->{word_length_min} =~ m/^\d+$/sx && $config->{word_length_min} > 3){
-        croak('Invalid or missing word_length_min - must be an integer greater than 3') if $carp;
-        return 0;
-    }
-    unless(defined $config->{word_length_max} && ref $config->{word_length_max} eq q{} && $config->{word_length_max} =~ m/^\d+$/sx && $config->{word_length_max} > 3){
-        croak('Invalid or missing word_length_max - must be an integer greater than 3') if $carp;
-        return 0;
-    }
-    if($config->{word_length_max} < $config->{word_length_min}){
-        croak('word_length_max must be greater than or equal to word_length_min') if $carp;
-        return 0;
-    }
-    
-    # the separator character - SCALAR
-    unless(defined $config->{separator_character} && ref $config->{separator_character} eq q{} && $config->{separator_character} =~ m/^[.]|(NONE)|(RANDOM)$/sx){
-        croak(q{Invalid or missing separator_character - must be a single character, 'NONE' or 'RANDOM'}) if $carp;
-        return 0;
+    # next ensure all passed keys have valid values
+    foreach my $key (@keys){
+        # skip keys not present in the config under test
+        next unless defined $config->{$key};
+        
+        # validate the key
+        eval{
+            $_CLASS->_validate_key($key, $config->{$key}, 1); # returns 1 on success
+        }or do{
+            croak("Invalid value for key=$key. Expected: ".$_KEYS->{$key}->{desc}) if $croak;
+            return 0;
+        };
     }
     
-    # padding digits - SCALARS
-    unless(defined $config->{padding_digits_before} && ref $config->{padding_digits_before} eq q{} && $config->{padding_digits_before} =~ m/^\d+$/sx){
-        croak('Invalid or missing padding_digits_before - must be an integer greater than or equal to 0') if $carp;
-        return 0;
-    }
-    unless(defined $config->{padding_digits_after} && ref $config->{padding_digits_after} eq q{} && $config->{padding_digits_after} =~ m/^\d+$/sx){
-        croak('Invalid or missing padding_digits_after - must be an integer greater than or equal to 0') if $carp;
-        return 0;
+    
+    # finally, make sure all other requirements are met
+    
+    # if there is any kind of character padding, make sure a padding character is specified
+    if($config->{padding_type} ne 'NONE'){
+        unless(defined $config->{padding_character}){
+            croak(qq{padding_type='$config->{padding_type}' requires padding_character be set}) if $croak;
+            return 0;
+        }
     }
     
-    # padding characters - SCALARS
-    unless(defined $config->{padding_type} && ref $config->{padding_type} eq q{} && $config->{padding_type} =~ m/^(NONE)|(FIXED)|(ADAPTIVE)$/sx){
-        croak(q{Invalid or missing padding_type - must be 'NONE', 'FIXED', or 'ADAPTIVE'}) if $carp;
-        return 0;
-    }
+    # if there is fixed character padding, make sure before and after are specified
     if($config->{padding_type} eq 'FIXED'){
-        unless(defined $config->{padding_characters_before} && ref $config->{padding_characters_before} eq q{} && $config->{padding_characters_before} =~ m/^\d+$/sx && $config->{padding_characters_before} >= 1){
-            croak(q{Invalid or missing padding_characters_before (required by padding_type='FIXED') - must be a positive integer}) if $carp;
-            return 0;
-        }
-        unless(defined $config->{padding_characters_after} && ref $config->{padding_characters_after} eq q{} && $config->{padding_characters_after} =~ m/^\d+$/sx && $config->{padding_characters_after} >= 1){
-            croak(q{Invalid or missing padding_characters_after (required by padding_type='FIXED') - must be a positive integer}) if $carp;
-            return 0;
-        }
-    }elsif($config->{padding_type} eq 'ADAPTIVE'){
-        unless(defined $config->{pad_to_length} && ref $config->{pad_to_length} eq q{} && $config->{pad_to_length} =~ m/^\d+$/sx && $config->{pad_to_length} >= 12){
-            croak(q{Invalid or missing pad_to_length (required by padding_type='ADAPTIVE') - must be an integer greater than or equal to 12}) if $carp;
-            return 0;
-        }
-    }
-    if($config->{padding_type} eq 'FIXED' || $config->{padding_type} eq 'ADAPTIVE'){
-        unless(defined $config->{padding_character} && ref $config->{padding_character} eq q{} && $config->{padding_character} =~ m/^[.]|(NONE)|(RANDOM)|(SEPARATOR)$/sx){
-            croak(q{Invalid or missing padding_character - must be a single character, 'NONE', 'RANDOM', or 'SEPARATOR'}) if $carp;
+        unless(defined $config->{padding_characters_before} && defined $config->{padding_characters_after}){
+            croak(q{padding_type='FIXED' requires padding_characters_before & padding_characters_after be set}) if $croak;
             return 0;
         }
     }
     
-    # case transformation - SCALAR
-    unless(defined $config->{case_transform} && ref $config->{case_transform} eq q{} && $config->{case_transform} =~ m/^(NONE)|(UPPER)|(LOWER)|(CAPITALISE)|(INVERSE)|(RANDOM)$/sx){
-        croak(q{Invalid or missing case_transform - must be 'NONE', 'UPPER', 'LOWER', 'CAPITALISE', 'INVERSE', or 'RANDOM'}) if $carp;
-        return 0;
+    # if there is adaptice padding, make sure a length is specified
+    if($config->{padding_type} eq 'ADAPTIVE'){
+        unless(defined $config->{pad_to_length}){
+            croak(q{padding_type='ADAPTIVE' requires pad_to_length be set}) if $croak;
+            return 0;
+        }
     }
     
     # if we got this far, all is well, so return true
@@ -333,6 +488,53 @@ sub _clone_config{
     
     # return the clone
     return $clone;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
+# Purpose    : validate the value for a single key
+# Returns    : 1 if the key is valid, 0 otherwise
+# Arguments  : 1. the key to validate the value for
+#              2. the value to validate
+#              3. OPTIONAL - a true value to croak on invalid value
+# Throws     : Croaks if invoked invalidly, or on error if arg 3 is truthy.
+#              Also Carps if called with invalid key with a truthy arg 3.
+# Notes      :
+# See Also   :
+sub _validate_key{
+    my $class = shift;
+    my $key = shift;
+    my $val = shift;
+    my $croak = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        croak((caller 0)[3].'() - invalid invocation of class method');
+    }
+    unless(defined $key && ref $key eq q{} && defined $val){
+        croak((caller 0)[3].'() - invoked with invalid args');
+    }
+    
+    # make sure the key exists
+    unless(defined $_KEYS->{$key}){
+        carp((caller 0)[3]."() - called with invalid key=$key") if $croak;
+        return 0;
+    }
+    
+    # make sure the value is of the correct type
+    unless(ref $val eq $_KEYS->{$key}->{ref}){
+        croak("Invalid type for key=$key. Expected: ".$_KEYS->{$key}->{desc}) if $croak;
+        return 0;
+    }
+    
+    # make sure the value passes the validation function for the key
+    unless($_KEYS->{$key}->{validate}->($val)){
+        croak("Invalid value for key=$key. Expected: ".$_KEYS->{$key}->{desc}) if $croak;
+        return 0;
+    }
+    
+    # if we got here, all is well, so return 1
+    return 1;
 }
 
 1; # because Perl is just a little bit odd :)
@@ -633,6 +835,65 @@ C<word_length_min>. For security reasons, both values must be greater than 3.
 The default values returned by C<default_config()> is are 4 & 8.
 
 =back
+
+=head2 CONSTRUCTOR
+
+    my $xkpasswd_instance = XKPasswd->new($config);
+
+The constructor must be called via the package name, and at least one argument
+must be passed, a hashref containing a valid configuration.
+
+If you only want to change a few keys from the default, the following shortcut
+might be useful:
+
+    my $xkpasswd_instance = XKPasswd->new(XKPasswd->default_config({dictionary_file_path => 'mydict.txt'}));
+    
+=head2 default_config()
+
+    my $config = XKPasswd->default_config();
+
+This function must be called via the package name, and returns a hashref
+containing a config with default values.
+
+Can be called with a single argument, a hashref containing keys with values to
+override the defaults with.
+
+    my $config = XKPasswd->default_config({dictionary_file_path => 'mydict.txt'});
+    
+When overrides are present, the function will carp if an inalid key or value is
+passed, and croak if the resulting merged config is invalid.
+    
+=head2 is_valid_config()
+
+    my $is_ok = XKPasswd->is_valid_config($config);
+    
+This function must be called via the package name, and must be passed a hashref
+to test. The function returns 1 if the passed config is valid, 0 otherwise.
+
+Optionally, any truthy value can be passed as a second argument to indicate
+that the function should croak on error rather than return 0;
+
+    use English qw( -no_match_vars );
+    eval{
+        XKPasswd->is_valid_config($config);
+    }or do{
+        print "ERROR - config is invalid because: $EVAL_ERROR\n";
+    }
+
+=head2 config()
+
+    my $config = $xkpasswd_instance->config(); # getter
+    $xkpasswd_instance->config($config); # setter
+    
+This function must be called on an XKpasswd instance.
+
+When called with no arguments the function returns a clone of the instance's
+config hashref.
+
+When called with a single argument the function sets the config of the instance
+to a clone of the passed hashref. The argument must be a hashref, and must
+contain valid config keys and values. The function will croak if an invalid
+config is passed.
 
 =head1 DIAGNOSTICS
 
