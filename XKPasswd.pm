@@ -421,6 +421,58 @@ sub is_valid_config{
 }
 ## use critic
 
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Convert a config hashref to a String
+# Returns    : A scalar
+# Arguments  : 1. A config hashref
+# Throws     : Croaks on invalid invocation or with invalid args. Carps if there
+#              are problems with the config hashref.
+# Notes      :
+# See Also   :
+sub config_to_string{
+    my $class = shift;
+    my $config = shift;
+    
+    # validate the args
+    unless(defined $class && $class eq $_CLASS){
+        croak((caller 0)[3].'() - invalid invocation of class method');
+    }
+    unless(defined $config && ref $config eq 'HASH'){
+        croak((caller 0)[3].'() - invalid arguments');
+    }
+    
+    # assemble the string to return
+    my $ans = q{};
+    foreach my $key (sort keys %{$_KEYS}){
+        # skip undefined keys
+        next unless defined $config->{$key};
+        
+        # make sure the key has the expected type
+        unless(ref $config->{$key} eq $_KEYS->{$key}->{ref}){
+            carp((caller 0)[3]."() - unexpected key type for key=$key (expected ref='$_KEYS->{$key}->{ref}', got ref='".ref $config->{$key}.q{')});
+            next;
+        }
+        
+        # process the key
+        if($_KEYS->{$key}->{ref} eq q{}){
+            # the key is a scalar
+            $ans .= $key.q{=}.$config->{$key}.qq{\n};
+        }elsif($_KEYS->{$key}->{ref} eq 'ARRAY'){
+            # the key is an array ref
+            $ans .= "$key=[";
+            $ans .= join q{, }, sort @{$config->{$key}};
+            $ans .= "]\n";
+        }else{
+            # this should never happen, but just in case, Carp
+            carp((caller 0)[3]."() - encounterd an un-handled key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
+        }
+    }
+    
+    # return the string
+    return $ans;
+}
+
 #
 # Public Instance functions ---------------------------------------------------
 #
@@ -477,6 +529,30 @@ sub config{
     
     # return a reference to self to facilitate function chaining
     return $self;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE
+# Purpose    : Return the config of the currently running instance as a string.
+# Returns    : A scalar.
+# Arguments  : NONE
+# Throws     : Croaks if invoked in an invalid way. Carps if it meets a key of a
+#              type not accounted for in the code.
+# Notes      :
+# See Also   :
+sub config_string{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    
+    # assemble the string to return
+    my $ans = $_CLASS->config_to_string($self->{_CONFIG});
+    
+    # return the string
+    return $ans;
 }
 
 #
@@ -873,31 +949,49 @@ If you only want to change a few keys from the default, the following shortcut
 might be useful:
 
     my $xkpasswd_instance = XKPasswd->new(XKPasswd->default_config({dictionary_file_path => 'mydict.txt'}));
+
+=head2 'CLASS' FUNCTIONS
+
+All 'class functions' (for want of a better term) must be invoked via the
+package name, or they will croak.
+
+=head3 clone_config()
+
+    my $clone = XKPasswd->clone_config($config);
     
-=head2 default_config()
+This function must be passed a valid config hashref as the first argument or it
+will croak. The function returns a hashref.
+
+=head3 config_to_string()
+
+    my $config_string = XKPasswd->config_to_string($config);
+    
+This function returns the content of the passed config hashref as a scalar
+string. The function must be passed a valid config hashref or it will croak.
+
+=head3 default_config()
 
     my $config = XKPasswd->default_config();
 
-This function must be called via the package name, and returns a hashref
-containing a config with default values.
+This function returns a hashref containing a config with default values.
 
-Can be called with a single argument, a hashref containing keys with values to
-override the defaults with.
+This function can optionally be called with a single argument, a hashref
+containing keys with values to override the defaults with.
 
     my $config = XKPasswd->default_config({dictionary_file_path => 'mydict.txt'});
     
-When overrides are present, the function will carp if an inalid key or value is
+When overrides are present, the function will carp if an invalid key or value is
 passed, and croak if the resulting merged config is invalid.
-    
-=head2 is_valid_config()
+
+=head3 is_valid_config()
 
     my $is_ok = XKPasswd->is_valid_config($config);
     
-This function must be called via the package name, and must be passed a hashref
-to test. The function returns 1 if the passed config is valid, 0 otherwise.
+This function must be passed a hashref to test as the first argument or it will
+croak. The function returns 1 if the passed config is valid, and 0 otherwise.
 
 Optionally, any truthy value can be passed as a second argument to indicate
-that the function should croak on error rather than return 0;
+that the function should croak on invalid configs rather than returning 0;
 
     use English qw( -no_match_vars );
     eval{
@@ -906,29 +1000,29 @@ that the function should croak on error rather than return 0;
         print "ERROR - config is invalid because: $EVAL_ERROR\n";
     }
 
-=head2 clone_config()
+=head2 INSTANCE FUNCTIONS
 
-    my $clone = XKPasswd->clone_config($config);
-    
-This function must be called via the package name, and must be passed a valid
-config hashref. The function returns a hashref.
+Instance functions must be called on an XKPasswd object or they will croak.
 
-The function Croaks if called in and invalid way, or, with an invalid config.
-
-=head2 config()
+=head3 config()
 
     my $config = $xkpasswd_instance->config(); # getter
     $xkpasswd_instance->config($config); # setter
-    
-This function must be called on an XKpasswd instance.
 
 When called with no arguments the function returns a clone of the instance's
 config hashref.
 
 When called with a single argument the function sets the config of the instance
-to a clone of the passed hashref. The argument must be a hashref, and must
-contain valid config keys and values. The function will croak if an invalid
-config is passed.
+to a clone of the passed hashref. If present, the argument must be a hashref,
+and must contain valid config keys and values. The function will croak if an
+invalid config is passed.
+
+=head3 config_string()
+
+    my $config_string = $xkpasswd_instance->config_string();
+    
+This function returns the content of the passed config hashref as a scalar
+string. The function must be passed a valid config hashref or it will croak.
 
 =head1 DIAGNOSTICS
 
