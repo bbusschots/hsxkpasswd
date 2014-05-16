@@ -208,6 +208,11 @@ sub new{
     # load the config
     $instance->config($config);
     
+    # if debugging, print out meta data
+    print "Initialised XKPasswd Instance with the following config:\n";
+    print $instance->config_string();
+    print 'Loaded Words: total='.(scalar @{$instance->{_CACHE_DICTIONARY_FULL}}).', valid='.(scalar @{$instance->{_CACHE_DICTIONARY_LIMITED}}).qq{\n};
+    
     # return the initialised object
     return $instance;
 }
@@ -524,7 +529,7 @@ sub config{
         $self->{_CONFIG} = $_CLASS->clone_config($config);
         
         # init the dictionary caches
-        # TO DO
+        $self->_load_dictionary_file();
     }
     
     # return a reference to self to facilitate function chaining
@@ -636,6 +641,65 @@ sub _validate_key{
     }
     
     # if we got here, all is well, so return 1
+    return 1;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Load the contents of the words file into the instance's cache.
+# Returns    : Always returns 1 (to keep perlcritic happy)
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation, or if there are not enough valid
+#              words in the file.
+# Notes      :
+# See Also   :
+sub _load_dictionary_file{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    
+    # slurp the words file
+    open my $WORDSFILE, '<', $self->{_CONFIG}->{dictionary_file_path};
+    my $words_raw = do{local $/ = undef; <$WORDSFILE>};
+    close $WORDSFILE;
+    
+    # loop through the lines to build a set of caches
+    my @cache_full = ();
+    my @cache_limited = ();
+    foreach my $line (split "\n", $words_raw){
+        # skip empty lines
+        next if $line =~ m/^\s*$/sx;
+        
+        # skip comment lines
+        next if $line =~ m/^[#]/sx;
+        
+        # skip anything that's not at least three letters
+        next unless $line =~ m/^[a-zA-Z]{4,}$/sx;
+        
+        # regardless of length, cache in full cache
+        push @cache_full, $line;
+        
+        # if within length range, save in main cache too
+        my $wlen = length $line;
+        if($wlen >= $self->{_CONFIG}->{word_length_min} && $wlen <= $self->{_CONFIG}->{word_length_max}){
+            push @cache_limited, $line;
+        }
+    }
+    
+    # ensure we got enough words
+    my $alen = scalar(@cache_limited);
+    unless($alen >= 100){
+        croak("Too few valid words in the dictionary file (need at least 100, got $alen)");
+    }
+    
+    # if all is well, load the caches into the object
+    $self->{_CACHE_DICTIONARY_FULL} = [@cache_full];
+    $self->{_CACHE_DICTIONARY_LIMITED} = [@cache_limited];
+    
+    # return 1 to keep perlcritic happy
     return 1;
 }
 
