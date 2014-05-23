@@ -21,6 +21,7 @@ use English qw( -no_match_vars ); # for more readable code
 
 # version info
 use version; our $VERSION = qv('2.1_01');
+my $MIN_WORDS = 100;
 
 # utility variables
 my $_CLASS = 'XKPasswd';
@@ -297,8 +298,8 @@ sub default_config{
 # Returns    : a hashref
 # Arguments  : 1. the config hashref to clone
 # Throws     : Croaks if called in an invalid way, or with an invalid config.
-# Notes      : This function needs to be updated each time a new valid config
-#              key is added to the library.
+# Notes      : This function needs to be updated each time a new non-scalar
+#              valid config key is added to the library.
 # See Also   :
 sub clone_config{
     my $class = shift;
@@ -312,21 +313,20 @@ sub clone_config{
         croak((caller 0)[3].'() - invalid args - a valid config hashref must be passed');
     }
     
-    # build the clone - clone all valid keys, if they exist in the running config
-    # scalar keys (required and optional) can be coppied straight over
-    my $clone = {
-        dictionary_file_path => $config->{dictionary_file_path},
-        word_length_min => $config->{word_length_min},
-        word_length_max => $config->{word_length_max},
-        separator_character => $config->{separator_character},
-        padding_digits_before => $config->{padding_digits_before},
-        padding_digits_after => $config->{padding_digits_after},
-        padding_characters_before => $config->{padding_characters_before},
-        padding_characters_after => $config->{padding_characters_after},
-        pad_to_length => $config->{pad_to_length},
-        padding_character => $config->{padding_character},
-        case_transform => $config->{case_transform},
-    };
+    # start with a blank hashref
+    my $clone = {};
+    
+    # copy over all the scalar keys
+    KEY_TO_CLONE:
+    foreach my $key (keys %{$_KEYS}){
+        # skip non-scalar keys
+        next KEY_TO_CLONE unless $_KEYS->{$key}->{ref} eq q{};
+        
+        #if the key exists in the config to clone, copy it to the clone
+        if(defined $config->{$key}){
+            $clone->{$key} = $config->{$key};
+        }
+    }
     
     # deal with the non-scarlar keys
     $clone->{symbol_alphabet} = [];
@@ -560,6 +560,76 @@ sub config_string{
     return $ans;
 }
 
+#####-SUB-######################################################################
+# Type       : INSTANCE
+# Purpose    : Alter the running config with new values.
+# Returns    : A reference to the instalce itself to enable function chaining.
+# Arguments  : 1. a hashref containing config keys and values.
+# Throws     : Croaks on invalid invocaiton, invalid args, and, if the resulting
+#              new config is in some way invalid.
+# Notes      : Invalid keys in the new keys hashref will be silently ignored.
+# See Also   :
+sub update_config{
+    my $self = shift;
+    my $new_keys = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    unless(defined $new_keys && ref $new_keys eq 'HASH'){
+        croak((caller 0)[3].'() - invalid arguments - the new config keys must be passed as a hashref');
+    }
+    
+    # clone the current config as a starting point for the new config
+    my $new_config = $self->_clone_config();
+    
+    # merge the new values into the config
+    my $num_keys_updated = 0;
+    foreach my $key (sort keys %{$_KEYS}){
+        # skip the key if it's not present in the list of new keys
+        next unless defined $new_keys->{$key};
+        
+        #validate the new key value
+        unless($_CLASS->_validate_key($key, $new_keys->{$key})){
+            croak((caller 0)[3]."() - invalid new value for key=$key");
+        }
+        
+        # update the key in the new config
+        $new_config->{$key} = $new_keys->{$key};
+        $num_keys_updated++;
+        print 'DEBUG - '.(caller 0)[3]."() - updated $key to new value\n" if $self->{debug};
+    }
+    print 'DEBUG - '.(caller 0)[3]."() - updated $num_keys_updated keys\n" if $self->{debug};
+    
+    # validate the merged config
+    unless($_CLASS->is_valid_config($new_config)){
+        croak((caller 0)[3].'() - updated config is invalid');
+    }
+    
+    # re-calculate the dictionary caches if needed
+    my @cache_all = @{$self->{_CACHE_DICTIONARY_FULL}};
+    my @cache_limited = @{$self->{_CACHE_DICTIONARY_LIMITED}};
+    my $new_dict = 0;
+    if($new_config->{dictionary_file_path} ne $self->{_CONFIG}->{dictionary_file_path}){
+        # rebuild the cache of all words
+        $new_dict = 1;
+        @cache_all = $_CLASS->parse_words_file($new_config->{dictionary_file_path});
+    }
+    if($new_dict || $new_config->{word_length_min} ne $self->{_CONFIG}->{word_length_min} || $new_config->{word_length_max} ne $self->{_CONFIG}->{word_length_max}){
+        # re-build the cache of valid words - throws an error if too few words are returned
+        @cache_limited = $_CLASS->_filter_word_list(\@cache_all, $new_config->{word_length_min}, $new_config->{word_length_max});
+    }
+    
+    # if we got here, all is well with the new config, so add it and the caches to the instance
+    $self->{_CONFIG} = $new_config;
+    $self->{_CACHE_DICTIONARY_FULL} = [@cache_all];
+    $self->{_CACHE_DICTIONARY_LIMITED} = [@cache_limited];
+    
+    # return a reference to self
+    return $self;
+}
+
 #
 # 'Private' functions ---------------------------------------------------------
 #
@@ -645,12 +715,111 @@ sub _validate_key{
 }
 
 #####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
+# Purpose    : Parse a dictionary file into an array of words.
+# Returns    : An array of words as scalars.
+# Arguments  : 1. a scalar containing the path to the file to parse
+# Throws     : Croaks on invalid invocation, invalid args, and if there is an
+#              error reading the file.
+# Notes      :
+# See Also   :
+sub _parse_words_file{
+    my $class = shift;
+    my $path = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        croak((caller 0)[3].'() - invalid invocation of class method');
+    }
+    unless(defined $path && ref $path eq q{} && -f $path){
+        croak((caller 0)[3].'() - invoked with invalid file path');
+    }
+    
+    # slurp the words file
+    open my $WORDSFILE, '<', $path or croak("failed to open words file at $path");
+    my $words_raw = do{local $/ = undef; <$WORDSFILE>};
+    close $WORDSFILE;
+    
+    #loop throuh the lines and build up the word list
+    my @ans = ();
+    LINE:
+    foreach my $line (split /\n/sx, $words_raw){
+         # skip empty lines
+        next LINE if $line =~ m/^\s*$/sx;
+        
+        # skip comment lines
+        next LINE if $line =~ m/^[#]/sx;
+        
+        # skip anything that's not at least three letters
+        next LINE unless $line =~ m/^[[:alpha:]]{4,}$/sx;
+        
+        # store the word
+        push @ans, $line;
+    }
+    
+    # return the answer
+    return @ans;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
+# Purpose    : Filter a word list based on word length
+# Returns    : An array of words as scalars.
+# Arguments  : 1. a reference to the array of words to filter.
+# Throws     : Croaks on invalid invocation, or if too few matching words found.
+# Notes      :
+# See Also   :
+sub _filter_word_list{
+    my $class = shift;
+    my $word_list_ref = shift;
+    my $min_len = shift;
+    my $max_len = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        croak((caller 0)[3].'() - invalid invocation of class method');
+    }
+    unless(defined $word_list_ref && ref $word_list_ref eq q{ARRAY}){
+        croak((caller 0)[3].'() - invoked with invalid word list');
+    }
+    unless(defined $min_len && ref $min_len eq q{} && $min_len =~ m/^\d+$/sx && $min_len > 3){
+        croak((caller 0)[3].'() - invoked with invalid minimum word length');
+    }
+    unless(defined $max_len && ref $max_len eq q{} && $max_len =~ m/^\d+$/sx && $max_len >= $min_len){
+        croak((caller 0)[3].'() - invoked with invalid maximum word length');
+    }
+    
+    #build the array of words of appropriate length
+    my @ans = ();
+    WORD:
+    foreach my $word (@{$word_list_ref}){
+        # skip words shorter than the minimum
+        next WORD if length $word < $min_len;
+        
+        # skip words longer than the maximum
+        next WORD if length $word > $max_len;
+        
+        # store the word in the filtered list
+        push @ans, $word;
+    }
+    
+    # ensure we got enough words
+    my $alen = scalar @ans;
+    unless($alen >= $MIN_WORDS){
+        croak("Too few valid words in the dictionary file (need at least $MIN_WORDS, got $alen)");
+    }
+    
+    # return the list
+    return @ans;
+}
+
+#####-SUB-######################################################################
 # Type       : INSTANCE (PRIVATE)
 # Purpose    : Load the contents of the words file into the instance's cache.
 # Returns    : Always returns 1 (to keep perlcritic happy)
 # Arguments  : NONE
-# Throws     : Croaks on invalid invocation, or if there are not enough valid
-#              words in the file.
+# Throws     : Croaks on invalid invocation, if there is a problem reading the
+#              file or if there are not enough valid words in the file.
 # Notes      :
 # See Also   :
 sub _load_dictionary_file{
@@ -661,39 +830,11 @@ sub _load_dictionary_file{
         croak((caller 0)[3].'() - invalid invocation of instance method');
     }
     
-    # slurp the words file
-    open my $WORDSFILE, '<', $self->{_CONFIG}->{dictionary_file_path};
-    my $words_raw = do{local $/ = undef; <$WORDSFILE>};
-    close $WORDSFILE;
+    # parse the dictionary file - croaks on error
+    my @cache_full = $_CLASS->_parse_words_file($self->{_CONFIG}->{dictionary_file_path});
     
-    # loop through the lines to build a set of caches
-    my @cache_full = ();
-    my @cache_limited = ();
-    foreach my $line (split "\n", $words_raw){
-        # skip empty lines
-        next if $line =~ m/^\s*$/sx;
-        
-        # skip comment lines
-        next if $line =~ m/^[#]/sx;
-        
-        # skip anything that's not at least three letters
-        next unless $line =~ m/^[a-zA-Z]{4,}$/sx;
-        
-        # regardless of length, cache in full cache
-        push @cache_full, $line;
-        
-        # if within length range, save in main cache too
-        my $wlen = length $line;
-        if($wlen >= $self->{_CONFIG}->{word_length_min} && $wlen <= $self->{_CONFIG}->{word_length_max}){
-            push @cache_limited, $line;
-        }
-    }
-    
-    # ensure we got enough words
-    my $alen = scalar(@cache_limited);
-    unless($alen >= 100){
-        croak("Too few valid words in the dictionary file (need at least 100, got $alen)");
-    }
+    # generate the valid word cache - croaks if too few words left after filtering
+    my @cache_limited = $_CLASS->_filter_word_list(\@cache_full, $self->{_CONFIG}->{word_length_min}, $self->{_CONFIG}->{word_length_max});
     
     # if all is well, load the caches into the object
     $self->{_CACHE_DICTIONARY_FULL} = [@cache_full];
@@ -1087,6 +1228,16 @@ invalid config is passed.
     
 This function returns the content of the passed config hashref as a scalar
 string. The function must be passed a valid config hashref or it will croak.
+
+=head3 update_config()
+
+    $xkpasswd_instance->update_config({separator_character => '+'});
+    
+The function updates the config within an XKPassws instance. A hashref with the
+config options to be changed must be passed. The function returns a reference to
+the instance to enable function chaining. The function will croak if the updated
+config would be invalid in some way. Note that if this happens the running
+config will not have been altered in any way.
 
 =head1 DIAGNOSTICS
 
