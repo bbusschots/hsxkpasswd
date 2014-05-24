@@ -159,7 +159,25 @@ my $_KEYS = {
             unless($key =~ m/^(NONE)|(UPPER)|(LOWER)|(CAPITALISE)|(INVERSE)|(RANDOM)$/sx){ return 0; }
             return 1;
         },
-        desc => q{a scalar containing one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERSE', or 'RANDOM'}
+        desc => q{A scalar containing one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERSE', or 'RANDOM'},
+    },
+    random_function => {
+        req => 1,
+        ref => q{CODE}, # Code ref
+        validate => sub {
+            return 1; # no validation to do other than making sure it's a code ref
+        },
+        desc => q{A code ref to a function for generating n random numbers between 0 and 1},
+    },
+    random_increment => {
+        req => 1,
+        ref => q{}, # SCALAR
+        validate => sub { # positive integer >= 1
+            my $key = shift;
+            unless($key =~ m/^\d+$/sx && $key >= 1){ return 0; }
+            return 1;
+        },
+        desc => 'A scalar containing an integer value greater than or equal to one',
     },
 };
 
@@ -210,9 +228,12 @@ sub new{
     $instance->config($config);
     
     # if debugging, print out meta data
-    print "Initialised XKPasswd Instance with the following config:\n";
-    print $instance->config_string();
-    print 'Loaded Words: total='.(scalar @{$instance->{_CACHE_DICTIONARY_FULL}}).', valid='.(scalar @{$instance->{_CACHE_DICTIONARY_LIMITED}}).qq{\n};
+    if($debug){
+        print "Initialised XKPasswd Instance with the following config:\n";
+        print $instance->config_string();
+        print "Cache Status:\n";
+        print $instance->caches_state();
+    }
     
     # return the initialised object
     return $instance;
@@ -261,6 +282,8 @@ sub default_config{
         padding_characters_before => 2,
         padding_characters_after => 2,
         case_transform => 'NONE',
+        random_function => \&XKPasswd::basic_random_generator,
+        random_increment => 10,
     };
     
     # if overrides were passed, apply them and validate
@@ -333,6 +356,7 @@ sub clone_config{
     foreach my $symbol (@{$config->{symbol_alphabet}}){
         push @{$clone->{symbol_alphabet}}, $symbol;
     }
+    $clone->{random_function} = $config->{random_function};
     
     # return the clone
     return $clone;
@@ -468,9 +492,11 @@ sub config_to_string{
             $ans .= "$key=[";
             $ans .= join q{, }, sort @{$config->{$key}};
             $ans .= "]\n";
+        }elsif($_KEYS->{$key}->{ref} eq 'CODE'){
+            $ans .= $key.q{=}.$config->{$key}.qq{\n};
         }else{
-            # this should never happen, but just in case, Carp
-            carp((caller 0)[3]."() - encounterd an un-handled key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
+            # this should never happen, but just in case, Confess (makes it easier to find than carping)
+            confess((caller 0)[3]."() - encounterd an un-handled key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
         }
     }
     
@@ -628,6 +654,64 @@ sub update_config{
     
     # return a reference to self
     return $self;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE
+# Purpose    : Return the status of the internal caches within the instnace.
+# Returns    : A string
+# Arguments  : NONE
+# Throws     : Croaks in invalid invocation
+# Notes      :
+# See Also   :
+sub caches_state{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    
+    # generate the string
+    my $ans = q{};
+    $ans .= 'Loaded Words: '.(scalar @{$self->{_CACHE_DICTIONARY_LIMITED}}).' (out of '.(scalar @{$self->{_CACHE_DICTIONARY_FULL}}).' loaded from the file)'.qq{\n};
+    $ans .= 'Cached Random Numbers: '.(scalar @{$self->{_CACHE_RANDOM}}).qq{\n};
+    
+    # return it
+    return $ans;
+}
+
+#
+# Regular Subs-----------------------------------------------------------------
+#
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE
+# Purpose    : The default random generator function.
+# Returns    : An array of random decimal numbers between 0 and 1 as scalars.
+# Arguments  : 1. the number of random numbers to generate (must be at least 1)
+#              2. OPTIONAL - a truthy value to enable debugging
+# Throws     : Croaks on invalid args
+# Notes      :
+# See Also   :
+sub basic_random_generator{
+    my $num = shift;
+    my $debug = shift;
+    
+    # validate args
+    unless(defined $num && $num =~ m/^\d+$/sx && $num >= 1){
+        croak((caller 0)[3].'() - invalid args - must request at least 1 password');
+    }
+    
+    # generate the random numbers
+    my @ans = ();
+    my $num_to_generate = $num;
+    while($num_to_generate > 0){
+        push @ans, rand;
+    }
+    
+    # return the random numbers
+    return @ans;
 }
 
 #
@@ -844,6 +928,113 @@ sub _load_dictionary_file{
     return 1;
 }
 
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Generate a random integer greater than 0 and less than a given
+#              maximum value.
+# Returns    : A random integer as a scalar.
+# Arguments  : 1. the min value for the random number (as a positive integer)
+# Throws     : Croaks if invoked in an invalid way, with invalid args, of if
+#              there is a problem generating random numbers (should the cache)
+#              be empty.
+# Notes      : The random cache is used as the source for the randomness. If the
+#              random pool is empty, this function will replenish it.
+# See Also   :
+sub _get_random_int{
+    my $self = shift;
+    my $max = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    unless(defined $max && $max =~ m/^\d+$/sx && $max > 0){
+        croak((caller 0)[3].'() - invoked with invalid random limit');
+    }
+    
+    # calculate the random number
+    my $ans = ($self->_rand() * 1_000_000) % $max;
+    
+    # return it
+    return $ans;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Return the next random number in the cache, and if needed,
+#              replenish it.
+# Returns    : A decimal number between 0 and 1
+# Arguments  : NONE
+# Throws     : Croaks if invoked in an invalid way, or if there is problem
+#              replenishing the random cache.
+# Notes      :
+# See Also   :
+sub _rand{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    
+    # get the next random number from the cache
+    my $num = shift @{$self->{_CACHE_RANDOM}};
+    if(!defined $num){
+        # the cache was empty - so try top up the random cache - could croak
+        $self->_increment_random_cache();
+        
+        # try shift again
+        $num = shift @{$self->{_CACHE_RANDOM}};
+    }
+    
+    # make sure we got a valid random number
+    unless(defined $num && $num =~ m/^\d+([.]\d+)?$/sx && $num >= 0 && $num <= 1){
+        croak((caller 0)[3].'() - found invalid entry in random cache');
+    }
+    
+    # return the random number
+    return $num;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Append random numbers to the cache.
+# Returns    : Always returns 1.
+# Arguments  : NONE
+# Throws     : Croaks if incorrectly invoked or if the random generating
+#              function fails to produce random numbers.
+# Notes      :
+# See Also   :
+sub _increment_random_cache{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    
+    # genereate the random numbers
+    my @random_numbers = &{$self->{_CONFIG}->{random_function}}($self->{_CONFIG}->{random_increment});
+    
+    # validate them
+    unless($#random_numbers == $self->{_CONFIG}->{random_increment}){
+        croak((caller 0)[3].'() - random function did not return the correct number of random numbers');
+    }
+    foreach my $num (@random_numbers){
+        unless($num =~ m/^1|(0([.]\d+)?)$/sx){
+            croak((caller 0)[3]."() - random function returned and invalid value ($num)");
+        }
+    }
+    
+    # add them to the cache
+    foreach my $num (@random_numbers){
+        push @{$self->{_CACHE_RANDOM}}, $num;
+    }
+    
+    # always return 1 (to keep PerlCritic happy)
+    return 1;
+}
+
 1; # because Perl is just a little bit odd :)
 __END__
 
@@ -992,11 +1183,21 @@ permutations of the best-case.
 
 =head2 DICTIONARY FILES
 
-TO DO
+XKPasswd instances use text files as the source for the list of words to
+randomly choose from when generating the password. Each instance uses one text
+file, referred to as the Dictionary File, and specified via the
+C<dictionary_file_path> config variable.
+
+Dictionary files should contain one word per line. Words shorter than four
+letters will be ignored, as will all lines starting with the # symbol.
+
+This format is the same as that of the standard Unix Words file, usually found
+at C</usr/share/dict/words> on Unix and Linux operating systems (including OS
+X).
 
 =head2 CONFIGURATION HASHREFS
 
-A number of subroutines require a configuration harshref as an argument. The
+A number of subroutines require a configuration hashref as an argument. The
 following are the valid keys for that hashref, what they mean, and what values
 are valid for each.
 
@@ -1115,6 +1316,20 @@ is specified.
 =back
 
 The default value returned by C<default_config()> is C<FIXED>.
+
+=item *
+
+C<random_function> - a reference to the function to be used use to generate
+random numbers during the password generation process. The function generate
+an array of random decimal numbers between 0 and 1, take one argument, the
+number of random numbers to generate, and it must return an array. By default
+the function C<XKPasswd::basic_random_generator()> is used.
+
+=item *
+
+C<random_increment> - the number of random digits to generate at a time when
+ever the instance's cache of randomness runs low. Must be an integer greater
+than or equal to 1. The default is 10.
 
 =item *
 
