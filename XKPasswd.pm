@@ -179,6 +179,19 @@ my $_KEYS = {
         },
         desc => 'A scalar containing an integer value greater than or equal to one',
     },
+    character_substitutions => {
+        req => 1,
+        ref => 'HASH', # Hashref REF
+        validate => sub {
+            my $key = shift;
+            foreach my $char (keys %{$key}){
+                unless(ref $char eq q{} && $char =~ m/^\w$/sx){ return 0; } # single char key
+                unless(ref $key->{$char} eq q{} && $key->{$char} =~ m/^\S+$/sx){ return 0; }
+            }
+            return 1;
+        },
+        desc => 'An hash ref mapping characters to replace with their replacements - can be empty',
+    },
 };
 
 #
@@ -284,6 +297,7 @@ sub default_config{
         case_transform => 'NONE',
         random_function => \&XKPasswd::basic_random_generator,
         random_increment => 10,
+        character_substitutions => {},
     };
     
     # if overrides were passed, apply them and validate
@@ -357,6 +371,10 @@ sub clone_config{
         push @{$clone->{symbol_alphabet}}, $symbol;
     }
     $clone->{random_function} = $config->{random_function};
+    $clone->{character_substitutions} = {};
+    foreach my $key (keys %{$config->{character_substitutions}}){
+        $clone->{character_substitutions}->{$key} = $config->{character_substitutions}->{$key};
+    }
     
     # return the clone
     return $clone;
@@ -437,7 +455,7 @@ sub is_valid_config{
         }
     }
     
-    # if there is adaptice padding, make sure a length is specified
+    # if there is adaptive padding, make sure a length is specified
     if($config->{padding_type} eq 'ADAPTIVE'){
         unless(defined $config->{pad_to_length}){
             croak(q{padding_type='ADAPTIVE' requires pad_to_length be set}) if $croak;
@@ -484,6 +502,7 @@ sub config_to_string{
         }
         
         # process the key
+        ## no critic (ProhibitCascadingIfElse);
         if($_KEYS->{$key}->{ref} eq q{}){
             # the key is a scalar
             $ans .= $key.q{=}.$config->{$key}.qq{\n};
@@ -492,12 +511,21 @@ sub config_to_string{
             $ans .= "$key=[";
             $ans .= join q{, }, sort @{$config->{$key}};
             $ans .= "]\n";
+        }elsif($_KEYS->{$key}->{ref} eq 'HASH'){
+            $ans .= "$key={";
+            my @parts = ();
+            foreach my $subkey (sort keys %{$config->{$key}}){
+                push @parts, "$subkey=$config->{$key}->{$subkey}";
+            }
+            $ans .= join q{, }, @parts;
+            $ans .= "}\n";
         }elsif($_KEYS->{$key}->{ref} eq 'CODE'){
             $ans .= $key.q{=}.$config->{$key}.qq{\n};
         }else{
             # this should never happen, but just in case, Confess (makes it easier to find than carping)
             confess((caller 0)[3]."() - encounterd an un-handled key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
         }
+        ## use critic
     }
     
     # return the string
@@ -1248,6 +1276,14 @@ The default value returned by C<default_config()> is C<NONE>.
 
 =item *
 
+C<character_substitutions> - a hashref containing zero or more character
+substitutions to be applied to the words that make up the bulk of the generated
+passwords. The keys in the hashref are the characters to be replaced, and must
+be single alpha numeric characters, while the values in the hashrefs are the
+replacements, and can be longer.
+
+=item *
+
 C<dictionary_file_path> - a scalar containing the path to the dictionary file
 to be used when generating passwords. The path must exist and point to a
 regular file. The default value for this key returned by C<default_config()>
@@ -1357,6 +1393,30 @@ C<word_length_min>. For security reasons, both values must be greater than 3.
 The default values returned by C<default_config()> is are 4 & 8.
 
 =back
+
+=head2 Random Functions
+
+In order to avoid this module relying on any non-standard modules, the default
+source of randomness is Perl's built-in C<rand()> function. This provides a
+reasonable level of randomness, and should suffice for most users, however,
+some users will prefer to make use of one of the many advanced randomisation
+modules in CPAN, or, reach out to a web service like L<http://random.org> for
+their randomness. To facilitate both of these options, this module uses a
+cache of randomness, and allows a custom randomness function to be specified
+by setting the config variable C<random_function> to a coderef to the function.
+
+Functions specified in this way must take exactly one argument, an integer
+number greater than zero, and then return that many random decimal numbers
+between zero and one.
+
+The random function is not called each time a random number is needed, instead
+a number of random numbers are generated at once, and cached until they are
+needed. The amount of random numbers generated at once is controlled by the
+C<random_increment> config variable. The reason the module works in this way
+is to facilitate web-based services which prefer you to generate many numbers
+at once rather than invoking them repeatedly. For example, Random.org ask
+developers to query them for more random numbers less frequently.
+
 
 =head2 CONSTRUCTOR
 
