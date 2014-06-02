@@ -776,7 +776,6 @@ sub basic_random_generator{
     
     # return the random numbers
     return @ans;
->>>>>>> FETCH_HEAD
 }
 
 #
