@@ -21,6 +21,7 @@ use English qw( -no_match_vars ); # for more readable code
 
 # version info
 use version; our $VERSION = qv('2.1_01');
+my $MIN_WORDS = 100;
 
 # utility variables
 my $_CLASS = 'XKPasswd';
@@ -168,7 +169,38 @@ my $_KEYS = {
             unless($key =~ m/^(NONE)|(UPPER)|(LOWER)|(CAPITALISE)|(INVERSE)|(RANDOM)$/sx){ return 0; }
             return 1;
         },
-        desc => q{a scalar containing one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERSE', or 'RANDOM'}
+        desc => q{A scalar containing one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERSE', or 'RANDOM'},
+    },
+    random_function => {
+        req => 1,
+        ref => q{CODE}, # Code ref
+        validate => sub {
+            return 1; # no validation to do other than making sure it's a code ref
+        },
+        desc => q{A code ref to a function for generating n random numbers between 0 and 1},
+    },
+    random_increment => {
+        req => 1,
+        ref => q{}, # SCALAR
+        validate => sub { # positive integer >= 1
+            my $key = shift;
+            unless($key =~ m/^\d+$/sx && $key >= 1){ return 0; }
+            return 1;
+        },
+        desc => 'A scalar containing an integer value greater than or equal to one',
+    },
+    character_substitutions => {
+        req => 1,
+        ref => 'HASH', # Hashref REF
+        validate => sub {
+            my $key = shift;
+            foreach my $char (keys %{$key}){
+                unless(ref $char eq q{} && $char =~ m/^\w$/sx){ return 0; } # single char key
+                unless(ref $key->{$char} eq q{} && $key->{$char} =~ m/^\S+$/sx){ return 0; }
+            }
+            return 1;
+        },
+        desc => 'An hash ref mapping characters to replace with their replacements - can be empty',
     },
 };
 
@@ -219,9 +251,12 @@ sub new{
     $instance->config($config);
     
     # if debugging, print out meta data
-    print "Initialised XKPasswd Instance with the following config:\n";
-    print $instance->config_string();
-    print 'Loaded Words: total='.(scalar @{$instance->{_CACHE_DICTIONARY_FULL}}).', valid='.(scalar @{$instance->{_CACHE_DICTIONARY_LIMITED}}).qq{\n};
+    if($debug){
+        print "Initialised XKPasswd Instance with the following config:\n";
+        print $instance->config_string();
+        print "Cache Status:\n";
+        print $instance->caches_state();
+    }
     
     # return the initialised object
     return $instance;
@@ -271,6 +306,9 @@ sub default_config{
         padding_characters_before => 2,
         padding_characters_after => 2,
         case_transform => 'NONE',
+        random_function => \&XKPasswd::basic_random_generator,
+        random_increment => 10,
+        character_substitutions => {},
     };
     
     # if overrides were passed, apply them and validate
@@ -308,8 +346,8 @@ sub default_config{
 # Returns    : a hashref
 # Arguments  : 1. the config hashref to clone
 # Throws     : Croaks if called in an invalid way, or with an invalid config.
-# Notes      : This function needs to be updated each time a new valid config
-#              key is added to the library.
+# Notes      : This function needs to be updated each time a new non-scalar
+#              valid config key is added to the library.
 # See Also   :
 sub clone_config{
     my $class = shift;
@@ -323,26 +361,30 @@ sub clone_config{
         croak((caller 0)[3].'() - invalid args - a valid config hashref must be passed');
     }
     
-    # build the clone - clone all valid keys, if they exist in the running config
-    # scalar keys (required and optional) can be coppied straight over
-    my $clone = {
-        dictionary_file_path => $config->{dictionary_file_path},
-        word_length_min => $config->{word_length_min},
-        word_length_max => $config->{word_length_max},
-        separator_character => $config->{separator_character},
-        padding_digits_before => $config->{padding_digits_before},
-        padding_digits_after => $config->{padding_digits_after},
-        padding_characters_before => $config->{padding_characters_before},
-        padding_characters_after => $config->{padding_characters_after},
-        pad_to_length => $config->{pad_to_length},
-        padding_character => $config->{padding_character},
-        case_transform => $config->{case_transform},
-    };
+    # start with a blank hashref
+    my $clone = {};
+    
+    # copy over all the scalar keys
+    KEY_TO_CLONE:
+    foreach my $key (keys %{$_KEYS}){
+        # skip non-scalar keys
+        next KEY_TO_CLONE unless $_KEYS->{$key}->{ref} eq q{};
+        
+        #if the key exists in the config to clone, copy it to the clone
+        if(defined $config->{$key}){
+            $clone->{$key} = $config->{$key};
+        }
+    }
     
     # deal with the non-scarlar keys
     $clone->{symbol_alphabet} = [];
     foreach my $symbol (@{$config->{symbol_alphabet}}){
         push @{$clone->{symbol_alphabet}}, $symbol;
+    }
+    $clone->{random_function} = $config->{random_function};
+    $clone->{character_substitutions} = {};
+    foreach my $key (keys %{$config->{character_substitutions}}){
+        $clone->{character_substitutions}->{$key} = $config->{character_substitutions}->{$key};
     }
     
     # return the clone
@@ -424,7 +466,7 @@ sub is_valid_config{
         }
     }
     
-    # if there is adaptice padding, make sure a length is specified
+    # if there is adaptive padding, make sure a length is specified
     if($config->{padding_type} eq 'ADAPTIVE'){
         unless(defined $config->{pad_to_length}){
             croak(q{padding_type='ADAPTIVE' requires pad_to_length be set}) if $croak;
@@ -471,6 +513,7 @@ sub config_to_string{
         }
         
         # process the key
+        ## no critic (ProhibitCascadingIfElse);
         if($_KEYS->{$key}->{ref} eq q{}){
             # the key is a scalar
             $ans .= $key.q{=}.$config->{$key}.qq{\n};
@@ -479,10 +522,21 @@ sub config_to_string{
             $ans .= "$key=[";
             $ans .= join q{, }, sort @{$config->{$key}};
             $ans .= "]\n";
+        }elsif($_KEYS->{$key}->{ref} eq 'HASH'){
+            $ans .= "$key={";
+            my @parts = ();
+            foreach my $subkey (sort keys %{$config->{$key}}){
+                push @parts, "$subkey=$config->{$key}->{$subkey}";
+            }
+            $ans .= join q{, }, @parts;
+            $ans .= "}\n";
+        }elsif($_KEYS->{$key}->{ref} eq 'CODE'){
+            $ans .= $key.q{=}.$config->{$key}.qq{\n};
         }else{
-            # this should never happen, but just in case, Carp
-            carp((caller 0)[3]."() - encounterd an un-handled key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
+            # this should never happen, but just in case, Confess (makes it easier to find than carping)
+            confess((caller 0)[3]."() - encounterd an un-handled key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
         }
+        ## use critic
     }
     
     # return the string
@@ -573,6 +627,100 @@ sub config_string{
 
 #####-SUB-######################################################################
 # Type       : INSTANCE
+# Purpose    : Alter the running config with new values.
+# Returns    : A reference to the instalce itself to enable function chaining.
+# Arguments  : 1. a hashref containing config keys and values.
+# Throws     : Croaks on invalid invocaiton, invalid args, and, if the resulting
+#              new config is in some way invalid.
+# Notes      : Invalid keys in the new keys hashref will be silently ignored.
+# See Also   :
+sub update_config{
+    my $self = shift;
+    my $new_keys = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    unless(defined $new_keys && ref $new_keys eq 'HASH'){
+        croak((caller 0)[3].'() - invalid arguments - the new config keys must be passed as a hashref');
+    }
+    
+    # clone the current config as a starting point for the new config
+    my $new_config = $self->_clone_config();
+    
+    # merge the new values into the config
+    my $num_keys_updated = 0;
+    foreach my $key (sort keys %{$_KEYS}){
+        # skip the key if it's not present in the list of new keys
+        next unless defined $new_keys->{$key};
+        
+        #validate the new key value
+        unless($_CLASS->_validate_key($key, $new_keys->{$key})){
+            croak((caller 0)[3]."() - invalid new value for key=$key");
+        }
+        
+        # update the key in the new config
+        $new_config->{$key} = $new_keys->{$key};
+        $num_keys_updated++;
+        print 'DEBUG - '.(caller 0)[3]."() - updated $key to new value\n" if $self->{debug};
+    }
+    print 'DEBUG - '.(caller 0)[3]."() - updated $num_keys_updated keys\n" if $self->{debug};
+    
+    # validate the merged config
+    unless($_CLASS->is_valid_config($new_config)){
+        croak((caller 0)[3].'() - updated config is invalid');
+    }
+    
+    # re-calculate the dictionary caches if needed
+    my @cache_all = @{$self->{_CACHE_DICTIONARY_FULL}};
+    my @cache_limited = @{$self->{_CACHE_DICTIONARY_LIMITED}};
+    my $new_dict = 0;
+    if($new_config->{dictionary_file_path} ne $self->{_CONFIG}->{dictionary_file_path}){
+        # rebuild the cache of all words
+        $new_dict = 1;
+        @cache_all = $_CLASS->parse_words_file($new_config->{dictionary_file_path});
+    }
+    if($new_dict || $new_config->{word_length_min} ne $self->{_CONFIG}->{word_length_min} || $new_config->{word_length_max} ne $self->{_CONFIG}->{word_length_max}){
+        # re-build the cache of valid words - throws an error if too few words are returned
+        @cache_limited = $_CLASS->_filter_word_list(\@cache_all, $new_config->{word_length_min}, $new_config->{word_length_max});
+    }
+    
+    # if we got here, all is well with the new config, so add it and the caches to the instance
+    $self->{_CONFIG} = $new_config;
+    $self->{_CACHE_DICTIONARY_FULL} = [@cache_all];
+    $self->{_CACHE_DICTIONARY_LIMITED} = [@cache_limited];
+    
+    # return a reference to self
+    return $self;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE
+# Purpose    : Return the status of the internal caches within the instnace.
+# Returns    : A string
+# Arguments  : NONE
+# Throws     : Croaks in invalid invocation
+# Notes      :
+# See Also   :
+sub caches_state{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+
+    # generate the string
+    my $ans = q{};
+    $ans .= 'Loaded Words: '.(scalar @{$self->{_CACHE_DICTIONARY_LIMITED}}).' (out of '.(scalar @{$self->{_CACHE_DICTIONARY_FULL}}).' loaded from the file)'.qq{\n};
+    $ans .= 'Cached Random Numbers: '.(scalar @{$self->{_CACHE_RANDOM}}).qq{\n};
+    
+    # return it
+    return $ans;
+}
+
+#####-SUB-######################################################################
 # Purpose    : Generaete a random password based on the object's loaded config
 # Returns    : a passowrd as a string
 # Arguments  : NONE
@@ -595,6 +743,40 @@ sub password{
     #
     # Then assemble the finished password
     #
+}
+
+#
+# Regular Subs-----------------------------------------------------------------
+#
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE
+# Purpose    : The default random generator function.
+# Returns    : An array of random decimal numbers between 0 and 1 as scalars.
+# Arguments  : 1. the number of random numbers to generate (must be at least 1)
+#              2. OPTIONAL - a truthy value to enable debugging
+# Throws     : Croaks on invalid args
+# Notes      :
+# See Also   :
+sub basic_random_generator{
+    my $num = shift;
+    my $debug = shift;
+    
+    # validate args
+    unless(defined $num && $num =~ m/^\d+$/sx && $num >= 1){
+        croak((caller 0)[3].'() - invalid args - must request at least 1 password');
+    }
+    
+    # generate the random numbers
+    my @ans = ();
+    my $num_to_generate = $num;
+    while($num_to_generate > 0){
+        push @ans, rand;
+    }
+    
+    # return the random numbers
+    return @ans;
+>>>>>>> FETCH_HEAD
 }
 
 #
@@ -682,12 +864,111 @@ sub _validate_key{
 }
 
 #####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
+# Purpose    : Parse a dictionary file into an array of words.
+# Returns    : An array of words as scalars.
+# Arguments  : 1. a scalar containing the path to the file to parse
+# Throws     : Croaks on invalid invocation, invalid args, and if there is an
+#              error reading the file.
+# Notes      :
+# See Also   :
+sub _parse_words_file{
+    my $class = shift;
+    my $path = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        croak((caller 0)[3].'() - invalid invocation of class method');
+    }
+    unless(defined $path && ref $path eq q{} && -f $path){
+        croak((caller 0)[3].'() - invoked with invalid file path');
+    }
+    
+    # slurp the words file
+    open my $WORDSFILE, '<', $path or croak("failed to open words file at $path");
+    my $words_raw = do{local $/ = undef; <$WORDSFILE>};
+    close $WORDSFILE;
+    
+    #loop throuh the lines and build up the word list
+    my @ans = ();
+    LINE:
+    foreach my $line (split /\n/sx, $words_raw){
+         # skip empty lines
+        next LINE if $line =~ m/^\s*$/sx;
+        
+        # skip comment lines
+        next LINE if $line =~ m/^[#]/sx;
+        
+        # skip anything that's not at least three letters
+        next LINE unless $line =~ m/^[[:alpha:]]{4,}$/sx;
+        
+        # store the word
+        push @ans, $line;
+    }
+    
+    # return the answer
+    return @ans;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
+# Purpose    : Filter a word list based on word length
+# Returns    : An array of words as scalars.
+# Arguments  : 1. a reference to the array of words to filter.
+# Throws     : Croaks on invalid invocation, or if too few matching words found.
+# Notes      :
+# See Also   :
+sub _filter_word_list{
+    my $class = shift;
+    my $word_list_ref = shift;
+    my $min_len = shift;
+    my $max_len = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        croak((caller 0)[3].'() - invalid invocation of class method');
+    }
+    unless(defined $word_list_ref && ref $word_list_ref eq q{ARRAY}){
+        croak((caller 0)[3].'() - invoked with invalid word list');
+    }
+    unless(defined $min_len && ref $min_len eq q{} && $min_len =~ m/^\d+$/sx && $min_len > 3){
+        croak((caller 0)[3].'() - invoked with invalid minimum word length');
+    }
+    unless(defined $max_len && ref $max_len eq q{} && $max_len =~ m/^\d+$/sx && $max_len >= $min_len){
+        croak((caller 0)[3].'() - invoked with invalid maximum word length');
+    }
+    
+    #build the array of words of appropriate length
+    my @ans = ();
+    WORD:
+    foreach my $word (@{$word_list_ref}){
+        # skip words shorter than the minimum
+        next WORD if length $word < $min_len;
+        
+        # skip words longer than the maximum
+        next WORD if length $word > $max_len;
+        
+        # store the word in the filtered list
+        push @ans, $word;
+    }
+    
+    # ensure we got enough words
+    my $alen = scalar @ans;
+    unless($alen >= $MIN_WORDS){
+        croak("Too few valid words in the dictionary file (need at least $MIN_WORDS, got $alen)");
+    }
+    
+    # return the list
+    return @ans;
+}
+
+#####-SUB-######################################################################
 # Type       : INSTANCE (PRIVATE)
 # Purpose    : Load the contents of the words file into the instance's cache.
 # Returns    : Always returns 1 (to keep perlcritic happy)
 # Arguments  : NONE
-# Throws     : Croaks on invalid invocation, or if there are not enough valid
-#              words in the file.
+# Throws     : Croaks on invalid invocation, if there is a problem reading the
+#              file or if there are not enough valid words in the file.
 # Notes      :
 # See Also   :
 sub _load_dictionary_file{
@@ -698,45 +979,124 @@ sub _load_dictionary_file{
         croak((caller 0)[3].'() - invalid invocation of instance method');
     }
     
-    # slurp the words file
-    open my $WORDSFILE, '<', $self->{_CONFIG}->{dictionary_file_path};
-    my $words_raw = do{local $/ = undef; <$WORDSFILE>};
-    close $WORDSFILE;
+    # parse the dictionary file - croaks on error
+    my @cache_full = $_CLASS->_parse_words_file($self->{_CONFIG}->{dictionary_file_path});
     
-    # loop through the lines to build a set of caches
-    my @cache_full = ();
-    my @cache_limited = ();
-    foreach my $line (split "\n", $words_raw){
-        # skip empty lines
-        next if $line =~ m/^\s*$/sx;
-        
-        # skip comment lines
-        next if $line =~ m/^[#]/sx;
-        
-        # skip anything that's not at least three letters
-        next unless $line =~ m/^[a-zA-Z]{4,}$/sx;
-        
-        # regardless of length, cache in full cache
-        push @cache_full, $line;
-        
-        # if within length range, save in main cache too
-        my $wlen = length $line;
-        if($wlen >= $self->{_CONFIG}->{word_length_min} && $wlen <= $self->{_CONFIG}->{word_length_max}){
-            push @cache_limited, $line;
-        }
-    }
-    
-    # ensure we got enough words
-    my $alen = scalar(@cache_limited);
-    unless($alen >= 100){
-        croak("Too few valid words in the dictionary file (need at least 100, got $alen)");
-    }
+    # generate the valid word cache - croaks if too few words left after filtering
+    my @cache_limited = $_CLASS->_filter_word_list(\@cache_full, $self->{_CONFIG}->{word_length_min}, $self->{_CONFIG}->{word_length_max});
     
     # if all is well, load the caches into the object
     $self->{_CACHE_DICTIONARY_FULL} = [@cache_full];
     $self->{_CACHE_DICTIONARY_LIMITED} = [@cache_limited];
     
     # return 1 to keep perlcritic happy
+    return 1;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Generate a random integer greater than 0 and less than a given
+#              maximum value.
+# Returns    : A random integer as a scalar.
+# Arguments  : 1. the min value for the random number (as a positive integer)
+# Throws     : Croaks if invoked in an invalid way, with invalid args, of if
+#              there is a problem generating random numbers (should the cache)
+#              be empty.
+# Notes      : The random cache is used as the source for the randomness. If the
+#              random pool is empty, this function will replenish it.
+# See Also   :
+sub _get_random_int{
+    my $self = shift;
+    my $max = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    unless(defined $max && $max =~ m/^\d+$/sx && $max > 0){
+        croak((caller 0)[3].'() - invoked with invalid random limit');
+    }
+    
+    # calculate the random number
+    my $ans = ($self->_rand() * 1_000_000) % $max;
+    
+    # return it
+    return $ans;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Return the next random number in the cache, and if needed,
+#              replenish it.
+# Returns    : A decimal number between 0 and 1
+# Arguments  : NONE
+# Throws     : Croaks if invoked in an invalid way, or if there is problem
+#              replenishing the random cache.
+# Notes      :
+# See Also   :
+sub _rand{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    
+    # get the next random number from the cache
+    my $num = shift @{$self->{_CACHE_RANDOM}};
+    if(!defined $num){
+        # the cache was empty - so try top up the random cache - could croak
+        $self->_increment_random_cache();
+        
+        # try shift again
+        $num = shift @{$self->{_CACHE_RANDOM}};
+    }
+    
+    # make sure we got a valid random number
+    unless(defined $num && $num =~ m/^\d+([.]\d+)?$/sx && $num >= 0 && $num <= 1){
+        croak((caller 0)[3].'() - found invalid entry in random cache');
+    }
+    
+    # return the random number
+    return $num;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Append random numbers to the cache.
+# Returns    : Always returns 1.
+# Arguments  : NONE
+# Throws     : Croaks if incorrectly invoked or if the random generating
+#              function fails to produce random numbers.
+# Notes      :
+# See Also   :
+sub _increment_random_cache{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    
+    # genereate the random numbers
+    my @random_numbers = &{$self->{_CONFIG}->{random_function}}($self->{_CONFIG}->{random_increment});
+    
+    # validate them
+    unless($#random_numbers == $self->{_CONFIG}->{random_increment}){
+        croak((caller 0)[3].'() - random function did not return the correct number of random numbers');
+    }
+    foreach my $num (@random_numbers){
+        unless($num =~ m/^1|(0([.]\d+)?)$/sx){
+            croak((caller 0)[3]."() - random function returned and invalid value ($num)");
+        }
+    }
+    
+    # add them to the cache
+    foreach my $num (@random_numbers){
+        push @{$self->{_CACHE_RANDOM}}, $num;
+    }
+    
+    # always return 1 (to keep PerlCritic happy)
     return 1;
 }
 
@@ -888,11 +1248,21 @@ permutations of the best-case.
 
 =head2 DICTIONARY FILES
 
-TO DO
+XKPasswd instances use text files as the source for the list of words to
+randomly choose from when generating the password. Each instance uses one text
+file, referred to as the Dictionary File, and specified via the
+C<dictionary_file_path> config variable.
+
+Dictionary files should contain one word per line. Words shorter than four
+letters will be ignored, as will all lines starting with the # symbol.
+
+This format is the same as that of the standard Unix Words file, usually found
+at C</usr/share/dict/words> on Unix and Linux operating systems (including OS
+X).
 
 =head2 CONFIGURATION HASHREFS
 
-A number of subroutines require a configuration harshref as an argument. The
+A number of subroutines require a configuration hashref as an argument. The
 following are the valid keys for that hashref, what they mean, and what values
 are valid for each.
 
@@ -940,6 +1310,14 @@ case.
 =back
 
 The default value returned by C<default_config()> is C<NONE>.
+
+=item *
+
+C<character_substitutions> - a hashref containing zero or more character
+substitutions to be applied to the words that make up the bulk of the generated
+passwords. The keys in the hashref are the characters to be replaced, and must
+be single alpha numeric characters, while the values in the hashrefs are the
+replacements, and can be longer.
 
 =item *
 
@@ -1020,6 +1398,20 @@ The default value returned by C<default_config()> is C<FIXED>.
 
 =item *
 
+C<random_function> - a reference to the function to be used use to generate
+random numbers during the password generation process. The function generate
+an array of random decimal numbers between 0 and 1, take one argument, the
+number of random numbers to generate, and it must return an array. By default
+the function C<XKPasswd::basic_random_generator()> is used.
+
+=item *
+
+C<random_increment> - the number of random digits to generate at a time when
+ever the instance's cache of randomness runs low. Must be an integer greater
+than or equal to 1. The default is 10.
+
+=item *
+
 C<separator_character> - the character to use to separate the words in the
 generated password. Must be a scalar, and acceptable values are a single
 character, or, the special values C<NONE> (indicating that no separator should
@@ -1044,6 +1436,30 @@ C<word_length_min>. For security reasons, both values must be greater than 3.
 The default values returned by C<default_config()> is are 4 & 8.
 
 =back
+
+=head2 Random Functions
+
+In order to avoid this module relying on any non-standard modules, the default
+source of randomness is Perl's built-in C<rand()> function. This provides a
+reasonable level of randomness, and should suffice for most users, however,
+some users will prefer to make use of one of the many advanced randomisation
+modules in CPAN, or, reach out to a web service like L<http://random.org> for
+their randomness. To facilitate both of these options, this module uses a
+cache of randomness, and allows a custom randomness function to be specified
+by setting the config variable C<random_function> to a coderef to the function.
+
+Functions specified in this way must take exactly one argument, an integer
+number greater than zero, and then return that many random decimal numbers
+between zero and one.
+
+The random function is not called each time a random number is needed, instead
+a number of random numbers are generated at once, and cached until they are
+needed. The amount of random numbers generated at once is controlled by the
+C<random_increment> config variable. The reason the module works in this way
+is to facilitate web-based services which prefer you to generate many numbers
+at once rather than invoking them repeatedly. For example, Random.org ask
+developers to query them for more random numbers less frequently.
+
 
 =head2 CONSTRUCTOR
 
@@ -1130,6 +1546,16 @@ invalid config is passed.
     
 This function returns the content of the passed config hashref as a scalar
 string. The function must be passed a valid config hashref or it will croak.
+
+=head3 update_config()
+
+    $xkpasswd_instance->update_config({separator_character => '+'});
+    
+The function updates the config within an XKPassws instance. A hashref with the
+config options to be changed must be passed. The function returns a reference to
+the instance to enable function chaining. The function will croak if the updated
+config would be invalid in some way. Note that if this happens the running
+config will not have been altered in any way.
 
 =head1 DIAGNOSTICS
 
