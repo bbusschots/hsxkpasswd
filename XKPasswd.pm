@@ -70,6 +70,16 @@ my $_KEYS = {
         },
         desc => 'A scalar containing an integer greater than three',
     },
+    num_words => {
+        req => 1,
+        ref => q{}, # SCALAR
+        validate => sub { # an int >= 2
+            my $key = shift;
+            unless($key =~ m/^\d+$/sx && $key >= 2){ return 0; }
+            return 1;
+        },
+        desc => 'A scalar containing an integer value greater than or equal to two',
+    },
     separator_character => {
         req => 1,
         ref => q{}, # SCALAR
@@ -252,6 +262,7 @@ sub default_config{
         symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ?}],
         word_length_min => 4,
         word_length_max => 8,
+        num_words => 4,
         separator_character => 'RANDOM',
         padding_digits_before => 2,
         padding_digits_after => 2,
@@ -558,6 +569,32 @@ sub config_string{
     
     # return the string
     return $ans;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE
+# Purpose    : Generaete a random password based on the object's loaded config
+# Returns    : a passowrd as a string
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation or on error generating the password
+# Notes      :
+# See Also   :
+sub password{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    
+    #
+    # start by generating the needed parts of the password
+    #
+    my @words = $self->_random_words($self->{_CONFIG}->{num_words});
+    
+    #
+    # Then assemble the finished password
+    #
 }
 
 #
@@ -910,6 +947,12 @@ C<dictionary_file_path> - a scalar containing the path to the dictionary file
 to be used when generating passwords. The path must exist and point to a
 regular file. The default value for this key returned by C<default_config()>
 is C<dict.txt>.
+
+=item *
+
+C<num_words> - the number of randomly chosen words use as the basis for the
+generated passwords. The default value is four. For security reasons, at least
+two words must be used.
 
 =item *
 
