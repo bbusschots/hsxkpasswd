@@ -738,7 +738,8 @@ sub password{
     #
     # start by generating the needed parts of the password
     #
-    my @words = $self->_random_words($self->{_CONFIG}->{num_words});
+    my @words = $self->_random_words();
+    
     
     #
     # Then assemble the finished password
@@ -1004,7 +1005,7 @@ sub _load_dictionary_file{
 # Notes      : The random cache is used as the source for the randomness. If the
 #              random pool is empty, this function will replenish it.
 # See Also   :
-sub _get_random_int{
+sub _random_int{
     my $self = shift;
     my $max = shift;
     
@@ -1097,6 +1098,34 @@ sub _increment_random_cache{
     
     # always return 1 (to keep PerlCritic happy)
     return 1;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Get the required number of random words from the loaded words
+#              file
+# Returns    : An array of words
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation or error generating random numbers
+# Notes      : The number of words generated is determined by the num_words
+#              config key.
+# See Also   :
+sub _random_words{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    
+    # get the random words
+    my @ans = ();
+    while ($#ans < $self->{_CONFIG}->{num_words}){
+        push @ans, $self->{_CACHE_DICTIONARY_LIMITED}->[$self->_random_int(scalar @{$self->{_CACHE_DICTIONARY_LIMITED}})];
+    }
+    
+    # return the list of random words
+    return @ans;
 }
 
 1; # because Perl is just a little bit odd :)
