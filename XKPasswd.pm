@@ -739,7 +739,7 @@ sub password{
     # start by generating the needed parts of the password
     #
     my @words = $self->_random_words();
-    
+    my $separator = $self->_separator();
     
     #
     # Then assemble the finished password
@@ -1127,6 +1127,37 @@ sub _random_words{
     # return the list of random words
     return @ans;
 }
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Get the separator character to use based on the loaded config.
+# Returns    : A scalar containing the separator, which could be an empty string.
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation, or if there is a problem generating
+#              any needed random numbers.
+# Notes      : The character returned is controlled by the config variable
+#              separator_character
+# See Also   :
+sub _separator{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    
+    # figure out the separator character
+    my $sep = $self->{_CONFIG}->{separator_character};
+    if ($sep eq 'NONE'){
+        $sep = q{};
+    }elsif($sep eq 'RANDOM'){
+        $sep = $self->{_CONFIG}->{symbol_alphabet}->[$self->_random_int(scalar @{$self->{_CONFIG}->{symbol_alphabet}})];
+    }
+    
+    # return the separator character
+    return $sep
+}
+
 
 1; # because Perl is just a little bit odd :)
 __END__
