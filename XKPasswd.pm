@@ -166,10 +166,10 @@ my $_KEYS = {
         ref => q{}, # SCALAR
         validate => sub {
             my $key = shift;
-            unless($key =~ m/^(NONE)|(UPPER)|(LOWER)|(CAPITALISE)|(INVERSE)|(RANDOM)$/sx){ return 0; }
+            unless($key =~ m/^(NONE)|(UPPER)|(LOWER)|(CAPITALISE)|(INVERSE)|(ALTERNATE)|(RANDOM)$/sx){ return 0; }
             return 1;
         },
-        desc => q{A scalar containing one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERSE', or 'RANDOM'},
+        desc => q{A scalar containing one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERSE', 'ALTERNATE', or 'RANDOM'},
     },
     random_function => {
         req => 1,
@@ -739,11 +739,31 @@ sub password{
     # start by generating the needed parts of the password
     #
     my @words = $self->_random_words();
+    $self->_transform_case(\@words);
+    $self->_substitute_characters(\@words); # TO DO
     my $separator = $self->_separator();
+    my $pad_char = $self->_padding_char($separator);
     
     #
     # Then assemble the finished password
     #
+    
+    # start with the words and the separator
+    my $password = join $separator, @words;
+    
+    # next add the numbers front and back
+    if($self->{_CONFIG}->{padding_digits_before} > 0){
+        $password = $self->_random_digits($self->{_CONFIG}->{padding_digits_before}).$separator.$password;
+    }
+    if($self->{_CONFIG}->{padding_digits_after} > 0){
+        $password = $password.$separator.$self->_random_digits($self->{_CONFIG}->{padding_digits_before});
+    }
+    
+    # then finally add the padding characters
+    # TO DO
+    
+    # return the finished password
+    return $password;
 }
 
 #
@@ -1026,6 +1046,37 @@ sub _random_int{
 
 #####-SUB-######################################################################
 # Type       : INSTANCE (PRIVATE)
+# Purpose    : Generate a number of random integers.
+# Returns    : A scalar containing a number of random integers.
+# Arguments  : 1. The number of random integers to generate
+# Throws     : Croaks on invalid invocation, or if there is a problem generating
+#              the needed randomness.
+# Notes      :
+# See Also   :
+sub _random_digits{
+    my $self = shift;
+    my $num = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    unless(defined $num && $num =~ m/^\d+$/sx && $num > 0){
+        croak((caller 0)[3].'() - invoked with invalid number of digits');
+    }
+    
+    # assemble the response
+    my $ans = q{};
+    foreach my $n (1..$num){
+        $ans .= $self->_random_int(10);
+    }
+    
+    # return the response
+    return $ans;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
 # Purpose    : Return the next random number in the cache, and if needed,
 #              replenish it.
 # Returns    : A decimal number between 0 and 1
@@ -1158,6 +1209,153 @@ sub _separator{
     return $sep
 }
 
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Return the padding character based on the loaded config.
+# Returns    : A scalar containing the padding character, which could be an
+#              empty string.
+# Arguments  : 1. the separator character being used to generate the password
+# Throws     : Croaks on invalid invocation, or if there is a problem geneating
+#              any needed random numbers.
+# Notes      : The character returned is determined by a combination of the
+#              padding_type & padding_character config variables.
+# See Also   :
+sub _padding_char{
+    my $self = shift;
+    my $sep = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    unless(defined $sep){
+        croak((caller 0)[3].'() - no separator character passed');
+    }
+    
+    # if there is no padding character needed, return an empty string
+    if($self->{_CONFIG}->{padding_type} eq 'NONE'){
+        return q{};
+    }
+    
+    # if we got here we do need a character, so generate one as appropriate
+    my $padc = $self->{_CONFIG}->{padding_character};
+    if($padc eq 'SEPARATOR'){
+        $padc = $sep;
+    }elsif($padc eq 'RANDOM'){
+        $padc = $self->{_CONFIG}->{symbol_alphabet}->[$self->_random_int(scalar @{$self->{_CONFIG}->{symbol_alphabet}})];
+    }
+    
+    # return the padding character
+    return $padc;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Apply the case transform (if any) specified in the loaded config.
+# Returns    : Always returns 1 (to keep PerlCritic happy)
+# Arguments  : 1. A reference to the array contianing the words to be
+#                 transformed.
+# Throws     : Croaks on invalid invocation or if there is a problem generating
+#              any needed random numbers.
+# Notes      : The transformations applied are controlled by the case_transform
+#              config variable.
+# See Also   :
+sub _transform_case{
+    my $self = shift;
+    my $words_ref = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    unless(defined $words_ref && ref $words_ref eq 'ARRAY'){
+        croak((caller 0)[3].'() - no words array reference passed');
+    }
+    
+    # if the transform is set to nothing, then just return
+    if($self->{_CONFIG}->{case_transform} eq 'NONE'){
+        return 1;
+    }
+    
+    # apply the appropriate transform
+    if($self->{_CONFIG}->{case_transform} eq 'UPPER'){
+        foreach my $i (0..(scalar @{$words_ref})){
+            $words_ref->[$i] = uc $words_ref->[$i];
+        }
+    }elsif($self->{_CONFIG}->{case_transform} eq 'LOWER'){
+        foreach my $i (0..(scalar @{$words_ref})){
+            $words_ref->[$i] = lc $words_ref->[$i];
+        }
+    }elsif($self->{_CONFIG}->{case_transform} eq 'CAPITALISE'){
+        foreach my $i (0..(scalar @{$words_ref})){
+            $words_ref->[$i] = ucfirst lc $words_ref->[$i];
+        }
+    }elsif($self->{_CONFIG}->{case_transform} eq 'INVERSE'){
+        foreach my $i (0..(scalar @{$words_ref})){
+            $words_ref->[$i] = lcfirst uc $words_ref->[$i];
+        }
+    }elsif($self->{_CONFIG}->{case_transform} eq 'ALTERNATE'){
+        foreach my $i (0..(scalar @{$words_ref})){
+            my $word = $words_ref->[$i];
+            if($i % 2 == 0){
+                $word = lc $word;
+            }else{
+                $word = uc $word;
+            }
+            $words_ref->[$i] = $word;
+        }
+    }elsif($self->{_CONFIG}->{case_transform} eq 'RANDOM'){
+        foreach my $i (0..(scalar @{$words_ref})){
+            my $word = $words_ref->[$i];
+            if($self->_random_int(2) % 2 == 0){
+                $word = uc $word;
+            }else{
+                $word = lc $word;
+            }
+            $words_ref->[$i] = $word;
+        }
+    }
+    
+    return 1; # just to to keep PerlCritic happy
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Apply any case transforms specified in the loaded config.
+# Returns    : Always returns 1 (to keep PerlCritic happy)
+# Arguments  : 1. a reference to an array containing the words that will make up
+#                 the password.
+# Throws     : Croaks on invalid invocation or invalid args.
+# Notes      : The substitutions that will be applied are specified in the
+#              character_substitutions config variable.
+# See Also   :
+sub _substitute_characters{
+    my $self = shift;
+    my $words_ref = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    unless(defined $words_ref && ref $words_ref eq 'ARRAY'){
+        croak((caller 0)[3].'() - no words array reference passed');
+    }
+    
+    # if no substitutions are defined, do nothing
+    unless(defined $self->{_CONFIG}->{character_substitutions} && (scalar keys %{$self->{_CONFIG}->{character_substitutions}})){
+        return 1;
+    }
+    
+    # If we got here, go ahead and apply the substitutions
+    foreach my $i (0..(scalar @{$words_ref})){
+        my $word = $words_ref->[$i];
+        foreach my $char (keys %{$self->{_CONFIG}->{character_substitutions}}){
+            my $sub = $self->{_CONFIG}->{character_substitutions}->{$char};
+            $word =~ s/$char/$sub/g;
+        }
+        $words_ref->[$i] = $word;
+    }
+}
 
 1; # because Perl is just a little bit odd :)
 __END__
@@ -1338,18 +1536,8 @@ are:
 
 =item -
 
-C<NONE> - the capitalisation used in the randomly generated password will be
-the same as it is in the dictionary file.
-
-=item -
-
-C<UPPER> - all letters in all the words will be converted to upper case. B<Use
-of this option is strongly discouraged for security reasons.>
-
-=item -
-
-C<LOWER> - all letters in all the words will be converted to lower case. B<Use
-of this option is strongly discouraged for security reasons.>
+c<ALTERNATE> - each alternate word will be converted to all upper case and
+all lower case.
 
 =item -
 
@@ -1363,8 +1551,23 @@ all other letters will be converted to upper case.
 
 =item -
 
+C<LOWER> - all letters in all the words will be converted to lower case. B<Use
+of this option is strongly discouraged for security reasons.>
+
+=item -
+
+C<NONE> - the capitalisation used in the randomly generated password will be
+the same as it is in the dictionary file.
+
+=item -
+
 C<RANDOM> - each word will be randomly converted to all upper case or all lower
 case.
+
+=item -
+
+C<UPPER> - all letters in all the words will be converted to upper case. B<Use
+of this option is strongly discouraged for security reasons.>
 
 =back
 
@@ -1401,12 +1604,11 @@ values greater than or equal to 12 (for security reasons).
 
 C<padding_character> - the character to use when padding the front and/or back
 of the randomly generated password. Must be a scalar containing either a single
-character or one of the special values C<NONE> (indicating that no separator
-should be used), C<RANDOM> (indicating that a character should be chosen at
-random from the C<symbol_alphabet>), or C<SEPARATOR> (use the same character
-used to separate the words). This key is only needed if C<padding_type> is set
-to C<FIXED> or C<ADAPTIVE>. The default value returned by C<default_config> is
-C<RANDOM>.
+character or one of the special values C<RANDOM> (indicating that a character
+should be chosen at random from the C<symbol_alphabet>), or C<SEPARATOR> (use
+the same character used to separate the words). This key is only needed if
+C<padding_type> is set to C<FIXED> or C<ADAPTIVE>. The default value returned
+by C<default_config> is C<RANDOM>.
 
 =item *
 
