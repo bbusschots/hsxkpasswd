@@ -5,6 +5,9 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use English qw( -no_match_vars ); # for more readable code
 
+use base qw( Exporter );
+our @EXPORT = qw( xkpasswd );
+
 # Copyright (c) 2014, Bart Busschots T/A Bartificer Web Solutions All rights
 # reserved.
 #
@@ -166,7 +169,9 @@ my $_KEYS = {
         ref => q{}, # SCALAR
         validate => sub {
             my $key = shift;
+            ## no critic (ProhibitComplexRegexes);
             unless($key =~ m/^(NONE)|(UPPER)|(LOWER)|(CAPITALISE)|(INVERSE)|(ALTERNATE)|(RANDOM)$/sx){ return 0; }
+            ## use critic
             return 1;
         },
         desc => q{A scalar containing one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERSE', 'ALTERNATE', or 'RANDOM'},
@@ -736,31 +741,66 @@ sub password{
     }
     
     #
-    # start by generating the needed parts of the password
+    # Generate the password
     #
-    my @words = $self->_random_words();
-    $self->_transform_case(\@words);
-    $self->_substitute_characters(\@words); # TO DO
-    my $separator = $self->_separator();
-    my $pad_char = $self->_padding_char($separator);
-    
-    #
-    # Then assemble the finished password
-    #
-    
-    # start with the words and the separator
-    my $password = join $separator, @words;
-    
-    # next add the numbers front and back
-    if($self->{_CONFIG}->{padding_digits_before} > 0){
-        $password = $self->_random_digits($self->{_CONFIG}->{padding_digits_before}).$separator.$password;
-    }
-    if($self->{_CONFIG}->{padding_digits_after} > 0){
-        $password = $password.$separator.$self->_random_digits($self->{_CONFIG}->{padding_digits_before});
-    }
-    
-    # then finally add the padding characters
-    # TO DO
+    my $password = q{};
+    eval{
+        #
+        # start by generating the needed parts of the password
+        #
+        print 'DEBUG - '.(caller 0)[3]."() - starting to generate random words\n" if $self->{debug};
+        my @words = $self->_random_words();
+        print 'DEBUG - '.(caller 0)[3].'() - got random words='.(join q{, }, @words)."\n" if $self->{debug};
+        $self->_transform_case(\@words);
+        $self->_substitute_characters(\@words); # TO DO
+        my $separator = $self->_separator();
+        my $pad_char = $self->_padding_char($separator);
+        
+        #
+        # Then assemble the finished password
+        #
+        
+        # start with the words and the separator
+        $password = join $separator, @words;
+        
+        # next add the numbers front and back
+        if($self->{_CONFIG}->{padding_digits_before} > 0){
+            $password = $self->_random_digits($self->{_CONFIG}->{padding_digits_before}).$separator.$password;
+        }
+        if($self->{_CONFIG}->{padding_digits_after} > 0){
+            $password = $password.$separator.$self->_random_digits($self->{_CONFIG}->{padding_digits_before});
+        }
+        
+        # then finally add the padding characters
+        if($self->{_CONFIG}->{padding_type} eq 'FIXED'){
+            # simple fixed padding
+            if($self->{_CONFIG}->{padding_characters_before} > 0){
+                foreach my $c (1..$self->{_CONFIG}->{padding_characters_before}){
+                    $password = $pad_char.$password;
+                }
+            }
+            if($self->{_CONFIG}->{padding_characters_after} > 0){
+                foreach my $c (1..$self->{_CONFIG}->{padding_characters_after}){
+                    $password .= $pad_char;
+                }
+            }
+        }elsif($self->{_CONFIG}->{padding_type} eq 'ADAPTIVE'){
+            # adaptive padding
+            my $pwlen = length $password;
+            if($pwlen < $self->{_CONFIG}->{pad_to_length}){
+                # if the password is shorter than the target length, padd it out
+                while((length $password) < $self->{_CONFIG}->{pad_to_length}){
+                    $password .= $pad_char;
+                }
+            }elsif($pwlen > $self->{_CONFIG}->{pad_to_length}){
+                # if the password is too long, trim it
+                $password = substr $password, 0, $self->{_CONFIG}->{pad_to_length};
+            }
+        }
+        1; # ensure true evaluation on successful execution
+    }or do{
+        croak("Failed to generate password with the following error: $EVAL_ERROR");
+    };
     
     # return the finished password
     return $password;
@@ -769,6 +809,45 @@ sub password{
 #
 # Regular Subs-----------------------------------------------------------------
 #
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE
+# Purpose    : A functional interface to this library (exported)
+# Returns    : A random password as a scalar
+# Arguments  : 1. The path to the dictionary file to use as a scalar
+#              2. OPTIONAL - A hashref containing values for config keys to
+#                 override the defaults with.
+# Throws     : Croaks on error
+# Notes      :
+# See Also   :
+sub xkpasswd{
+    my $words_file_path = shift;
+    my $config_overrides = shift;
+    
+    # validate args
+    unless(defined $words_file_path && -f $words_file_path){
+        croak((caller 0)[3].'() - invalid args - must pass a valid path to a dictionary file');
+    }
+    if(defined $config_overrides){
+        unless(ref $config_overrides eq 'HASH'){
+            croak((caller 0)[3].'() - invalid args - if present, the second argument must be a reference to a hash');
+        }
+    }
+    $config_overrides = {} unless defined $config_overrides;
+    $config_overrides->{dictionary_file_path} = $words_file_path;
+    
+    # initialise an xkpasswd object
+    my $xkpasswd;
+    eval{
+        $xkpasswd = $_CLASS->new($_CLASS->default_config($config_overrides));
+        1; # ensure truthy evaliation on successful execution
+    } or do {
+        croak("Failed to generate password with the following error: $EVAL_ERROR");
+    };
+    
+    # genereate and return a password - could croak
+    return $xkpasswd->password();
+}
 
 #####-SUB-######################################################################
 # Type       : SUBROUTINE
@@ -793,6 +872,7 @@ sub basic_random_generator{
     my $num_to_generate = $num;
     while($num_to_generate > 0){
         push @ans, rand;
+        $num_to_generate--;
     }
     
     # return the random numbers
@@ -1041,6 +1121,7 @@ sub _random_int{
     my $ans = ($self->_rand() * 1_000_000) % $max;
     
     # return it
+    print 'DEBUG - '.(caller 0)[3]."() - returning $ans (max=$max)\n" if $self->{debug};
     return $ans;
 }
 
@@ -1097,6 +1178,7 @@ sub _rand{
     my $num = shift @{$self->{_CACHE_RANDOM}};
     if(!defined $num){
         # the cache was empty - so try top up the random cache - could croak
+        print 'DEBUG - '.(caller 0)[3]."() - random cache empty - attempting to replenish\n" if $self->{debug};
         $self->_increment_random_cache();
         
         # try shift again
@@ -1109,6 +1191,7 @@ sub _rand{
     }
     
     # return the random number
+    print 'DEBUG - '.(caller 0)[3]."() - returning $num\n" if $self->{debug};
     return $num;
 }
 
@@ -1131,9 +1214,10 @@ sub _increment_random_cache{
     
     # genereate the random numbers
     my @random_numbers = &{$self->{_CONFIG}->{random_function}}($self->{_CONFIG}->{random_increment});
+    print 'DEBUG - '.(caller 0)[3].'() - generated '.(scalar @random_numbers).' random numbers ('.(join q{, }, @random_numbers).")\n" if $self->{debug};
     
     # validate them
-    unless($#random_numbers == $self->{_CONFIG}->{random_increment}){
+    unless((scalar @random_numbers) == $self->{_CONFIG}->{random_increment}){
         croak((caller 0)[3].'() - random function did not return the correct number of random numbers');
     }
     foreach my $num (@random_numbers){
@@ -1171,11 +1255,15 @@ sub _random_words{
     
     # get the random words
     my @ans = ();
+    print 'DEBUG - '.(caller 0)[3].'() - about to generate '.$self->{_CONFIG}->{num_words}." words\n" if $self->{debug};
     while ($#ans < $self->{_CONFIG}->{num_words}){
-        push @ans, $self->{_CACHE_DICTIONARY_LIMITED}->[$self->_random_int(scalar @{$self->{_CACHE_DICTIONARY_LIMITED}})];
+        my $word = $self->{_CACHE_DICTIONARY_LIMITED}->[$self->_random_int(scalar @{$self->{_CACHE_DICTIONARY_LIMITED}})];
+        print 'DEBUG - '.(caller 0)[3].'() - generate word='.$word."\n" if $self->{debug};
+        push @ans, $word;
     }
     
     # return the list of random words
+    print 'DEBUG - '.(caller 0)[3].'() - returning '.(scalar @ans)." words\n" if $self->{debug};
     return @ans;
 }
 
@@ -1260,6 +1348,7 @@ sub _padding_char{
 # Notes      : The transformations applied are controlled by the case_transform
 #              config variable.
 # See Also   :
+## no critic (ProhibitExcessComplexity);
 sub _transform_case{
     my $self = shift;
     my $words_ref = shift;
@@ -1278,6 +1367,7 @@ sub _transform_case{
     }
     
     # apply the appropriate transform
+    ## no critic (ProhibitCascadingIfElse);
     if($self->{_CONFIG}->{case_transform} eq 'UPPER'){
         foreach my $i (0..(scalar @{$words_ref})){
             $words_ref->[$i] = uc $words_ref->[$i];
@@ -1315,9 +1405,11 @@ sub _transform_case{
             $words_ref->[$i] = $word;
         }
     }
+    ## use critic
     
     return 1; # just to to keep PerlCritic happy
 }
+## use critic
 
 #####-SUB-######################################################################
 # Type       : INSTANCE (PRIVATE)
@@ -1351,10 +1443,13 @@ sub _substitute_characters{
         my $word = $words_ref->[$i];
         foreach my $char (keys %{$self->{_CONFIG}->{character_substitutions}}){
             my $sub = $self->{_CONFIG}->{character_substitutions}->{$char};
-            $word =~ s/$char/$sub/g;
+            $word =~ s/$char/$sub/sxg;
         }
         $words_ref->[$i] = $word;
     }
+    
+    # always return 1 to keep PerlCritic happy
+    return 1;
 }
 
 1; # because Perl is just a little bit odd :)
@@ -1698,7 +1793,7 @@ The default values returned by C<default_config()> is are 4 & 8.
 
 =back
 
-=head2 Random Functions
+=head2 RANDOM FUNCTIONS
 
 In order to avoid this module relying on any non-standard modules, the default
 source of randomness is Perl's built-in C<rand()> function. This provides a
@@ -1720,6 +1815,33 @@ C<random_increment> config variable. The reason the module works in this way
 is to facilitate web-based services which prefer you to generate many numbers
 at once rather than invoking them repeatedly. For example, Random.org ask
 developers to query them for more random numbers less frequently.
+
+=head2 FUNCTIONAL INTERFACE
+
+Although the package was primarily designed to be used in an object-oriented
+way, there is a functional interface too. The functional interface initialises
+an object internally and then uses that object to generate a single password.
+If you only need one password, this is no less efficient than the
+object-oriented interface, however, if you are generating multiple passwords it
+is much less efficient.
+
+There is only a single function exported by the library:
+
+=head3 C<xkpasswd()>
+
+    my $password = xkpasswd('mydict.txt');
+    
+This function call is equivalent to the following Object-Oriented code:
+
+    my $config = XKPasswd->default_config({dictionary_file_path => 'mydict.txt'});
+    my $xkpasswd = XKPasswd->new($config);
+    my $password = $xkpasswd->password();
+    
+This function requires a valid path to a dictionary file to be passed as the
+first argument. Optionally, a hashref containing one or more config options to
+override the default values.
+
+This function Croaks if there is a problem generating the password.
 
 
 =head2 CONSTRUCTOR
@@ -1807,6 +1929,18 @@ invalid config is passed.
     
 This function returns the content of the passed config hashref as a scalar
 string. The function must be passed a valid config hashref or it will croak.
+
+=head3 password()
+
+    my $password = $xkpasswd_instance->password();
+    
+This function generates a random password based on the instance's loaded config
+and returns it as a scalar. The function takes no arguments.
+
+The function croaks if there is an error generating the password. The most
+likely cause of and error is the random number generation, particularly if the
+loaded random generation function relies on a cloud service or a non-standard
+library.
 
 =head3 update_config()
 
