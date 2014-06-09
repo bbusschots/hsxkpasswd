@@ -5,8 +5,10 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use English qw( -no_match_vars ); # for more readable code
 
+## no critic (ProhibitAutomaticExportation);
 use base qw( Exporter );
 our @EXPORT = qw( xkpasswd );
+## use critic
 
 # Copyright (c) 2014, Bart Busschots T/A Bartificer Web Solutions All rights
 # reserved.
@@ -53,6 +55,19 @@ my $_KEYS = {
             return 1;
         },
         desc => 'An array ref containing at least 5 single-character scalars',
+    },
+    separator_alphabet => {
+        req => 0,
+        ref => 'ARRAY', # ARRAY REF
+        validate => sub { # at least 3 scalar elements
+            my $key = shift;
+            unless(scalar @{$key} >= 3){ return 0; }
+            foreach my $symbol (@{$key}){
+                unless(ref $symbol eq q{} && $symbol =~ m/^.$/sx){ return 0; }
+            }
+            return 1;
+        },
+        desc => 'An array ref containing at least 3 single-character scalars',
     },
     word_length_min => {
         req => 1,
@@ -385,6 +400,12 @@ sub clone_config{
     $clone->{symbol_alphabet} = [];
     foreach my $symbol (@{$config->{symbol_alphabet}}){
         push @{$clone->{symbol_alphabet}}, $symbol;
+    }
+    if(defined $config->{separator_alphabet} && ref $config->{separator_alphabet} eq 'ARRAY'){
+        $clone->{separator_alphabet} = [];
+        foreach my $symbol (@{$config->{separator_alphabet}}){
+            push @{$clone->{separator_alphabet}}, $symbol;
+        }
     }
     $clone->{random_function} = $config->{random_function};
     $clone->{character_substitutions} = {};
@@ -1256,7 +1277,7 @@ sub _random_words{
     # get the random words
     my @ans = ();
     print 'DEBUG - '.(caller 0)[3].'() - about to generate '.$self->{_CONFIG}->{num_words}." words\n" if $self->{debug};
-    while ($#ans < $self->{_CONFIG}->{num_words}){
+    while ((scalar @ans) < $self->{_CONFIG}->{num_words}){
         my $word = $self->{_CACHE_DICTIONARY_LIMITED}->[$self->_random_int(scalar @{$self->{_CACHE_DICTIONARY_LIMITED}})];
         print 'DEBUG - '.(caller 0)[3].'() - generate word='.$word."\n" if $self->{debug};
         push @ans, $word;
@@ -1290,7 +1311,11 @@ sub _separator{
     if ($sep eq 'NONE'){
         $sep = q{};
     }elsif($sep eq 'RANDOM'){
-        $sep = $self->{_CONFIG}->{symbol_alphabet}->[$self->_random_int(scalar @{$self->{_CONFIG}->{symbol_alphabet}})];
+        if(defined $self->{_CONFIG}->{separator_alphabet}){
+            $sep = $self->{_CONFIG}->{separator_alphabet}->[$self->_random_int(scalar @{$self->{_CONFIG}->{separator_alphabet}})];
+        }else{
+            $sep = $self->{_CONFIG}->{symbol_alphabet}->[$self->_random_int(scalar @{$self->{_CONFIG}->{symbol_alphabet}})];
+        }
     }
     
     # return the separator character
@@ -1369,23 +1394,23 @@ sub _transform_case{
     # apply the appropriate transform
     ## no critic (ProhibitCascadingIfElse);
     if($self->{_CONFIG}->{case_transform} eq 'UPPER'){
-        foreach my $i (0..(scalar @{$words_ref})){
+        foreach my $i (0..((scalar @{$words_ref}) - 1)){
             $words_ref->[$i] = uc $words_ref->[$i];
         }
     }elsif($self->{_CONFIG}->{case_transform} eq 'LOWER'){
-        foreach my $i (0..(scalar @{$words_ref})){
+        foreach my $i (0..((scalar @{$words_ref}) - 1)){
             $words_ref->[$i] = lc $words_ref->[$i];
         }
     }elsif($self->{_CONFIG}->{case_transform} eq 'CAPITALISE'){
-        foreach my $i (0..(scalar @{$words_ref})){
+        foreach my $i (0..((scalar @{$words_ref}) - 1)){
             $words_ref->[$i] = ucfirst lc $words_ref->[$i];
         }
     }elsif($self->{_CONFIG}->{case_transform} eq 'INVERSE'){
-        foreach my $i (0..(scalar @{$words_ref})){
+        foreach my $i (0..((scalar @{$words_ref}) - 1)){
             $words_ref->[$i] = lcfirst uc $words_ref->[$i];
         }
     }elsif($self->{_CONFIG}->{case_transform} eq 'ALTERNATE'){
-        foreach my $i (0..(scalar @{$words_ref})){
+        foreach my $i (0..((scalar @{$words_ref}) - 1)){
             my $word = $words_ref->[$i];
             if($i % 2 == 0){
                 $word = lc $word;
@@ -1395,7 +1420,7 @@ sub _transform_case{
             $words_ref->[$i] = $word;
         }
     }elsif($self->{_CONFIG}->{case_transform} eq 'RANDOM'){
-        foreach my $i (0..(scalar @{$words_ref})){
+        foreach my $i (0..((scalar @{$words_ref}) - 1)){
             my $word = $words_ref->[$i];
             if($self->_random_int(2) % 2 == 0){
                 $word = uc $word;
@@ -1765,6 +1790,12 @@ the function C<XKPasswd::basic_random_generator()> is used.
 C<random_increment> - the number of random digits to generate at a time when
 ever the instance's cache of randomness runs low. Must be an integer greater
 than or equal to 1. The default is 10.
+
+=item *
+
+C<separator_alphabet> - this key is optional. It can be used to override
+the contents of C<symbol_alphabet> when C<separator_character> is set to
+C<RANDOM>.
 
 =item *
 
