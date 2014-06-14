@@ -33,16 +33,6 @@ my $_CLASS = 'XKPasswd';
 
 # config key definitions
 my $_KEYS = {
-    dictionary_file_path => {
-        req => 1,
-        ref => q{}, # SCALAR
-        validate => sub { # file must exist
-            my $key = shift;
-            unless(-f $key){ return 0; }
-            return 1;
-        },
-        desc => 'A scalar containing a valid file path',
-    },
     symbol_alphabet => {
         req => 1,
         ref => 'ARRAY', # ARRAY REF
@@ -185,11 +175,11 @@ my $_KEYS = {
         validate => sub {
             my $key = shift;
             ## no critic (ProhibitComplexRegexes);
-            unless($key =~ m/^(NONE)|(UPPER)|(LOWER)|(CAPITALISE)|(INVERSE)|(ALTERNATE)|(RANDOM)$/sx){ return 0; }
+            unless($key =~ m/^(NONE)|(UPPER)|(LOWER)|(CAPITALISE)|(INVERT)|(ALTERNATE)|(RANDOM)$/sx){ return 0; }
             ## use critic
             return 1;
         },
-        desc => q{A scalar containing one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERSE', 'ALTERNATE', or 'RANDOM'},
+        desc => q{A scalar containing one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERT', 'ALTERNATE', or 'RANDOM'},
     },
     random_function => {
         req => 1,
@@ -224,6 +214,27 @@ my $_KEYS = {
     },
 };
 
+# preset definitions
+my $_PRESETS = {
+    DEFAULT => {
+        symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ?}],
+        word_length_min => 4,
+        word_length_max => 8,
+        num_words => 4,
+        separator_character => 'RANDOM',
+        padding_digits_before => 2,
+        padding_digits_after => 2,
+        padding_type => 'FIXED',
+        padding_character => 'RANDOM',
+        padding_characters_before => 2,
+        padding_characters_after => 2,
+        case_transform => 'CAPITALISE',
+        random_function => \&XKPasswd::basic_random_generator,
+        random_increment => 10,
+        character_substitutions => {},
+    }
+};
+
 #
 # Constructor -----------------------------------------------------------------
 #
@@ -232,19 +243,67 @@ my $_KEYS = {
 # Type       : CONSTRUCTOR (CLASS)
 # Purpose    : Instantiate an object of type XKPasswd
 # Returns    : An object of type XKPasswd
-# Arguments  : 1. OPTIONAL - a configuration hashref
-#              2. OPTIONAL - a true value to enter debug mode
-# Throws     : Croaks if the function is called in an invalid way, or with an invalid config
-# Notes      : For valid configuarion options see POD documentation below
-# See Also   :
+# Arguments  : 1. The path to a dictionary file
+#              2. OPTIONAL - the name of a preset as a scalar (an empty string,
+#                 undef, or 'DEFAULT' to get the default config)
+#                     -OR-
+#                 A hashref containing a full valid config
+#              3. OPTIONAL - a hashref continaing any keys from the preset to be
+#                 overridden (ignored if a hashref is passed as the second arg)
+#              4. OPTIONAL - a truthy value to enter debug mode
+# Throws     : Croaks if the function is called in an invalid way, or with an
+#              invalid config
+# Notes      : 
+# See Also   : For valid configuarion options see POD documentation below
 sub new{
     my $class = shift;
-    my $config = shift;
+    my $dictionary_path = shift;
+    my $preset = shift;
+    my $preset_override = shift;
     my $debug = shift;
     
     # validate args
     unless($class && $class eq $_CLASS){
         croak((caller 0)[3].'() - invalid invocation of constructor');
+    }
+    unless(defined $dictionary_path && -f $dictionary_path){
+        croak((caller 0)[3].'() - a valid dictionary path must be passed as the first argument');
+    }
+    
+    # assemble the config hashref
+    my $config = {};
+    if(defined $preset){
+        if(ref $preset eq q{}){
+            #we were passed a preset name
+            
+            # expand blank preset name to 'DEFAULT'
+            $preset = 'DEFAULT' if $preset eq q{};
+            
+            # convert name to caps
+            $preset = uc $preset;
+            
+            # make sure the preset exists
+            unless(defined $_PRESETS->{$preset}){
+                croak((caller 0)[3]."() - invalid arguments - preset '$preset' does not exist");
+            }
+            
+            # if overrides are defined, make sure they are hashrefs
+            if(defined $preset_override){
+                unless(ref $preset_override eq 'HASH'){
+                    croak((caller 0)[3].'() - invalid arguments - if present, third argument must be a hashref');
+                }
+            }
+            
+            # load the preset
+            $config = $_CLASS->preset_config($preset, $preset_override);
+        }elsif(ref $preset eq 'HASH'){
+            # we were passed a hashref, so use it as the config
+            $config = $preset;
+        }else{
+            croak((caller 0)[3].'() - invalid argument - if present, the second argument must be a scalar or a hashref');
+        }
+    }else{
+        $config = $_CLASS->default_config();
     }
     
     # initialise the object
@@ -253,6 +312,7 @@ sub new{
         debug => 0,
         # 'PRIVATE' internal variables
         _CONFIG => {},
+        _DICTIONARY_PATH => q{}, # the path to the dictionary hashref
         _CACHE_DICTIONARY_FULL => [], # a cache of all words found in the dictionary file
         _CACHE_DICTIONARY_LIMITED => [], # a cache of all the words found in the dictionary file that meet the length criteria
         _CACHE_RANDOM => [], # a cache of random numbers (as floating points between 0 and 1)
@@ -262,13 +322,11 @@ sub new{
     }
     bless $instance, $class;
     
-    # if no config was passed, use a default one
-    unless($config){
-        $config = default_config();
-    }
-    
     # load the config
     $instance->config($config);
+    
+    # load the dictionary (can't be done until the config is loaded)
+    $instance->dictionary($dictionary_path);
     
     # if debugging, print out meta data
     if($debug){
@@ -305,31 +363,54 @@ sub default_config{
     unless($class && $class eq $_CLASS){
         croak((caller 0)[3].'() - invalid invocation of class method');
     }
+
+    # build and return a default config
+    return $_CLASS->preset_config('DEFAULT', $overrides);
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : generate a config hashref populated using a preset
+# Returns    : a hashref
+# Arguments  : 1. OPTIONAL - The name of the preset to assemble the config for
+#                 as a scalar. If no name is passed, the preset 'DEFAULT' is
+#                 used
+#              2. OPTIONAL - a hashref with config keys to over-ride when
+#                 assembling the config
+# Throws     : Croaks if invoked in an invalid way. If passed overrides also
+#              Croaks if the resulting config is invalid, and Carps if passed
+#              on each invalid key passed in the overrides hashref.
+# Notes      :
+# See Also   :
+sub preset_config{
+    my $class = shift;
+    my $preset = shift;
+    my $overrides = shift;
+    
+    # default blank presets to 'DEFAULT'
+    $preset = 'DEFAULT' unless defined $preset;
+    
+    # convert preset names to upper case
+    $preset = uc $preset;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        croak((caller 0)[3].'() - invalid invocation of class method');
+    }
+    unless(ref $preset eq q{}){
+        croak((caller 0)[3].'() - invalid args - if present, the first argument must be a scalar');
+    }
+    unless(defined $_PRESETS->{$preset}){
+        croak((caller 0)[3]."() - preset '$preset' does not exist");
+    }
     if(defined $overrides){
         unless(ref $overrides eq 'HASH'){
             croak((caller 0)[3].'() - invalid args, overrides must be passed as a hashref');
         }
     }
     
-    # build the default config
-    my $config = {
-        dictionary_file_path => 'dict.txt', # defaults to a file called dict.txt in the current working directory
-        symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ?}],
-        word_length_min => 4,
-        word_length_max => 8,
-        num_words => 4,
-        separator_character => 'RANDOM',
-        padding_digits_before => 2,
-        padding_digits_after => 2,
-        padding_type => 'FIXED',
-        padding_character => 'RANDOM',
-        padding_characters_before => 2,
-        padding_characters_after => 2,
-        case_transform => 'NONE',
-        random_function => \&XKPasswd::basic_random_generator,
-        random_increment => 10,
-        character_substitutions => {},
-    };
+    # start by loading the preset
+    my $config = $_CLASS->clone_config($_PRESETS->{$preset});
     
     # if overrides were passed, apply them and validate
     if(defined $overrides){
@@ -575,6 +656,56 @@ sub config_to_string{
 
 #####-SUB-######################################################################
 # Type       : INSTANCE
+# Purpose    : Get the path to the currently loaded dictionary file, or, load a
+#              new dictionary file
+# Returns    : A scalar with the path to the loaded dictionary file if called
+#              with no argument, or, a reference to the instance (to enable
+#              function chaining) if called with a file path
+# Arguments  : 1. OPTIONAL - the path to the config file to load as a scalar
+# Throws     : Croaks on invalid invocation, or, if there is a problem loading
+#              a dictionary file
+# Notes      :
+# See Also   : For description of dictionary file format, see POD documentation
+#              below
+sub dictionary{
+    my $self = shift;
+    my $path = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        croak((caller 0)[3].'() - invalid invocation of instance method');
+    }
+    
+    # decide if we're a 'getter' or a 'setter'
+    if(!(defined $path)){
+        # we are a getter, so just return
+        return $self->{_DICTIONARY_PATH};
+    }else{
+        # we are a setter, so try load the dictionary
+        
+        # croak if we are called before the config has been loaded into the instance
+        unless(defined $self->{_CONFIG}->{word_length_min} && $self->{_CONFIG}->{word_length_max}){
+            croak((caller 0)[3].'() - Failed to load dictionary file - config has not been loaded yet');
+        }
+        
+        # parse the file
+        my @cache_full = $_CLASS->_parse_words_file($path);
+    
+        # generate the valid word cache - croaks if too few words left after filtering
+        my @cache_limited = $_CLASS->_filter_word_list(\@cache_full, $self->{_CONFIG}->{word_length_min}, $self->{_CONFIG}->{word_length_max});
+    
+        # if we got here all is well, so save the new path and caches into the object
+        $self->{_DICTIONARY_PATH} = $path;
+        $self->{_CACHE_DICTIONARY_FULL} = [@cache_full];
+        $self->{_CACHE_DICTIONARY_LIMITED} = [@cache_limited];
+    }
+    
+    # return a reference to self
+    return 1;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE
 # Purpose    : Get a clone of the current config from an instance, or load a
 #              new config into the instance.
 # Returns    : A config hashref if called with no arguments, or, the instance
@@ -582,8 +713,8 @@ sub config_to_string{
 # Arguments  : 1. OPTIONAL - a configuartion hashref
 # Throws     : Croaks if the function is called in an invalid way, with invalid
 #              arguments, or with an invalid config
-# Notes      : For valid configuarion options see POD documentation below
-# See Also   :
+# Notes      :
+# See Also   : For valid configuarion options see POD documentation below
 sub config{
     my $self = shift;
     my $config = shift;
@@ -618,9 +749,6 @@ sub config{
         
         # save a clone of the passed config into the instance
         $self->{_CONFIG} = $_CLASS->clone_config($config);
-        
-        # init the dictionary caches
-        $self->_load_dictionary_file();
     }
     
     # return a reference to self to facilitate function chaining
@@ -698,23 +826,16 @@ sub update_config{
         croak((caller 0)[3].'() - updated config is invalid');
     }
     
-    # re-calculate the dictionary caches if needed
+    # re-calculate the dictionary cache if needed
     my @cache_all = @{$self->{_CACHE_DICTIONARY_FULL}};
     my @cache_limited = @{$self->{_CACHE_DICTIONARY_LIMITED}};
-    my $new_dict = 0;
-    if($new_config->{dictionary_file_path} ne $self->{_CONFIG}->{dictionary_file_path}){
-        # rebuild the cache of all words
-        $new_dict = 1;
-        @cache_all = $_CLASS->parse_words_file($new_config->{dictionary_file_path});
-    }
-    if($new_dict || $new_config->{word_length_min} ne $self->{_CONFIG}->{word_length_min} || $new_config->{word_length_max} ne $self->{_CONFIG}->{word_length_max}){
+    if($new_config->{word_length_min} ne $self->{_CONFIG}->{word_length_min} || $new_config->{word_length_max} ne $self->{_CONFIG}->{word_length_max}){
         # re-build the cache of valid words - throws an error if too few words are returned
         @cache_limited = $_CLASS->_filter_word_list(\@cache_all, $new_config->{word_length_min}, $new_config->{word_length_max});
     }
     
     # if we got here, all is well with the new config, so add it and the caches to the instance
     $self->{_CONFIG} = $new_config;
-    $self->{_CACHE_DICTIONARY_FULL} = [@cache_all];
     $self->{_CACHE_DICTIONARY_LIMITED} = [@cache_limited];
     
     # return a reference to self
@@ -835,32 +956,27 @@ sub password{
 # Type       : SUBROUTINE
 # Purpose    : A functional interface to this library (exported)
 # Returns    : A random password as a scalar
-# Arguments  : 1. The path to the dictionary file to use as a scalar
-#              2. OPTIONAL - A hashref containing values for config keys to
-#                 override the defaults with.
+# Arguments  : 1. The path to a dictionary file
+#              2. OPTIONAL - the name of a preset as a scalar (an empty string,
+#                 undef, or 'DEFAULT' to get the default config)
+#                     -OR-
+#                 A hashref containing a full valid config
+#              3. OPTIONAL - a hashref continaing any keys from the preset to be
+#                 overridden (ignored if a hashref is passed as the second arg)
+#              4. OPTIONAL - a truthy value to enter debug mode
 # Throws     : Croaks on error
 # Notes      :
 # See Also   :
 sub xkpasswd{
-    my $words_file_path = shift;
-    my $config_overrides = shift;
+    my $dictionary_path = shift;
+    my $preset = shift;
+    my $preset_override = shift;
+    my $debug = shift;
     
-    # validate args
-    unless(defined $words_file_path && -f $words_file_path){
-        croak((caller 0)[3].'() - invalid args - must pass a valid path to a dictionary file');
-    }
-    if(defined $config_overrides){
-        unless(ref $config_overrides eq 'HASH'){
-            croak((caller 0)[3].'() - invalid args - if present, the second argument must be a reference to a hash');
-        }
-    }
-    $config_overrides = {} unless defined $config_overrides;
-    $config_overrides->{dictionary_file_path} = $words_file_path;
-    
-    # initialise an xkpasswd object
+    # try initialise an xkpasswd object
     my $xkpasswd;
     eval{
-        $xkpasswd = $_CLASS->new($_CLASS->default_config($config_overrides));
+        $xkpasswd = $_CLASS->new($dictionary_path, $preset, $preset_override, $debug);
         1; # ensure truthy evaliation on successful execution
     } or do {
         croak("Failed to generate password with the following error: $EVAL_ERROR");
@@ -1081,37 +1197,6 @@ sub _filter_word_list{
     
     # return the list
     return @ans;
-}
-
-#####-SUB-######################################################################
-# Type       : INSTANCE (PRIVATE)
-# Purpose    : Load the contents of the words file into the instance's cache.
-# Returns    : Always returns 1 (to keep perlcritic happy)
-# Arguments  : NONE
-# Throws     : Croaks on invalid invocation, if there is a problem reading the
-#              file or if there are not enough valid words in the file.
-# Notes      :
-# See Also   :
-sub _load_dictionary_file{
-    my $self = shift;
-    
-    # validate args
-    unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
-    }
-    
-    # parse the dictionary file - croaks on error
-    my @cache_full = $_CLASS->_parse_words_file($self->{_CONFIG}->{dictionary_file_path});
-    
-    # generate the valid word cache - croaks if too few words left after filtering
-    my @cache_limited = $_CLASS->_filter_word_list(\@cache_full, $self->{_CONFIG}->{word_length_min}, $self->{_CONFIG}->{word_length_max});
-    
-    # if all is well, load the caches into the object
-    $self->{_CACHE_DICTIONARY_FULL} = [@cache_full];
-    $self->{_CACHE_DICTIONARY_LIMITED} = [@cache_limited];
-    
-    # return 1 to keep perlcritic happy
-    return 1;
 }
 
 #####-SUB-######################################################################
@@ -1405,7 +1490,7 @@ sub _transform_case{
         foreach my $i (0..((scalar @{$words_ref}) - 1)){
             $words_ref->[$i] = ucfirst lc $words_ref->[$i];
         }
-    }elsif($self->{_CONFIG}->{case_transform} eq 'INVERSE'){
+    }elsif($self->{_CONFIG}->{case_transform} eq 'INVERT'){
         foreach my $i (0..((scalar @{$words_ref}) - 1)){
             $words_ref->[$i] = lcfirst uc $words_ref->[$i];
         }
@@ -1656,7 +1741,7 @@ are:
 
 =item -
 
-c<ALTERNATE> - each alternate word will be converted to all upper case and
+C<ALTERNATE> - each alternate word will be converted to all upper case and
 all lower case.
 
 =item -
@@ -1666,7 +1751,7 @@ all other letters will be converted to lower case.
 
 =item -
 
-C<INVERSE> - the first letter in every word will be converted to lower case,
+C<INVERT> - the first letter in every word will be converted to lower case,
 all other letters will be converted to upper case.
 
 =item -
@@ -1691,7 +1776,7 @@ of this option is strongly discouraged for security reasons.>
 
 =back
 
-The default value returned by C<default_config()> is C<NONE>.
+The default value returned by C<default_config()> is C<CAPITALISE>.
 
 =item *
 
@@ -1700,13 +1785,6 @@ substitutions to be applied to the words that make up the bulk of the generated
 passwords. The keys in the hashref are the characters to be replaced, and must
 be single alpha numeric characters, while the values in the hashrefs are the
 replacements, and can be longer.
-
-=item *
-
-C<dictionary_file_path> - a scalar containing the path to the dictionary file
-to be used when generating passwords. The path must exist and point to a
-regular file. The default value for this key returned by C<default_config()>
-is C<dict.txt>.
 
 =item *
 
@@ -1824,6 +1902,10 @@ The default values returned by C<default_config()> is are 4 & 8.
 
 =back
 
+=head2 PRESETS
+
+TO DO
+
 =head2 RANDOM FUNCTIONS
 
 In order to avoid this module relying on any non-standard modules, the default
@@ -1856,7 +1938,7 @@ If you only need one password, this is no less efficient than the
 object-oriented interface, however, if you are generating multiple passwords it
 is much less efficient.
 
-There is only a single function exported by the library:
+There is only a single function exported by the module:
 
 =head3 C<xkpasswd()>
 
@@ -1864,28 +1946,42 @@ There is only a single function exported by the library:
     
 This function call is equivalent to the following Object-Oriented code:
 
-    my $config = XKPasswd->default_config({dictionary_file_path => 'mydict.txt'});
-    my $xkpasswd = XKPasswd->new($config);
+    my $xkpasswd = XKPasswd->new('mydict.txt');
     my $password = $xkpasswd->password();
     
-This function requires a valid path to a dictionary file to be passed as the
-first argument. Optionally, a hashref containing one or more config options to
-override the default values.
+This function passes it's arguments through to the constructor, so all arguments
+that are valid in C<new()> are valid here.
 
 This function Croaks if there is a problem generating the password.
 
 
 =head2 CONSTRUCTOR
 
-    my $xkpasswd_instance = XKPasswd->new($config);
+    # create an instance with the default config
+    my $xkpasswd_instance = XKPasswd->new('dict.txt');
+    
+    # create an instance with the preset 'XKCD'
+    my $xkpasswd_instance = XKPasswd->new('dict.txt', 'XKCD');
+    
+    #create an instance based on the preset 'XKCD', but with one config key
+    # overridden (case_transform)
+    my $xkpasswd_instance = XKPasswd->new('dict.txt', 'XKCD', {case_transform => 'INVERT'});
+    
+    # create an instance with a custom config hashref
+    my $xkpasswd_instance = XKPasswd->new('dict.txt' $config_hashref);
 
 The constructor must be called via the package name, and at least one argument
-must be passed, a hashref containing a valid configuration.
+must be passed, the path to the dictionary file to be used when generating the
+words.
 
-If you only want to change a few keys from the default, the following shortcut
-might be useful:
+If only one argument is passed the default values are used for all config keys.
+To use a different configuration, a second argument can be passed. If this
+argument is a scalar it will be assumed to be the name of a preset, and if it
+is a hashref it is assumed to be the config to load.
 
-    my $xkpasswd_instance = XKPasswd->new(XKPasswd->default_config({dictionary_file_path => 'mydict.txt'}));
+If a preset name is passed as a second argument, a hashref with config key
+overrides can be passed as a third argument. If the second argument is a hashref
+the third argument is ignored.
 
 =head2 'CLASS' FUNCTIONS
 
@@ -1920,6 +2016,12 @@ containing keys with values to override the defaults with.
 When overrides are present, the function will carp if an invalid key or value is
 passed, and croak if the resulting merged config is invalid.
 
+This function is a shortcut for C<preset_config()>, and the above examples are
+equivalent to the following:
+
+    my $config = XKPasswd->preset_config('DEFAULT');
+    my $config = XKPasswd->default_config('DEFAULT', {dictionary_file_path => 'mydict.txt'});
+
 =head3 is_valid_config()
 
     my $is_ok = XKPasswd->is_valid_config($config);
@@ -1932,10 +2034,29 @@ that the function should croak on invalid configs rather than returning 0;
 
     use English qw( -no_match_vars );
     eval{
-        XKPasswd->is_valid_config($config);
+        XKPasswd->is_valid_config($config, 'do_croak');
     }or do{
         print "ERROR - config is invalid because: $EVAL_ERROR\n";
     }
+
+=head3 preset_config()
+
+    my $config = XKPasswd->preset_config('XKCD');
+    
+This function returns the config hashref for a given preset. See above for the
+list of available presets.
+
+The first argument this function accpeps is the name of the desired preset as a
+scalar. If an invalid name is passed, the function will carp. If no preset is
+passed the preset C<'DEFAULT'> is assumed.
+
+This function can optionally accept a second argument, a hashref
+containing keys with values to override the defaults with.
+
+    my $config = XKPasswd->preset_config('XKCD', {case_transform => 'INVERT'});
+    
+When overrides are present, the function will carp if an invalid key or value is
+passed, and croak if the resulting merged config is invalid.
 
 =head2 INSTANCE FUNCTIONS
 
@@ -1961,6 +2082,15 @@ invalid config is passed.
 This function returns the content of the passed config hashref as a scalar
 string. The function must be passed a valid config hashref or it will croak.
 
+=head3 dictionary()
+
+    print $xkpasswd_instance->dictionary();
+    $xkpasswd_instance->dictionary('dict.txt');
+    
+When called with no arguments this function returns the path to the currently
+loaded dictionary file. To load a dictionary file into an instance call this
+function with the path to the dictionary file.
+
 =head3 password()
 
     my $password = $xkpasswd_instance->password();
@@ -1977,7 +2107,7 @@ library.
 
     $xkpasswd_instance->update_config({separator_character => '+'});
     
-The function updates the config within an XKPassws instance. A hashref with the
+The function updates the config within an XKPasswd instance. A hashref with the
 config options to be changed must be passed. The function returns a reference to
 the instance to enable function chaining. The function will croak if the updated
 config would be invalid in some way. Note that if this happens the running
