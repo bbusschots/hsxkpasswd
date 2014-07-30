@@ -36,15 +36,15 @@ my $_KEYS = {
     symbol_alphabet => {
         req => 0,
         ref => 'ARRAY', # ARRAY REF
-        validate => sub { # at least 5 scalar elements
+        validate => sub { # at least 3 scalar elements
             my $key = shift;
-            unless(scalar @{$key} >= 5){ return 0; }
+            unless(scalar @{$key} >= 3){ return 0; }
             foreach my $symbol (@{$key}){
                 unless(ref $symbol eq q{} && $symbol =~ m/^.$/sx){ return 0; }
             }
             return 1;
         },
-        desc => 'An array ref containing at least 5 single-character scalars',
+        desc => 'An array ref containing at least 3 single-character scalars',
     },
     separator_alphabet => {
         req => 0,
@@ -132,9 +132,9 @@ my $_KEYS = {
     padding_characters_before => {
         req => 0,
         ref => q{}, # SCALAR
-        validate => sub { # positive integer
+        validate => sub { # positive integer or 0
             my $key = shift;
-            unless($key =~ m/^\d+$/sx && $key >= 1){ return 0; }
+            unless($key =~ m/^\d+$/sx && $key >= 0){ return 0; }
             return 1;
         },
         desc => 'A scalar containing an integer value greater than or equal to one',
@@ -142,9 +142,9 @@ my $_KEYS = {
     padding_characters_after => {
         req => 0,
         ref => q{}, # SCALAR
-        validate => sub { # positive integer
+        validate => sub { # positive integer or 0
             my $key = shift;
-            unless($key =~ m/^\d+$/sx && $key >= 1){ return 0; }
+            unless($key =~ m/^\d+$/sx && $key >= 0){ return 0; }
             return 1;
         },
         desc => 'A scalar containing an integer value greater than or equal to one',
@@ -218,7 +218,7 @@ my $_KEYS = {
 my $_PRESETS = {
     DEFAULT => {
         description => 'The default preset resulting in a password consisting of 4 random words of between 4 and 8 letters separated by a random character, with two random digits before and after, and padded with two random characters front and back',
-        config =>{
+        config => {
             symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ?}],
             word_length_min => 4,
             word_length_max => 8,
@@ -231,6 +231,151 @@ my $_PRESETS = {
             padding_characters_before => 2,
             padding_characters_after => 2,
             case_transform => 'CAPITALISE',
+            random_function => \&XKPasswd::basic_random_generator,
+            random_increment => 10,
+            character_substitutions => {},
+        },
+    },
+    WEB => {
+        description => q{A preset for websites that don't have password length restrictions. Passwords are assembled from three random words each between 4 and 8 characters long, the case is alternated for each word, words are separated by a random character with two random digits added frond and back, and finally two padding characters front and back.},
+        config => {
+            symbol_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+            separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+            word_length_min => 4,
+            word_length_max => 8,
+            num_words => 3,
+            separator_character => 'RANDOM',
+            padding_digits_before => 2,
+            padding_digits_after => 2,
+            padding_type => 'FIXED',
+            padding_character => 'RANDOM',
+            padding_characters_before => 2,
+            padding_characters_after => 2,
+            case_transform => 'ALTERNATE',
+            random_function => \&XKPasswd::basic_random_generator,
+            random_increment => 10,
+            character_substitutions => {},
+        },
+    },
+    WEB16 => {
+        description => 'A preset for websites that insit passwords not be longer than 16 characters. Passwords are assembled from two random five-letter words, transformed into inverse case (first letter lower case, rest upper), separated by a random character with two random digits appended, and finally one padding character front and back.',
+        config => {
+            symbol_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+            separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+            word_length_min => 5,
+            word_length_max => 5,
+            num_words => 2,
+            separator_character => 'RANDOM',
+            padding_digits_before => 0,
+            padding_digits_after => 2,
+            padding_type => 'FIXED',
+            padding_character => 'RANDOM',
+            padding_characters_before => 1,
+            padding_characters_after => 1,
+            case_transform => 'INVERT',
+            random_function => \&XKPasswd::basic_random_generator,
+            random_increment => 10,
+            character_substitutions => {},
+        },
+    },
+    WEB20 => {
+        description => 'A preset for websites that insit passwords not be longer than 20 characters. Passwords are assembled from two random six-letter words, transformed into inverse case (first letter lower case, rest upper), separated by a random character with two random digits appended, and finally two padding characters front and back.',
+        config => {
+            symbol_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+            separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+            word_length_min => 6,
+            word_length_max => 6,
+            num_words => 2,
+            separator_character => 'RANDOM',
+            padding_digits_before => 0,
+            padding_digits_after => 2,
+            padding_type => 'FIXED',
+            padding_character => 'RANDOM',
+            padding_characters_before => 2,
+            padding_characters_after => 2,
+            case_transform => 'INVERT',
+            random_function => \&XKPasswd::basic_random_generator,
+            random_increment => 10,
+            character_substitutions => {},
+        },
+    },
+    WIFI => {
+        description => 'A preset for generating 63 character long WPA2 keys (most routers allow 64 characters, but some only 63, hence the odd length).',
+        config => {
+            symbol_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+            separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+            word_length_min => 4,
+            word_length_max => 8,
+            num_words => 6,
+            separator_character => 'RANDOM',
+            padding_digits_before => 4,
+            padding_digits_after => 4,
+            padding_type => 'ADAPTIVE',
+            padding_character => 'RANDOM',
+            pad_to_length => 63,
+            case_transform => 'RANDOM',
+            random_function => \&XKPasswd::basic_random_generator,
+            random_increment => 22,
+            character_substitutions => {},
+        },
+    },
+    APPLEID => {
+        description => 'A preset respecting the many prerequisites Apple places on Apple ID passwords. The preset also limits itself to symbols found on the iOS letter and number keyboards (i.e. not the awkward to reach symbol keyboard)',
+        config => {
+            symbol_alphabet => [qw{! ? @ &}],
+            separator_alphabet => [qw{- : .}, q{,}],
+            word_length_min => 5,
+            word_length_max => 7,
+            num_words => 3,
+            separator_character => 'RANDOM',
+            padding_digits_before => 2,
+            padding_digits_after => 2,
+            padding_type => 'FIXED',
+            padding_character => 'RANDOM',
+            padding_characters_before => 1,
+            padding_characters_after => 1,
+            case_transform => 'ALTERNATE',
+            random_function => \&XKPasswd::basic_random_generator,
+            random_increment => 10,
+            character_substitutions => {},
+        },
+    },
+    NTLM => {
+        description => 'A preset for for those unfortunate enough to have to use a 14 character Windows NTLMv1 password.',
+        config => {
+            symbol_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+            separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+            word_length_min => 5,
+            word_length_max => 5,
+            num_words => 2,
+            separator_character => 'RANDOM',
+            padding_digits_before => 1,
+            padding_digits_after => 0,
+            padding_type => 'FIXED',
+            padding_character => 'RANDOM',
+            padding_characters_before => 0,
+            padding_characters_after => 1,
+            case_transform => 'INVERT',
+            random_function => \&XKPasswd::basic_random_generator,
+            random_increment => 10,
+            character_substitutions => {},
+        },
+    },
+    SECURITYQ => {
+        description => 'A preset for creating fake answers to so-called security questions.',
+        config => {
+            word_length_min => 4,
+            word_length_max => 8,
+            num_words => 6,
+            separator_character => q{ },
+            padding_digits_before => 0,
+            padding_digits_after => 0,
+            padding_type => 'FIXED',
+            padding_character => 'RANDOM',
+            symbol_alphabet => [qw{. ! ?}],
+            padding_characters_before => 0,
+            padding_characters_after => 1,
+            case_transform => 'NONE',
             random_function => \&XKPasswd::basic_random_generator,
             random_increment => 10,
             character_substitutions => {},
@@ -599,10 +744,14 @@ sub is_valid_config{
         }
     }
     
-    # if there is fixed character padding, make sure before and after are specified
+    # if there is fixed character padding, make sure before and after are specified, and at least one has a value greater than 1
     if($config->{padding_type} eq 'FIXED'){
         unless(defined $config->{padding_characters_before} && defined $config->{padding_characters_after}){
             croak(q{padding_type='FIXED' requires padding_characters_before & padding_characters_after be set}) if $croak;
+            return 0;
+        }
+        unless($config->{padding_characters_before} + $config->{padding_characters_after} > 0){
+            croak(q{padding_type='FIXED' requires at least one of padding_characters_before & padding_characters_after be greater than one (to use no padding use padding_type='NONE')}) if $croak;
             return 0;
         }
     }
@@ -981,7 +1130,9 @@ sub password{
         $self->_transform_case(\@words);
         $self->_substitute_characters(\@words); # TO DO
         my $separator = $self->_separator();
+        print 'DEBUG - '.(caller 0)[3]."() - got separator=$separator\n" if $self->{debug};
         my $pad_char = $self->_padding_char($separator);
+        print 'DEBUG - '.(caller 0)[3]."() - got pad_char=$pad_char\n" if $self->{debug};
         
         #
         # Then assemble the finished password
@@ -989,14 +1140,17 @@ sub password{
         
         # start with the words and the separator
         $password = join $separator, @words;
+        print 'DEBUG - '.(caller 0)[3]."() - assembled base password: $password\n" if $self->{debug};
         
         # next add the numbers front and back
         if($self->{_CONFIG}->{padding_digits_before} > 0){
             $password = $self->_random_digits($self->{_CONFIG}->{padding_digits_before}).$separator.$password;
         }
         if($self->{_CONFIG}->{padding_digits_after} > 0){
-            $password = $password.$separator.$self->_random_digits($self->{_CONFIG}->{padding_digits_before});
+            $password = $password.$separator.$self->_random_digits($self->{_CONFIG}->{padding_digits_after});
         }
+        print 'DEBUG - '.(caller 0)[3]."() - added random digits (as configured): $password\n" if $self->{debug};
+        
         
         # then finally add the padding characters
         if($self->{_CONFIG}->{padding_type} eq 'FIXED'){
@@ -1024,6 +1178,7 @@ sub password{
                 $password = substr $password, 0, $self->{_CONFIG}->{pad_to_length};
             }
         }
+        print 'DEBUG - '.(caller 0)[3]."() - added padding (as configured): $password\n" if $self->{debug};
         1; # ensure true evaluation on successful execution
     }or do{
         croak("Failed to generate password with the following error: $EVAL_ERROR");
@@ -1971,7 +2126,7 @@ is C<RANDOM>.
 
 =item *
 
-C<symbol_alphabet> - an arrayref containing at least five single characters as
+C<symbol_alphabet> - an arrayref containing at least three single characters as
 scalars. This alphabet will be used when selecting random characters to act as
 the separator between words, or the padding at the start and/or end of
 generated passwords. The default value returned by C<default_config()> is
@@ -2020,6 +2175,19 @@ The following presets are defined:
 
 =item *
 
+C<APPLEID> - a preset respecting the many prerequisites Apple places on Apple
+ID passwords. Apple's official password policy is located here:
+L<http://support.apple.com/kb/ht4232>. Note that Apple's knowlege base article
+omits to mention that passwords can't be longer than 32 characters. This preset
+is also configured to use only characters that are easy to type on the standard
+iOS keyboard, i.e. those apearing on the letters keybard (C<ABC>) or the
+numbers keyboard C<.?123>, and not those on the harder to reach symbols
+keyboard C<#+=>. This preset generates passwords of the following form:
+
+    @56.copilot.BOGLE.rinker.52@
+
+=item *
+
 C<DEFAULT> - the default configuration. Results in passwords of the following
 form:
 
@@ -2027,7 +2195,56 @@ form:
 
 =item *
 
-C<XKCD> - a configuration inspired by the original XKCD comic
+C<NTLM> - a preset for those people unfortunate enough to still need Windows
+NTLM version 1 passwords. Because of the 14 character limit on NTMLv1
+passwords, this preset should only be used in extremis - i.e. when you really
+do need an NTLMv1 password. Results in passwords of the following form:
+
+    0=mAYAN=sCART@
+
+=item *
+
+C<SECURITYQ> - a preset for creating fake answers to security questions. It
+generates long nonsense sentences ending in C<.> C<!> or C<?>, for example:
+
+    lakelike titrable skippet preshare Pictland fraying?
+    
+=item *
+
+C<WEB> - a preset for those websites which allow long passwords. Results in
+passwords of the following form:
+
+    ||48-bounding-CLASSY-zabra-98||
+
+=item *
+
+C<WEB16> - a preset for generating passwords on websites that do not allow more
+than 16 characters. Because 16 characters is not very long, a large set of
+symbols are chosen from for the padding and separator, and the unusual inverse
+case is used (the first letter lower-case, the rest upper). Results in
+passwords of the following form:
+
+    =lEARN_rIGOR_35=
+    
+=item *
+
+C<WEB20> - similar to C<WEB16>, but consisting of six-letter words, and with
+two padding characters front and back. Results in passwords of the following
+form:
+
+    ||tWITCH-fLUSHY-45||
+
+=item *
+
+C<WIFI> - a preset for generating 63 character long WPA2 keys (most routers
+allow 64 characters, but some only 63, hence the odd length). Results in
+passwords of the following form:
+
+    3722|uncrook|outlaid|YAPPING|cheer|bestink|BROWNOUT|6852=======
+
+=item *
+
+C<XKCD> - a preset inspired by the original XKCD comic
 (L<http://xkcd.com/936/>), but with the alteration that words are separated by
 dashes rather than spaces. Results in passwords of the following
 form:
