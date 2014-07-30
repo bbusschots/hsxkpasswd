@@ -34,7 +34,7 @@ my $_CLASS = 'XKPasswd';
 # config key definitions
 my $_KEYS = {
     symbol_alphabet => {
-        req => 1,
+        req => 0,
         ref => 'ARRAY', # ARRAY REF
         validate => sub { # at least 5 scalar elements
             my $key = shift;
@@ -94,7 +94,7 @@ my $_KEYS = {
         ref => q{}, # SCALAR
         validate => sub {
             my $key = shift;
-            unless($key =~ m/^[.]|(NONE)|(RANDOM)$/sx){ return 0; }
+            unless($key =~ m/^(.)|(NONE)|(RANDOM)$/sx){ return 0; }
             return 1;
         },
         desc => q{A scalar containing a single character, or the special value 'NONE' or 'RANDOM'},
@@ -217,22 +217,41 @@ my $_KEYS = {
 # preset definitions
 my $_PRESETS = {
     DEFAULT => {
-        symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ?}],
-        word_length_min => 4,
-        word_length_max => 8,
-        num_words => 4,
-        separator_character => 'RANDOM',
-        padding_digits_before => 2,
-        padding_digits_after => 2,
-        padding_type => 'FIXED',
-        padding_character => 'RANDOM',
-        padding_characters_before => 2,
-        padding_characters_after => 2,
-        case_transform => 'CAPITALISE',
-        random_function => \&XKPasswd::basic_random_generator,
-        random_increment => 10,
-        character_substitutions => {},
-    }
+        description => 'The default preset resulting in a password consisting of 4 random words of between 4 and 8 letters separated by a random character, with two random digits before and after, and padded with two random characters front and back',
+        config =>{
+            symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ?}],
+            word_length_min => 4,
+            word_length_max => 8,
+            num_words => 4,
+            separator_character => 'RANDOM',
+            padding_digits_before => 2,
+            padding_digits_after => 2,
+            padding_type => 'FIXED',
+            padding_character => 'RANDOM',
+            padding_characters_before => 2,
+            padding_characters_after => 2,
+            case_transform => 'CAPITALISE',
+            random_function => \&XKPasswd::basic_random_generator,
+            random_increment => 10,
+            character_substitutions => {},
+        },
+    },
+    XKCD => {
+        description => 'Passwords similar to the example in the original XKCD cartoon, but with a dash to separate the four random words (each word being between 4 and 8 characterse long)',
+        config => {
+            word_length_min => 4,
+            word_length_max => 8,
+            num_words => 4,
+            separator_character => '-',
+            padding_digits_before => 0,
+            padding_digits_after => 0,
+            padding_type => 'NONE',
+            case_transform => 'CAPITALISE',
+            random_function => \&XKPasswd::basic_random_generator,
+            random_increment => 10,
+            character_substitutions => {},
+        },
+    },
 };
 
 #
@@ -410,7 +429,7 @@ sub preset_config{
     }
     
     # start by loading the preset
-    my $config = $_CLASS->clone_config($_PRESETS->{$preset});
+    my $config = $_CLASS->clone_config($_PRESETS->{$preset}->{config});
     
     # if overrides were passed, apply them and validate
     if(defined $overrides){
@@ -478,9 +497,11 @@ sub clone_config{
     }
     
     # deal with the non-scarlar keys
-    $clone->{symbol_alphabet} = [];
-    foreach my $symbol (@{$config->{symbol_alphabet}}){
-        push @{$clone->{symbol_alphabet}}, $symbol;
+    if(defined $config->{symbol_alphabet} && ref $config->{symbol_alphabet} eq 'ARRAY'){
+        $clone->{symbol_alphabet} = [];
+        foreach my $symbol (@{$config->{symbol_alphabet}}){
+            push @{$clone->{symbol_alphabet}}, $symbol;
+        }
     }
     if(defined $config->{separator_alphabet} && ref $config->{separator_alphabet} eq 'ARRAY'){
         $clone->{separator_alphabet} = [];
@@ -554,14 +575,27 @@ sub is_valid_config{
         };
     }
     
-    
     # finally, make sure all other requirements are met
+    
+    # if there is a need for a symbol alphabet, make sure one is defined
+    if($config->{separator_character} eq 'RANDOM'){
+        unless(defined $config->{symbol_alphabet} || defined $config->{separator_alphabet}){
+            croak(qq{separator_character='$config->{separator_character}' requires either a symbol_alphabet or separator_alphabet be specified}) if $croak;
+            return 0;
+        }
+    }
     
     # if there is any kind of character padding, make sure a padding character is specified
     if($config->{padding_type} ne 'NONE'){
         unless(defined $config->{padding_character}){
             croak(qq{padding_type='$config->{padding_type}' requires padding_character be set}) if $croak;
             return 0;
+        }
+        if($config->{padding_character} eq 'RANDOM'){
+            unless(defined $config->{symbol_alphabet}){
+                croak(qq{padding_character='$config->{padding_character}' requires a symbol_alphabet be specified}) if $croak;
+            return 0;
+            }
         }
     }
     
@@ -644,6 +678,57 @@ sub config_to_string{
             confess((caller 0)[3]."() - encounterd an un-handled key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
         }
         ## use critic
+    }
+    
+    # return the string
+    return $ans;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Return a list of all valid preset names
+# Returns    : An array of preset names as scalars
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation.
+# Notes      :
+# See Also   :
+sub defined_presets{
+    my $class = shift;
+    
+    # validate the args
+    unless(defined $class && $class eq $_CLASS){
+        croak((caller 0)[3].'() - invalid invocation of class method');
+    }
+    
+    # return the preset names
+    return sort keys $_PRESETS;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Render the defined presets as a string
+# Returns    : A scalar
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation
+# Notes      :
+# See Also   :
+sub presets_to_string{
+    my $class = shift;
+    
+    # validate the args
+    unless(defined $class && $class eq $_CLASS){
+        croak((caller 0)[3].'() - invalid invocation of class method');
+    }
+    
+    # loop through each preset and assemble the result
+    my $ans = q{};
+    my @preset_names = $_CLASS->defined_presets();
+    foreach my $preset (@preset_names){
+        $ans .= $preset."\n===\n";
+        $ans .= $_PRESETS->{$preset}->{description}."\n";
+        $ans .= "\nConfig:\n---\n";
+        $ans .= $_CLASS->config_to_string($_PRESETS->{$preset}->{config});
+        $ans .= "\n";
     }
     
     # return the string
@@ -1904,7 +1989,52 @@ The default values returned by C<default_config()> is are 4 & 8.
 
 =head2 PRESETS
 
-TO DO
+For ease of use, this module comes with a set of pre-defined presets. Preset
+names can be used in place of config hashrefs when instantiating an XKPasswd
+object, or, when using the functional interface to XKPasswd.
+
+Presets can be used as-is, or, they can be used as a starting point for
+creating your own config hashref, as demonstrated by the following example:
+
+    my $config = XKPasswd->preset_config('XKCD');
+    $config->{separator_character} = q{ }; # change the separator to a space
+    my $xkpasswd = XKPasswd->new('mydict.txt', $config);
+    
+If you only wish to alter a small number of config settings, the following
+two shortcuts might be of interest (both produce the same result as the
+example above):
+
+    my $config = XKPasswd->preset_config('XKCD', {separator_character => q{ }});
+    my $xkpasswd = XKPasswd->new('mydict.txt', $config);
+    
+or
+
+    my $xkpasswd = XKPasswd->new('mydict.txt', $config, {separator_character => q{ }});
+
+For more see the definitions for the class functions C<defined_presets()>,
+C<presets_to_string()>, and C<preset_config()>.
+
+The following presets are defined:
+
+=over 4
+
+=item *
+
+C<DEFAULT> - the default configuration. Results in passwords of the following
+form:
+
+    %%57+Sensuous+Tannery+Layback+Accepter+27%%
+
+=item *
+
+C<XKCD> - a configuration inspired by the original XKCD comic
+(L<http://xkcd.com/936/>), but with the alteration that words are separated by
+dashes rather than spaces. Results in passwords of the following
+form:
+
+    Revalue-Skippy-Gustful-Daddle
+
+=back
 
 =head2 RANDOM FUNCTIONS
 
@@ -2022,6 +2152,12 @@ equivalent to the following:
     my $config = XKPasswd->preset_config('DEFAULT');
     my $config = XKPasswd->default_config('DEFAULT', {dictionary_file_path => 'mydict.txt'});
 
+=head3 defined_presets()
+
+    my @preset_names = XKPasswd->defined_presets();
+    
+This function returns the list of defined preset names as an array of scalars.
+
 =head3 is_valid_config()
 
     my $is_ok = XKPasswd->is_valid_config($config);
@@ -2057,6 +2193,13 @@ containing keys with values to override the defaults with.
     
 When overrides are present, the function will carp if an invalid key or value is
 passed, and croak if the resulting merged config is invalid.
+
+=head3 presets_to_string()
+
+    print XKPasswd->presets_to_string();
+    
+This function returns a string containing a description of each defined preset
+and the configs associated with the presets.
 
 =head2 INSTANCE FUNCTIONS
 
