@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use English qw( -no_match_vars ); # for more readable code
+use Devel::StackTrace; # for better error reporting
 
 ## no critic (ProhibitAutomaticExportation);
 use base qw( Exporter );
@@ -27,6 +28,11 @@ our @EXPORT = qw( xkpasswd );
 # version info
 use version; our $VERSION = qv('2.1_01');
 my $MIN_WORDS = 100;
+
+# Logging configuration
+our $LOG_STREAM = *STDERR; # default to logging to STDERR
+our $LOG_ERRORS = 0; # default to not logging errors
+our $DEBUG = 0; # default to not having debugging enabled
 
 # utility variables
 my $_CLASS = 'XKPasswd';
@@ -192,12 +198,12 @@ my $_KEYS = {
     random_increment => {
         req => 1,
         ref => q{}, # SCALAR
-        validate => sub { # positive integer >= 1
+        validate => sub { # positive integer >= 1, or 'AUTO'
             my $key = shift;
-            unless($key =~ m/^\d+$/sx && $key >= 1){ return 0; }
+            unless(($key =~ m/^\d+$/sx && $key >= 1) || $key eq 'AUTO'){ return 0; }
             return 1;
         },
-        desc => 'A scalar containing an integer value greater than or equal to one',
+        desc => q{A scalar containing an integer value greater than or equal to one, or 'AUTO'},
     },
     character_substitutions => {
         req => 1,
@@ -232,7 +238,7 @@ my $_PRESETS = {
             padding_characters_after => 2,
             case_transform => 'CAPITALISE',
             random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 10,
+            random_increment => 'AUTO',
             character_substitutions => {},
         },
     },
@@ -253,7 +259,7 @@ my $_PRESETS = {
             padding_characters_after => 2,
             case_transform => 'ALTERNATE',
             random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 10,
+            random_increment => 9,
             character_substitutions => {},
         },
     },
@@ -274,7 +280,7 @@ my $_PRESETS = {
             padding_characters_after => 1,
             case_transform => 'INVERT',
             random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 10,
+            random_increment => 6,
             character_substitutions => {},
         },
     },
@@ -295,7 +301,7 @@ my $_PRESETS = {
             padding_characters_after => 2,
             case_transform => 'INVERT',
             random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 10,
+            random_increment => 6,
             character_substitutions => {},
         },
     },
@@ -336,7 +342,7 @@ my $_PRESETS = {
             padding_characters_after => 1,
             case_transform => 'ALTERNATE',
             random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 10,
+            random_increment => 9,
             character_substitutions => {},
         },
     },
@@ -357,7 +363,7 @@ my $_PRESETS = {
             padding_characters_after => 1,
             case_transform => 'INVERT',
             random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 10,
+            random_increment => 5,
             character_substitutions => {},
         },
     },
@@ -377,7 +383,7 @@ my $_PRESETS = {
             padding_characters_after => 1,
             case_transform => 'NONE',
             random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 10,
+            random_increment => 7,
             character_substitutions => {},
         },
     },
@@ -393,7 +399,7 @@ my $_PRESETS = {
             padding_type => 'NONE',
             case_transform => 'CAPITALISE',
             random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 10,
+            random_increment => 4,
             character_substitutions => {},
         },
     },
@@ -414,7 +420,6 @@ my $_PRESETS = {
 #                 A hashref containing a full valid config
 #              3. OPTIONAL - a hashref continaing any keys from the preset to be
 #                 overridden (ignored if a hashref is passed as the second arg)
-#              4. OPTIONAL - a truthy value to enter debug mode
 # Throws     : Croaks if the function is called in an invalid way, or with an
 #              invalid config
 # Notes      : 
@@ -424,14 +429,18 @@ sub new{
     my $dictionary_path = shift;
     my $preset = shift;
     my $preset_override = shift;
-    my $debug = shift;
     
     # validate args
     unless($class && $class eq $_CLASS){
-        croak((caller 0)[3].'() - invalid invocation of constructor');
+        $_CLASS->_error('invalid invocation of constructor');
     }
     unless(defined $dictionary_path && -f $dictionary_path){
-        croak((caller 0)[3].'() - a valid dictionary path must be passed as the first argument');
+        $_CLASS->_error('a valid dictionary path must be passed as the first argument');
+    }
+    
+    # before going any further, check the presets if debugging (doing later may cause an error before we test)
+    if($DEBUG){
+        $_CLASS->_check_presets();
     }
     
     # assemble the config hashref
@@ -448,13 +457,13 @@ sub new{
             
             # make sure the preset exists
             unless(defined $_PRESETS->{$preset}){
-                croak((caller 0)[3]."() - invalid arguments - preset '$preset' does not exist");
+                $_CLASS->_error("invalid arguments - preset '$preset' does not exist");
             }
             
             # if overrides are defined, make sure they are hashrefs
             if(defined $preset_override){
                 unless(ref $preset_override eq 'HASH'){
-                    croak((caller 0)[3].'() - invalid arguments - if present, third argument must be a hashref');
+                    $_CLASS->_error('invalid arguments - if present, the third argument must be a hashref');
                 }
             }
             
@@ -464,7 +473,7 @@ sub new{
             # we were passed a hashref, so use it as the config
             $config = $preset;
         }else{
-            croak((caller 0)[3].'() - invalid argument - if present, the second argument must be a scalar or a hashref');
+            $_CLASS->_error('invalid argument - if present, the second argument must be a scalar or a hashref');
         }
     }else{
         $config = $_CLASS->default_config();
@@ -472,8 +481,7 @@ sub new{
     
     # initialise the object
     my $instance = {
-        # 'public' instance variables
-        debug => 0,
+        # 'public' instance variables (none so far)
         # 'PRIVATE' internal variables
         _CONFIG => {},
         _DICTIONARY_PATH => q{}, # the path to the dictionary hashref
@@ -481,9 +489,6 @@ sub new{
         _CACHE_DICTIONARY_LIMITED => [], # a cache of all the words found in the dictionary file that meet the length criteria
         _CACHE_RANDOM => [], # a cache of random numbers (as floating points between 0 and 1)
     };
-    if($debug){
-        $instance->{debug} = 1;
-    }
     bless $instance, $class;
     
     # load the config
@@ -493,11 +498,11 @@ sub new{
     $instance->dictionary($dictionary_path);
     
     # if debugging, print out meta data
-    if($debug){
-        print "Initialised XKPasswd Instance with the following config:\n";
-        print $instance->config_string();
-        print "Cache Status:\n";
-        print $instance->caches_state();
+    if($DEBUG){
+        print {$LOG_STREAM} "\nInitialised XKPasswd Instance with the following details:\nConfig:\n---\n";
+        print {$LOG_STREAM} $instance->config_string();
+        print {$LOG_STREAM} "Cache Status:\n---\n";
+        print {$LOG_STREAM} $instance->caches_state()."\n";
     }
     
     # return the initialised object
@@ -525,7 +530,7 @@ sub default_config{
     
     # validate the args
     unless($class && $class eq $_CLASS){
-        croak((caller 0)[3].'() - invalid invocation of class method');
+        $_CLASS->_error('invalid invocation of class method');
     }
 
     # build and return a default config
@@ -559,17 +564,17 @@ sub preset_config{
     
     # validate the args
     unless($class && $class eq $_CLASS){
-        croak((caller 0)[3].'() - invalid invocation of class method');
+        $_CLASS->_error('invalid invocation of class method');
     }
     unless(ref $preset eq q{}){
-        croak((caller 0)[3].'() - invalid args - if present, the first argument must be a scalar');
+        $_CLASS->_error('invalid args - if present, the first argument must be a scalar');
     }
     unless(defined $_PRESETS->{$preset}){
-        croak((caller 0)[3]."() - preset '$preset' does not exist");
+        $_CLASS->_error("preset '$preset' does not exist");
     }
     if(defined $overrides){
         unless(ref $overrides eq 'HASH'){
-            croak((caller 0)[3].'() - invalid args, overrides must be passed as a hashref');
+            $_CLASS->_error('invalid args, overrides must be passed as a hashref');
         }
     }
     
@@ -581,7 +586,7 @@ sub preset_config{
         foreach my $key (keys %{$overrides}){
             # ensure the key is valid - skip it if not
             unless(defined $_KEYS->{$key}){
-                carp("Skinning invalid key=$key");
+                $_CLASS->_warn("Skippining invalid key=$key");
                 next;
             }
             
@@ -589,7 +594,7 @@ sub preset_config{
             eval{
                 $_CLASS->_validate_key($key, $overrides->{$key}, 1); # returns 1 if valid
             }or do{
-                carp("Skinning key=$key because of invalid value. Expected: $_KEYS->{$key}->{desc}");
+                $_CLASS->_warn("Skipping key=$key because of invalid value. Expected: $_KEYS->{$key}->{desc}");
                 next;
             };
             
@@ -597,7 +602,7 @@ sub preset_config{
             $config->{$key} = $overrides->{$key};
         }
         unless($_CLASS->is_valid_config($config)){
-            croak('The default config combined with the specified overrides has resulted in an inalid config');
+            $_CLASS->_error('The default config combined with the specified overrides has resulted in an inalid config');
         }
     }
     
@@ -620,10 +625,10 @@ sub clone_config{
     
     # validate the args
     unless($class && $class eq $_CLASS){
-        croak((caller 0)[3].'() - invalid invocation of class method');
+        $_CLASS->_error('invalid invocation of class method');
     }
     unless(defined $config && $_CLASS->is_valid_config($config)){
-        croak((caller 0)[3].'() - invalid args - a valid config hashref must be passed');
+        $_CLASS->_error('invalid args - a valid config hashref must be passed');
     }
     
     # start with a blank hashref
@@ -682,10 +687,10 @@ sub is_valid_config{
     
     # validate the args
     unless($class && $class eq $_CLASS){
-        croak((caller 0)[3].'() - invalid invocation of class method');
+        $_CLASS->_error('invalid invocation of class method');
     }
     unless($config && ref $config eq 'HASH'){
-        croak((caller 0)[3].'() - invalid arguments');
+        $_CLASS->_error('invalid arguments');
     }
     
     #
@@ -784,10 +789,10 @@ sub config_to_string{
     
     # validate the args
     unless(defined $class && $class eq $_CLASS){
-        croak((caller 0)[3].'() - invalid invocation of class method');
+        $_CLASS->_error('invalid invocation of class method');
     }
     unless(defined $config && ref $config eq 'HASH'){
-        croak((caller 0)[3].'() - invalid arguments');
+        $_CLASS->_error('invalid arguments');
     }
     
     # assemble the string to return
@@ -798,7 +803,7 @@ sub config_to_string{
         
         # make sure the key has the expected type
         unless(ref $config->{$key} eq $_KEYS->{$key}->{ref}){
-            carp((caller 0)[3]."() - unexpected key type for key=$key (expected ref='$_KEYS->{$key}->{ref}', got ref='".ref $config->{$key}.q{')});
+            $_CLASS->_warn("unexpected key type for key=$key (expected ref='$_KEYS->{$key}->{ref}', got ref='".ref $config->{$key}.q{')});
             next;
         }
         
@@ -823,8 +828,8 @@ sub config_to_string{
         }elsif($_KEYS->{$key}->{ref} eq 'CODE'){
             $ans .= $key.q{=}.$config->{$key}.qq{\n};
         }else{
-            # this should never happen, but just in case, Confess (makes it easier to find than carping)
-            confess((caller 0)[3]."() - encounterd an un-handled key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
+            # this should never happen, but just in case, throw an error
+            $_CLASS->_error("encounterd an un-handled key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
         }
         ## use critic
     }
@@ -846,7 +851,7 @@ sub defined_presets{
     
     # validate the args
     unless(defined $class && $class eq $_CLASS){
-        croak((caller 0)[3].'() - invalid invocation of class method');
+        $_CLASS->_error('invalid invocation of class method');
     }
     
     # return the preset names
@@ -867,7 +872,7 @@ sub presets_to_string{
     
     # validate the args
     unless(defined $class && $class eq $_CLASS){
-        croak((caller 0)[3].'() - invalid invocation of class method');
+        $_CLASS->_error('invalid invocation of class method');
     }
     
     # loop through each preset and assemble the result
@@ -916,10 +921,10 @@ sub config_stats{
     
     # validate the args
     unless(defined $class && $class eq $_CLASS){
-        croak((caller 0)[3].'() - invalid invocation of class method');
+        $_CLASS->_error('invalid invocation of class method');
     }
     unless(defined $config && $_CLASS->is_valid_config($config)){
-        croak((caller 0)[3].'() - invalid args - a valid config hashref must be passed');
+        $_CLASS->_error('invalid args - a valid config hashref must be passed');
     }
     
     # calculate the lengths
@@ -964,7 +969,7 @@ sub config_stats{
     if($config->{separator_character} eq 'RANDOM'){
         $num_rand++;
     }
-    if($config->{padding_character} eq 'RANDOM'){
+    if(defined $config->{padding_character} && $config->{padding_character} eq 'RANDOM'){
         $num_rand++;
     }
     $num_rand += $config->{padding_digits_before};
@@ -975,7 +980,7 @@ sub config_stats{
         CHAR_SUB:
         foreach my $char (keys %{$config->{character_substitutions}}){
             if(length $config->{character_substitutions}->{$char} > 1){
-                carp((caller 0)[3].'() - warning, maximum length calculation is unreliable because the config contains a character substituion with length greater than 1 character');
+                $_CLASS->_warn('maximum length calculation is unreliable because the config contains a character substituion with length greater than 1 character');
                 last CHAR_SUB;
             }
         }
@@ -1013,7 +1018,7 @@ sub dictionary{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
     
     # decide if we're a 'getter' or a 'setter'
@@ -1025,7 +1030,7 @@ sub dictionary{
         
         # croak if we are called before the config has been loaded into the instance
         unless(defined $self->{_CONFIG}->{word_length_min} && $self->{_CONFIG}->{word_length_max}){
-            croak((caller 0)[3].'() - Failed to load dictionary file - config has not been loaded yet');
+            $_CLASS->_error('failed to load dictionary file - config has not been loaded yet');
         }
         
         # parse the file
@@ -1061,7 +1066,7 @@ sub config{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
     
     # decide if we're a 'getter' or a 'setter'
@@ -1073,18 +1078,18 @@ sub config{
         
         # ensure the config passed is a hashref
         unless($config && ref $config eq 'HASH'){
-            croak((caller 0)[3].'() - invalid arguments - the config passed must be a hashref');
+            $_CLASS->_error('invalid arguments - the config passed must be a hashref');
         }
         
         # validate the passed config hashref
         eval{
             $_CLASS->is_valid_config($config, 1); # returns 1 if valid
         }or do{
-            my $msg = (caller 0)[3].'() - invoked with invalid config';
+            my $msg = 'invoked with invalid config';
             if($self->{debug}){
                 $msg .= " ($EVAL_ERROR)";
             }
-            croak($msg);
+            $_CLASS->_error($msg);
         };
         
         # save a clone of the passed config into the instance
@@ -1109,7 +1114,7 @@ sub config_string{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
     
     # assemble the string to return
@@ -1134,10 +1139,10 @@ sub update_config{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
     unless(defined $new_keys && ref $new_keys eq 'HASH'){
-        croak((caller 0)[3].'() - invalid arguments - the new config keys must be passed as a hashref');
+        $_CLASS->_error('invalid arguments - the new config keys must be passed as a hashref');
     }
     
     # clone the current config as a starting point for the new config
@@ -1151,19 +1156,19 @@ sub update_config{
         
         #validate the new key value
         unless($_CLASS->_validate_key($key, $new_keys->{$key})){
-            croak((caller 0)[3]."() - invalid new value for key=$key");
+            $_CLASS->_error("invalid new value for key=$key");
         }
         
         # update the key in the new config
         $new_config->{$key} = $new_keys->{$key};
         $num_keys_updated++;
-        print 'DEBUG - '.(caller 0)[3]."() - updated $key to new value\n" if $self->{debug};
+        $_CLASS->_debug("updated $key to new value");
     }
-    print 'DEBUG - '.(caller 0)[3]."() - updated $num_keys_updated keys\n" if $self->{debug};
+    $_CLASS->_debug("updated $num_keys_updated keys");
     
     # validate the merged config
     unless($_CLASS->is_valid_config($new_config)){
-        croak((caller 0)[3].'() - updated config is invalid');
+        $_CLASS->_error('updated config is invalid');
     }
     
     # re-calculate the dictionary cache if needed
@@ -1195,7 +1200,7 @@ sub caches_state{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
 
     # generate the string
@@ -1214,13 +1219,12 @@ sub caches_state{
 # Throws     : Croaks on invalid invocation or on error generating the password
 # Notes      :
 # See Also   :
-## no critic (ProhibitExcessComplexity);
 sub password{
     my $self = shift;
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
     
     #
@@ -1231,15 +1235,15 @@ sub password{
         #
         # start by generating the needed parts of the password
         #
-        print 'DEBUG - '.(caller 0)[3]."() - starting to generate random words\n" if $self->{debug};
+        $_CLASS->_debug('starting to generate random words');
         my @words = $self->_random_words();
-        print 'DEBUG - '.(caller 0)[3].'() - got random words='.(join q{, }, @words)."\n" if $self->{debug};
+        $_CLASS->_debug('got random words='.(join q{, }, @words));
         $self->_transform_case(\@words);
         $self->_substitute_characters(\@words); # TO DO
         my $separator = $self->_separator();
-        print 'DEBUG - '.(caller 0)[3]."() - got separator=$separator\n" if $self->{debug};
+        $_CLASS->_debug("got separator=$separator");
         my $pad_char = $self->_padding_char($separator);
-        print 'DEBUG - '.(caller 0)[3]."() - got pad_char=$pad_char\n" if $self->{debug};
+        $_CLASS->_debug("got pad_char=$pad_char");
         
         #
         # Then assemble the finished password
@@ -1247,7 +1251,7 @@ sub password{
         
         # start with the words and the separator
         $password = join $separator, @words;
-        print 'DEBUG - '.(caller 0)[3]."() - assembled base password: $password\n" if $self->{debug};
+        $_CLASS->_debug("assembled base password: $password");
         
         # next add the numbers front and back
         if($self->{_CONFIG}->{padding_digits_before} > 0){
@@ -1256,7 +1260,7 @@ sub password{
         if($self->{_CONFIG}->{padding_digits_after} > 0){
             $password = $password.$separator.$self->_random_digits($self->{_CONFIG}->{padding_digits_after});
         }
-        print 'DEBUG - '.(caller 0)[3]."() - added random digits (as configured): $password\n" if $self->{debug};
+        $_CLASS->_debug("added random digits (as configured): $password");
         
         
         # then finally add the padding characters
@@ -1285,16 +1289,15 @@ sub password{
                 $password = substr $password, 0, $self->{_CONFIG}->{pad_to_length};
             }
         }
-        print 'DEBUG - '.(caller 0)[3]."() - added padding (as configured): $password\n" if $self->{debug};
+        $_CLASS->_debug("added padding (as configured): $password");
         1; # ensure true evaluation on successful execution
     }or do{
-        croak("Failed to generate password with the following error: $EVAL_ERROR");
+        $_CLASS->_error("Failed to generate password with the following error: $EVAL_ERROR");
     };
     
     # return the finished password
     return $password;
 }
-## use critic
 
 #
 # Regular Subs-----------------------------------------------------------------
@@ -1311,7 +1314,6 @@ sub password{
 #                 A hashref containing a full valid config
 #              3. OPTIONAL - a hashref continaing any keys from the preset to be
 #                 overridden (ignored if a hashref is passed as the second arg)
-#              4. OPTIONAL - a truthy value to enter debug mode
 # Throws     : Croaks on error
 # Notes      :
 # See Also   :
@@ -1319,15 +1321,14 @@ sub xkpasswd{
     my $dictionary_path = shift;
     my $preset = shift;
     my $preset_override = shift;
-    my $debug = shift;
     
     # try initialise an xkpasswd object
     my $xkpasswd;
     eval{
-        $xkpasswd = $_CLASS->new($dictionary_path, $preset, $preset_override, $debug);
+        $xkpasswd = $_CLASS->new($dictionary_path, $preset, $preset_override);
         1; # ensure truthy evaliation on successful execution
     } or do {
-        croak("Failed to generate password with the following error: $EVAL_ERROR");
+        $_CLASS->_error("Failed to generate password with the following error: $EVAL_ERROR");
     };
     
     # genereate and return a password - could croak
@@ -1349,7 +1350,7 @@ sub basic_random_generator{
     
     # validate args
     unless(defined $num && $num =~ m/^\d+$/sx && $num >= 1){
-        croak((caller 0)[3].'() - invalid args - must request at least 1 password');
+        $_CLASS->_error('invalid args - must request at least 1 password');
     }
     
     # generate the random numbers
@@ -1369,6 +1370,192 @@ sub basic_random_generator{
 #
 
 #####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
+# Purpose    : Function to log output from the module - SHOULD NEVER BE CALLED
+#              DIRECTLY
+# Returns    : Always returns 1 (to keep perlcritic happy)
+# Arguments  : 1. the severity of the message (one of 'DEBUG', 'WARNING', or
+#                 'ERROR')
+#              2. the message to log
+# Throws     : Croaks on invalid invocation
+# Notes      : THIS FUNCTION SHOULD NEVER BE CALLED DIRECTLY, but always called
+#              via _debug(), _warn(), or _error().
+#              This function does not croak on invalid args, it confess with as
+#              useful an output as it can.
+#              If the function prints output, it will do so to $LOG_STREAM. The
+#              severity determines the functions exact behaviour:
+#              * 'DEBUG' - message is always printed without a stack trace
+#              * 'WARNING' - output is carped, and, if $LOG_ERRORS is true the
+#                message is also printed
+#              * 'ERROR' - output is confessed if $DEBUG and croaked otherwise.
+#                If $LOG_ERRORS is true the message is also printed with a
+#                stack trace
+# See Also   : _debug(), _warn() & _error()
+## no critic (ProhibitExcessComplexity);
+sub _log{
+    my $class = shift;
+    my $severity = uc shift;
+    my $message = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        croak((caller 0)[3].'(): invalid invocation of class method');
+    }
+    unless(defined $severity && ref $severity eq q{} && length $severity > 1){
+        $severity = 'UNKNOWN_SEVERITY';
+    }
+    unless(defined $message && ref $message eq q{}){
+        my $output = 'ERROR - '.(caller 0)[3]."(): invoked with severity '$severity' without message at ".(caller 1)[1].q{:}.(caller 1)[2];
+        if($LOG_ERRORS){
+            print {$LOG_STREAM} "$output\nStack Trace:\n".Devel::StackTrace->new()->as_string();
+        }
+        confess($output);
+    }
+    
+    # figure out the correct index for the function that is really responsible
+    my $caller_index = 2;
+    my $calling_func = (caller 1)[3];
+    unless($calling_func =~ m/^$_CLASS[:]{2}((_debug)|(_warn)|(_error))$/sx){
+        print {$LOG_STREAM} 'WARNING - '.(caller 0)[3].q{(): invoked directly rather than via _debug(), _warn() or _error() - DO NOT DO THIS!};
+        $caller_index++;
+    }
+    
+    # deal with evals
+    my $true_caller = q{};
+    my @caller = caller $caller_index;
+    if(@caller){
+        $true_caller = $caller[3];
+    }
+    my $eval_depth = 0;
+    while($true_caller eq '(eval)'){
+        $eval_depth++;
+        $caller_index++;
+        my @next_caller = caller $caller_index;
+        if(@next_caller){
+            $true_caller = $next_caller[3];
+        }else{
+            $true_caller = q{};
+        }
+    }
+    if($true_caller eq q{}){
+        $true_caller = 'UNKNOWN_FUNCTION';
+    }
+    
+    # deal with the message as appropriate
+    my $output = "$severity - ";
+    if($eval_depth > 0){
+        if($eval_depth == 1){
+            $output .= "eval() within $true_caller";
+        }else{
+            $output .= "$eval_depth deep eval()s within $true_caller";
+        }
+    }else{
+        $output .= $true_caller;
+    }
+    $output .= "(): $message";
+    if($severity eq 'DEBUG'){
+        # debugging, so always print and do nothing more
+        print {$LOG_STREAM} "$output\n" if $DEBUG;
+    }elsif($severity eq 'WARNING'){
+        # warning - always carp, but first print if needed
+        if($LOG_ERRORS){
+            print {$LOG_STREAM} "$output\n";
+        }
+        carp($output);
+    }elsif($severity eq 'ERROR'){
+        # error - print if needed, then confess or croak depending on whether or not debugging
+        if($LOG_ERRORS){
+            if($DEBUG){
+                print {$LOG_STREAM} "$output\n";
+            }else{
+                print {$LOG_STREAM} "$output\nStack Trace:\n".Devel::StackTrace->new()->as_string();
+            }
+        }
+        if($DEBUG){
+            confess($output);
+        }else{
+            croak($output);
+        }
+    }else{
+        # we have an unknown severity, so assume the worst and confess (also log if needed)
+        if($LOG_ERRORS){
+            print {$LOG_STREAM} "$output\nStack Trace:\n".Devel::StackTrace->new()->as_string();
+        }
+        confess($output);
+    }
+    
+    # to keep perlcritic happy
+    return 1;
+}
+## use critic
+
+#####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
+# Purpose    : Function for printing a debug message
+# Returns    : Always return 1 (to keep perlcritic happpy)
+# Arguments  : 1. the debug message to log
+# Throws     : Croaks on invalid invocation
+# Notes      : a wrapper for _log() which invokes that function with a severity
+#              of 'DEBUG'
+# See Also   : _log()
+sub _debug{
+    my $class = shift;
+    my $message = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        $_CLASS->_error('invalid invocation of class method');
+    }
+    
+    #pass the call on to _log
+    return $_CLASS->_log('DEBUG', $message);
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
+# Purpose    : Function for issuing a warning
+# Returns    : Always returns 1 to keep perlcritic happy
+# Arguments  : 1. the warning message to log
+# Throws     : Croaks on invalid invocation
+# Notes      : a wrapper for _log() which invokes that function with a severity
+#              of 'WARNING'
+# See Also   : _log()
+sub _warn{
+    my $class = shift;
+    my $message = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        $_CLASS->_error('invalid invocation of class method');
+    }
+    
+    #pass the call on to _log
+    return $_CLASS->_log('WARNING', $message);
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
+# Purpose    : Function for throwing an error
+# Returns    : Always returns 1 to keep perlcritic happy
+# Arguments  : 1. the error message to log
+# Throws     : Croaks on invalid invocation
+# Notes      : a wrapper for _log() which invokes that function with a severity
+#              of 'ERROR'
+# See Also   : _log()
+sub _error{
+    my $class = shift;
+    my $message = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        $_CLASS->_error('invalid invocation of class method');
+    }
+    
+    #pass the call on to _log
+    return $_CLASS->_log('ERROR', $message);
+}
+
+#####-SUB-######################################################################
 # Type       : INSTANCE ('PRIVATE')
 # Purpose    : Clone the instance's config hashref
 # Returns    : a hashref
@@ -1381,7 +1568,7 @@ sub _clone_config{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
     
     # build the clone
@@ -1393,7 +1580,7 @@ sub _clone_config{
         eval{
             $_CLASS->is_valid_config($clone, 1); # returns 1 if valid
         }or do{
-            croak((caller 0)[3].'() - cloning error ('.$EVAL_ERROR.')');
+            $_CLASS->_error('cloning error ('.$EVAL_ERROR.')');
         };
     }
     
@@ -1420,27 +1607,27 @@ sub _validate_key{
     
     # validate the args
     unless($class && $class eq $_CLASS){
-        croak((caller 0)[3].'() - invalid invocation of class method');
+        $_CLASS->_error('invalid invocation of class method');
     }
     unless(defined $key && ref $key eq q{} && defined $val){
-        croak((caller 0)[3].'() - invoked with invalid args');
+        $_CLASS->_error('invoked with invalid args');
     }
     
     # make sure the key exists
     unless(defined $_KEYS->{$key}){
-        carp((caller 0)[3]."() - called with invalid key=$key") if $croak;
+        carp("invalid key=$key") if $croak;
         return 0;
     }
     
     # make sure the value is of the correct type
     unless(ref $val eq $_KEYS->{$key}->{ref}){
-        croak("Invalid type for key=$key. Expected: ".$_KEYS->{$key}->{desc}) if $croak;
+        croak("invalid type for key=$key. Expected: ".$_KEYS->{$key}->{desc}) if $croak;
         return 0;
     }
     
     # make sure the value passes the validation function for the key
     unless($_KEYS->{$key}->{validate}->($val)){
-        croak("Invalid value for key=$key. Expected: ".$_KEYS->{$key}->{desc}) if $croak;
+        croak("invalid value for key=$key. Expected: ".$_KEYS->{$key}->{desc}) if $croak;
         return 0;
     }
     
@@ -1463,14 +1650,14 @@ sub _parse_words_file{
     
     # validate the args
     unless($class && $class eq $_CLASS){
-        croak((caller 0)[3].'() - invalid invocation of class method');
+        $_CLASS->_error('invalid invocation of class method');
     }
     unless(defined $path && ref $path eq q{} && -f $path){
-        croak((caller 0)[3].'() - invoked with invalid file path');
+        $_CLASS->_error('invoked with invalid file path');
     }
     
     # slurp the words file
-    open my $WORDSFILE, '<', $path or croak("failed to open words file at $path");
+    open my $WORDSFILE, '<', $path or $_CLASS->_error("failed to open words file at $path");
     my $words_raw = do{local $/ = undef; <$WORDSFILE>};
     close $WORDSFILE;
     
@@ -1511,16 +1698,16 @@ sub _filter_word_list{
     
     # validate the args
     unless($class && $class eq $_CLASS){
-        croak((caller 0)[3].'() - invalid invocation of class method');
+        $_CLASS->_error('invalid invocation of class method');
     }
     unless(defined $word_list_ref && ref $word_list_ref eq q{ARRAY}){
-        croak((caller 0)[3].'() - invoked with invalid word list');
+        $_CLASS->_error('invoked with invalid word list');
     }
     unless(defined $min_len && ref $min_len eq q{} && $min_len =~ m/^\d+$/sx && $min_len > 3){
-        croak((caller 0)[3].'() - invoked with invalid minimum word length');
+        $_CLASS->_error('invoked with invalid minimum word length');
     }
     unless(defined $max_len && ref $max_len eq q{} && $max_len =~ m/^\d+$/sx && $max_len >= $min_len){
-        croak((caller 0)[3].'() - invoked with invalid maximum word length');
+        $_CLASS->_error('invoked with invalid maximum word length');
     }
     
     #build the array of words of appropriate length
@@ -1540,7 +1727,7 @@ sub _filter_word_list{
     # ensure we got enough words
     my $alen = scalar @ans;
     unless($alen >= $MIN_WORDS){
-        croak("Too few valid words in the dictionary file (need at least $MIN_WORDS, got $alen)");
+        $_CLASS->_error("Too few valid words in the dictionary file (need at least $MIN_WORDS, got $alen)");
     }
     
     # return the list
@@ -1565,17 +1752,17 @@ sub _random_int{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
     unless(defined $max && $max =~ m/^\d+$/sx && $max > 0){
-        croak((caller 0)[3].'() - invoked with invalid random limit');
+        $_CLASS->_error('invoked with invalid random limit');
     }
     
     # calculate the random number
     my $ans = ($self->_rand() * 1_000_000) % $max;
     
     # return it
-    print 'DEBUG - '.(caller 0)[3]."() - returning $ans (max=$max)\n" if $self->{debug};
+    $_CLASS->_debug("returning $ans (max=$max)");
     return $ans;
 }
 
@@ -1594,10 +1781,10 @@ sub _random_digits{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
     unless(defined $num && $num =~ m/^\d+$/sx && $num > 0){
-        croak((caller 0)[3].'() - invoked with invalid number of digits');
+        $_CLASS->_error('invoked with invalid number of digits');
     }
     
     # assemble the response
@@ -1625,14 +1812,14 @@ sub _rand{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
     
     # get the next random number from the cache
     my $num = shift @{$self->{_CACHE_RANDOM}};
     if(!defined $num){
         # the cache was empty - so try top up the random cache - could croak
-        print 'DEBUG - '.(caller 0)[3]."() - random cache empty - attempting to replenish\n" if $self->{debug};
+        $_CLASS->_debug('random cache empty - attempting to replenish');
         $self->_increment_random_cache();
         
         # try shift again
@@ -1641,11 +1828,11 @@ sub _rand{
     
     # make sure we got a valid random number
     unless(defined $num && $num =~ m/^\d+([.]\d+)?$/sx && $num >= 0 && $num <= 1){
-        croak((caller 0)[3].'() - found invalid entry in random cache');
+        $_CLASS->_error('found invalid entry in random cache');
     }
     
     # return the random number
-    print 'DEBUG - '.(caller 0)[3]."() - returning $num\n" if $self->{debug};
+    $_CLASS->_debug("returning $num (".(scalar @{$self->{_CACHE_RANDOM}}).' remaining in cache)');
     return $num;
 }
 
@@ -1663,20 +1850,32 @@ sub _increment_random_cache{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
+    }
+    
+    # figure out how many numbers to generate
+    my $num_rand = $self->{_CONFIG}->{random_increment};
+    if($num_rand eq 'AUTO'){
+        $_CLASS->_debug(q{random_increment='AUTO' - generating stats to determine increment to use});
+        my %conf_stats = $_CLASS->config_stats($self->{_CONFIG});
+        $num_rand = $conf_stats{random_numbers_required};
+        $_CLASS->_debug("using increment of $num_rand");
+    }else{
+        $_CLASS->_debug("using hard-coded increment of $num_rand");
     }
     
     # genereate the random numbers
-    my @random_numbers = &{$self->{_CONFIG}->{random_function}}($self->{_CONFIG}->{random_increment});
-    print 'DEBUG - '.(caller 0)[3].'() - generated '.(scalar @random_numbers).' random numbers ('.(join q{, }, @random_numbers).")\n" if $self->{debug};
+    my @random_numbers = &{$self->{_CONFIG}->{random_function}}($num_rand);
+    $_CLASS->_debug('generated '.(scalar @random_numbers).' random numbers ('.(join q{, }, @random_numbers).')');
     
     # validate them
-    unless((scalar @random_numbers) == $self->{_CONFIG}->{random_increment}){
-        croak((caller 0)[3].'() - random function did not return the correct number of random numbers');
+    my $num_generated = scalar @random_numbers;
+    unless($num_generated == $num_rand){
+        $_CLASS->_error("random function did not return the correct number of random numbers (expected $num_rand, got $num_generated)");
     }
     foreach my $num (@random_numbers){
         unless($num =~ m/^1|(0([.]\d+)?)$/sx){
-            croak((caller 0)[3]."() - random function returned and invalid value ($num)");
+            $_CLASS->_error("random function returned and invalid value ($num)");
         }
     }
     
@@ -1704,20 +1903,20 @@ sub _random_words{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
     
     # get the random words
     my @ans = ();
-    print 'DEBUG - '.(caller 0)[3].'() - about to generate '.$self->{_CONFIG}->{num_words}." words\n" if $self->{debug};
+    $_CLASS->_debug('about to generate '.$self->{_CONFIG}->{num_words}.' words');
     while ((scalar @ans) < $self->{_CONFIG}->{num_words}){
         my $word = $self->{_CACHE_DICTIONARY_LIMITED}->[$self->_random_int(scalar @{$self->{_CACHE_DICTIONARY_LIMITED}})];
-        print 'DEBUG - '.(caller 0)[3].'() - generate word='.$word."\n" if $self->{debug};
+        $_CLASS->_debug("generate word=$word");
         push @ans, $word;
     }
     
     # return the list of random words
-    print 'DEBUG - '.(caller 0)[3].'() - returning '.(scalar @ans)." words\n" if $self->{debug};
+    $_CLASS->_debug('returning '.(scalar @ans).' words');
     return @ans;
 }
 
@@ -1736,7 +1935,7 @@ sub _separator{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
     
     # figure out the separator character
@@ -1772,10 +1971,10 @@ sub _padding_char{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
     unless(defined $sep){
-        croak((caller 0)[3].'() - no separator character passed');
+        $_CLASS->_error('no separator character passed');
     }
     
     # if there is no padding character needed, return an empty string
@@ -1813,10 +2012,10 @@ sub _transform_case{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
     unless(defined $words_ref && ref $words_ref eq 'ARRAY'){
-        croak((caller 0)[3].'() - no words array reference passed');
+        $_CLASS->_error('no words array reference passed');
     }
     
     # if the transform is set to nothing, then just return
@@ -1885,10 +2084,10 @@ sub _substitute_characters{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        croak((caller 0)[3].'() - invalid invocation of instance method');
+        $_CLASS->_error('invalid invocation of instance method');
     }
     unless(defined $words_ref && ref $words_ref eq 'ARRAY'){
-        croak((caller 0)[3].'() - no words array reference passed');
+        $_CLASS->_error('no words array reference passed');
     }
     
     # if no substitutions are defined, do nothing
@@ -1907,6 +2106,54 @@ sub _substitute_characters{
     }
     
     # always return 1 to keep PerlCritic happy
+    return 1;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Perform sanity checks on all defined presets
+# Returns    : Always returns 1 (to keep perlcritic happy)
+# Arguments  : NONE
+# Throws     : Croaks on invalid input
+# Notes      : The function is designed to be called from the constructor when
+#              in debug mode. It prints information on what it's doing and any
+#              errors it finds to STDERR
+# See Also   :
+sub _check_presets{
+    my $class = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        $_CLASS->_error('invalid invocation of class method');
+    }
+    
+    # loop through all presets and perform sanity checks
+    my @preset_names = $_CLASS->defined_presets();
+    my $num_problems = 0;
+    foreach my $preset (@preset_names){
+        # make sure the preset is valid
+        eval{
+            $_CLASS->is_valid_config($_PRESETS->{$preset}->{config}, 1);
+            1; # ensure truthy evaluation on success
+        }or do{
+            $_CLASS->_warn("preset $preset has invalid config ($EVAL_ERROR)");
+            $num_problems++;
+        };
+        
+        # make sure the random_increment is optimal
+        if($_PRESETS->{$preset}->{config}->{random_increment} ne 'AUTO'){
+            my %stats = $_CLASS->config_stats($_PRESETS->{$preset}->{config});
+            unless($_PRESETS->{$preset}->{config}->{random_increment} == $stats{random_numbers_required}){
+                $_CLASS->_warn("preset $preset has sub-optimal random_increment (value=$_PRESETS->{$preset}->{config}->{random_increment}, required per password=$stats{random_numbers_required})");
+                $num_problems++;
+            }
+        }
+    }
+    if($num_problems == 0){
+        $_CLASS->_debug('all presets OK');
+    }
+    
+    # to keep perlcritic happy
     return 1;
 }
 
@@ -2215,7 +2462,10 @@ the function C<XKPasswd::basic_random_generator()> is used.
 
 C<random_increment> - the number of random digits to generate at a time when
 ever the instance's cache of randomness runs low. Must be an integer greater
-than or equal to 1. The default is 10.
+than or equal to 1, or the special value C<AUTO>. When the value is set to
+C<AUTO> a call to C<config_stats()> is used to determine the amount of random
+numbers needed to generate a single password, and this value is used as the
+random increment. The default value is c<AUTO>.
 
 =item *
 
@@ -2395,7 +2645,7 @@ is much less efficient.
 
 There is only a single function exported by the module:
 
-=head3 C<xkpasswd()>
+=head3 xkpasswd()
 
     my $password = xkpasswd('mydict.txt');
     
@@ -2619,7 +2869,16 @@ config will not have been altered in any way.
 
 =head1 DIAGNOSTICS
 
-TO DO
+By default this module does all of it's error notification via the functions
+C<carp()>, C<croak()>, and C<confess()> from the C<Carp> module. Optionally,
+all error messages can also be printed. To enable the printing of messages,
+set C<$XKPasswd::LOG_ERRORS> to a true. All error messages will then be printed
+to the stream at C<$XKPasswd::LOG_STREAM>, which is set to C<STDERR> by
+default.
+
+Ordinarly this module produces very little output, to enable more verbose
+output C<$XKPasswd::DEBUG> can be set to a truthy value. If this is set, all
+debug messages will be printed to the stream C<$XKPasswd::LOG_STREAM>.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
