@@ -1214,7 +1214,7 @@ sub caches_state{
 
 #####-SUB-######################################################################
 # Purpose    : Generaete a random password based on the object's loaded config
-# Returns    : a passowrd as a string
+# Returns    : a passowrd as a scalar
 # Arguments  : NONE
 # Throws     : Croaks on invalid invocation or on error generating the password
 # Notes      :
@@ -1297,6 +1297,38 @@ sub password{
     
     # return the finished password
     return $password;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE
+# Purpose    : Generate multiple passwords
+# Returns    : An array of passwords as scalars
+# Arguments  : 1. the number of passwords to generate as a scalar
+# Throws     : Croaks on invalid invocation or invalid args
+# Notes      :
+# See Also   :
+sub passwords{
+    my $self = shift;
+    my $num_pws = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        $_CLASS->_error('invalid invocation of instance method');
+    }
+    unless(defined $num_pws && ref $num_pws eq q{} && $num_pws =~ m/^\d+$/sx && $num_pws > 0){
+        $_CLASS->_error('invalid args - must specify the number of passwords to generate as a positive integer');
+    }
+    
+    # generate the needed passwords
+    my @passwords = ();
+    my $num_to_do = $num_pws;
+    while($num_to_do > 0){
+        push @passwords, $self->password(); # could croak
+        $num_to_do--;
+    }
+    
+    # return the passwords
+    return @passwords;
 }
 
 #
@@ -2176,16 +2208,73 @@ This documentation refers to XKPasswd version 2.1.1.
 
     use XKPasswd;
 
-    # get a default config hashref
-    my $config = XKPasswd->default_config();
-
-    # make any desired alterations
-    $config->{dictionary_file_path} = '/usr/share/dict/words';
-
-    # instantiate an XKPasswd object
-    my $xkpasswd = XKPasswd->new($config);
-
-    # TO DO - finish example
+    #
+    # Functional Interface - for single passwords genereated from simple configs
+    #
+    
+    # generate a single password using words from the file
+    # dict.txt using the default configuration
+    my $password = xkpasswd('dict.txt');
+    
+    # generate a single password using one of the module's
+    # predefined presets exactly
+    my $password = xkpasswd('dict.txt', 'XKCD');
+    
+    # generate a single password using one of the module's
+    # predefined presets as a starting point, but with a
+    # small customisation
+    my $password = xkpasswd('dict.txt', 'XKCD', {separator_character => q{ }});
+    
+    #
+    # Object Oriented Interface
+    #
+    
+    # create a new instance with the default config
+    my $xkpasswd_instance = XKPasswd->new('dict.txt');
+    
+    # create an instance from the preset 'XKCD'
+    my $xkpasswd_instance = XKPasswd->new('dict.txt', 'XKCD');
+    
+    # create an instance based on the preset 'XKCD' with one customisation
+    my $xkpasswd_instance = XKPasswd->new('dict.txt', 'XKCD', {separator_character => q{ }});
+    
+    # create an instance from a config based on a preset
+    # but with many alterations
+    my $config = XKPasswd->preset_config('XKCD');
+    $config->{separator_character} = q{ };
+    $config->{case_transform} = 'INVERT';
+    $config->{padding_type} = "FIXED";
+    $config->{padding_characters_before} = 1;
+    $config->{padding_characters_after} = 1;
+    $config->{padding_character} = '*';
+    my $xkpasswd_instance = XKPasswd->new('dict.txt', $config);
+    
+    # create an instance from an entirely custom configuration
+    my $config = {
+        symbol_alphabet => [qw{! @ $ % ^ & * + = : ~ ?}],
+        separator_alphabet => [qw{- + = . _ | ~}],
+        word_length_min => 6,
+        word_length_max => 6,
+        num_words => 3,
+        separator_character => 'RANDOM',
+        padding_digits_before => 2,
+        padding_digits_after => 2,
+        padding_type => 'FIXED',
+        padding_character => 'RANDOM',
+        padding_characters_before => 2,
+        padding_characters_after => 2,
+        case_transform => 'CAPITALISE',
+        random_function => \&XKPasswd::basic_random_generator,
+        random_increment => 'AUTO',
+        character_substitutions => {}
+    }
+    my $xkpasswd_instance = XKPasswd->new('dict.txt', $config);
+    
+    # generate a single password
+    my $password = $xkpasswd_instance->password();
+    
+    # generate multiple passwords
+    my @passwords = $xkpasswd_instance->passwords(10);
 
 =head1 DESCRIPTION
 
@@ -2661,19 +2750,18 @@ This function Croaks if there is a problem generating the password.
 
 
 =head2 CONSTRUCTOR
-
-    # create an instance with the default config
+    
+    # create a new instance with the default config
     my $xkpasswd_instance = XKPasswd->new('dict.txt');
     
-    # create an instance with the preset 'XKCD'
+    # create an instance from the preset 'XKCD'
     my $xkpasswd_instance = XKPasswd->new('dict.txt', 'XKCD');
     
-    #create an instance based on the preset 'XKCD', but with one config key
-    # overridden (case_transform)
-    my $xkpasswd_instance = XKPasswd->new('dict.txt', 'XKCD', {case_transform => 'INVERT'});
+    # create an instance based on the preset 'XKCD' with one customisation
+    my $xkpasswd_instance = XKPasswd->new('dict.txt', 'XKCD', {separator_character => q{ }});
     
-    # create an instance with a custom config hashref
-    my $xkpasswd_instance = XKPasswd->new('dict.txt' $config_hashref);
+    # create an instance from a config hashref
+    my $xkpasswd_instance = XKPasswd->new('dict.txt', $config_hashref);
 
 The constructor must be called via the package name, and at least one argument
 must be passed, the path to the dictionary file to be used when generating the
@@ -2856,6 +2944,15 @@ The function croaks if there is an error generating the password. The most
 likely cause of and error is the random number generation, particularly if the
 loaded random generation function relies on a cloud service or a non-standard
 library.
+
+=head3 passwords()
+
+    my @passwords = $xkpasswd_instance->passwords(10);
+    
+This function generates a number of passwords and returns them all as an array.
+
+The function uses C<password()> to genereate the passwords, and hence will
+croak if there is an error generating any of the requested passwords.
 
 =head3 update_config()
 

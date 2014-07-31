@@ -27,3 +27,5 @@ test.pl
 README
 
 *.komodoproject
+
+*.tmp
