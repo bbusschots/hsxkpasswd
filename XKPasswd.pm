@@ -4,6 +4,9 @@ use strict;
 use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use English qw( -no_match_vars ); # for more readable code
+#use POSIX; # for floor() and ceil()
+use Math::Round; # for round()
+use Math::BigInt; # for the massive numbers needed to store the permutations
 use Devel::StackTrace; # for better error reporting
 
 ## no critic (ProhibitAutomaticExportation);
@@ -27,7 +30,11 @@ our @EXPORT = qw( xkpasswd );
 
 # version info
 use version; our $VERSION = qv('2.1_01');
-my $MIN_WORDS = 100;
+
+# acceptable entropy levels
+our $ENTROPY_MIN_BLIND = 78; # 78 bits - equivalent to 12 alpha numeric characters with mixed case and symbols
+our $ENTROPY_MIN_SEEN = 52; # 52 bits - equivalent to 8 alpha numeric characters with mixed case and symbols
+our $SUPRESS_ENTROPY_WARNINGS = 'NONE'; # valid values are 'NONE', 'ALL', 'SEEN', or 'BLIND' (invalid values treated like 'NONE')
 
 # Logging configuration
 our $LOG_STREAM = *STDERR; # default to logging to STDERR
@@ -42,28 +49,28 @@ my $_KEYS = {
     symbol_alphabet => {
         req => 0,
         ref => 'ARRAY', # ARRAY REF
-        validate => sub { # at least 3 scalar elements
+        validate => sub { # at least 2 scalar elements
             my $key = shift;
-            unless(scalar @{$key} >= 3){ return 0; }
+            unless(scalar @{$key} >= 2){ return 0; }
             foreach my $symbol (@{$key}){
                 unless(ref $symbol eq q{} && $symbol =~ m/^.$/sx){ return 0; }
             }
             return 1;
         },
-        desc => 'An array ref containing at least 3 single-character scalars',
+        desc => 'An array ref containing at least 2 single-character scalars',
     },
     separator_alphabet => {
         req => 0,
         ref => 'ARRAY', # ARRAY REF
-        validate => sub { # at least 3 scalar elements
+        validate => sub { # at least 2 scalar elements
             my $key = shift;
-            unless(scalar @{$key} >= 3){ return 0; }
+            unless(scalar @{$key} >= 2){ return 0; }
             foreach my $symbol (@{$key}){
                 unless(ref $symbol eq q{} && $symbol =~ m/^.$/sx){ return 0; }
             }
             return 1;
         },
-        desc => 'An array ref containing at least 3 single-character scalars',
+        desc => 'An array ref containing at least 2 single-character scalars',
     },
     word_length_min => {
         req => 1,
@@ -487,6 +494,7 @@ sub new{
         _DICTIONARY_PATH => q{}, # the path to the dictionary hashref
         _CACHE_DICTIONARY_FULL => [], # a cache of all words found in the dictionary file
         _CACHE_DICTIONARY_LIMITED => [], # a cache of all the words found in the dictionary file that meet the length criteria
+        _CACHE_ENTROPYSTATS => {}, # a cache of the entropy stats for the current combination of dictionary and config
         _CACHE_RANDOM => [], # a cache of random numbers (as floating points between 0 and 1)
     };
     bless $instance, $class;
@@ -909,6 +917,11 @@ sub presets_to_string{
 #              * 'random_numbers_required' - the number of random numbers needed
 #                to generate a single password using the given config
 # Arguments  : 1. A valid config hashref
+#              2. OPTONAL - a truthy value to suppress warnings if the config
+#                 is such that there are uncertainties in the calculations.
+#                 E.g. the max length is uncertain when the config contains
+#                 a character substitution with a replacement of length greater
+#                 than 1
 # Throws     : Croaks on invalid invocation or args, carps if multi-character
 #              substitutions are in use when not using adapive padding
 # Notes      : This function ignores character replacements, if one or more
@@ -918,6 +931,7 @@ sub presets_to_string{
 sub config_stats{
     my $class = shift;
     my $config = shift;
+    my $suppres_warnings = shift;
     
     # validate the args
     unless(defined $class && $class eq $_CLASS){
@@ -976,7 +990,7 @@ sub config_stats{
     $num_rand += $config->{padding_digits_after};
     
     # detect whether or not we need to carp about multi-character replacements
-    if($config->{padding_type} ne 'ADAPTIVE'){
+    if($config->{padding_type} ne 'ADAPTIVE' && !$suppres_warnings){
         CHAR_SUB:
         foreach my $char (keys %{$config->{character_substitutions}}){
             if(length $config->{character_substitutions}->{$char} > 1){
@@ -1043,6 +1057,9 @@ sub dictionary{
         $self->{_DICTIONARY_PATH} = $path;
         $self->{_CACHE_DICTIONARY_FULL} = [@cache_full];
         $self->{_CACHE_DICTIONARY_LIMITED} = [@cache_limited];
+        
+        # update the instance's entropy cache
+        $self->_update_entropystats_cache();
     }
     
     # return a reference to self
@@ -1094,6 +1111,9 @@ sub config{
         
         # save a clone of the passed config into the instance
         $self->{_CONFIG} = $_CLASS->clone_config($config);
+        
+        # update the instance's entropy cache
+        $self->_update_entropystats_cache();
     }
     
     # return a reference to self to facilitate function chaining
@@ -1756,12 +1776,6 @@ sub _filter_word_list{
         push @ans, $word;
     }
     
-    # ensure we got enough words
-    my $alen = scalar @ans;
-    unless($alen >= $MIN_WORDS){
-        $_CLASS->_error("Too few valid words in the dictionary file (need at least $MIN_WORDS, got $alen)");
-    }
-    
     # return the list
     return @ans;
 }
@@ -2189,6 +2203,226 @@ sub _check_presets{
     return 1;
 }
 
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Gather entropy stats for the combination of the loaded config
+#              and dictionary.
+# Returns    : A hash of stats indexed by:
+#              * 'permutations_blind_min' - the number of permutations to be
+#                tested by an attacker with no knowledge of the dictionary file
+#                used, or the config used, assuming the minimum possible
+#                password length from the given config (as BigInt)
+#              * 'permutations_blind_max' - the number of permutations to be
+#                tested by an attacker with no knowledge of the dictionary file
+#                used, or the cofig file used, assuming the maximum possible
+#                password length fom the given config (as BigInt)
+#              * 'permutations_blind' - the number of permutations for the
+#                average password length for the given config (as BigInt)
+#              * 'permutations_seen' - the number of permutations to be tested
+#                by an attacker with full knowledge of the dictionary file and
+#                configuration used (as BigInt)
+#              * 'entropy_blind_min' - permutations_blind_min converted to bits
+#              * 'entropy_blind_max' - permutations_blind_max converted to bits
+#              * 'entropy_blind' - permutations_blind converted to bits
+#              * 'entropy_seen' - permutations_seen converted to bits
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation
+# Notes      : This function uses config_stats() to determined the longest and
+#              shortest password lengths, so the caveat that function has
+#              when it comes to multi-character substitutions applies here too.
+#              This function assumes no accented characters (at least for now).
+#              For the blind calculations, if any single symbol is present, a
+#              search-space of 33 symbols is assumed (same as password
+#              haystacks page)
+# See Also   : config_stats()
+sub _calculate_entropy_stats{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        $_CLASS->_error('invalid invocation of instance method');
+    }
+    
+    my %ans = ();
+    
+    # get the password length details for the config
+    my %config_stats = $_CLASS->config_stats($self->{_CONFIG}, 'supress errors');
+    my $b_length_min = Math::BigInt->new($config_stats{length_min});
+    my $b_length_max = Math::BigInt->new($config_stats{length_max});
+    
+    # calculate the blind permutations - (based purely on length and alphabet)
+    my $alphabet_count = 12; # all passwords have at least one case of letters
+    if($self->{_CONFIG}->{case_transform} =~ m/^(ALTERNATE)|(CAPITALISE)|(INVERT)|(RANDOM)$/sx){
+        $alphabet_count += 12; # these configs guarantee a mix of cases
+    }
+    if($self->{_CONFIG}->{padding_digits_before} > 0 || $self->{_CONFIG}->{padding_digits_after} > 0){
+        $alphabet_count += 10; # these configs guarantee digits in the mix
+    }
+    if($self->_passwords_will_contain_symbol()){
+        $alphabet_count += 33; # the config almost certainly includes a symbol, so add 33 to the alphabet (like password haystacks does)
+    }
+    my $b_alphabet_count = Math::BigInt->new($alphabet_count);
+    my $length_avg = round(($config_stats{length_min} + $config_stats{length_max})/2);
+    $ans{permutations_blind_min} = $b_alphabet_count->copy()->bpow($b_length_min); #$alphabet_count ** $length_min;
+    $_CLASS->_debug('got permutations_blind_min='.$ans{permutations_blind_min});
+    $ans{permutations_blind_max} = $b_alphabet_count->copy()->bpow($b_length_max); #$alphabet_count ** $length_max;
+    $_CLASS->_debug('got permutations_blind_max='.$ans{permutations_blind_max});
+    $ans{permutations_blind} = $b_alphabet_count->copy()->bpow(Math::BigInt->new($length_avg)); #$alphabet_count ** $length_avg;
+    $_CLASS->_debug('got permutations_blind='.$ans{permutations_blind});
+    
+    # calculate the seen permutations
+    my $num_words = scalar @{$self->{_CACHE_DICTIONARY_LIMITED}};
+    my $b_num_words = Math::BigInt->new($num_words);
+    my $b_seen_perms = Math::BigInt->new('0');
+    # the permutations from the chosen words
+    $b_seen_perms->badd($b_num_words->copy()->bpow(Math::BigInt->new($self->{_CONFIG}->{num_words}))); # += $num_words ** $self->{_CONFIG}->{num_words};
+    # the extra permutations introduced by the case randomisation (if any)
+    if($self->{_CONFIG}->{case_transform} eq 'RANDOM'){
+        $b_seen_perms->badd($b_num_words->copy()->bpow(Math::BigInt->new('2'))); # += $num_words ** 2;
+    }
+    # the permutations from the separator (if any)
+    if($self->{_CONFIG}->{separator_character} eq 'RANDOM'){
+        if(defined $self->{_CONFIG}->{separator_alphabet}){
+            $b_seen_perms->badd(Math::BigInt->new(scalar @{$self->{_CONFIG}->{separator_alphabet}}));
+        }else{
+            $b_seen_perms->badd(Math::BigInt->new(scalar @{$self->{_CONFIG}->{symbol_alphabet}}));
+        }
+    }
+    # the permutations from the padding character (if any)
+    if($self->{_CONFIG}->{padding_type} ne 'NONE' && $self->{_CONFIG}->{padding_character} eq 'RANDOM'){
+        $b_seen_perms->badd(Math::BigInt->new(scalar @{$self->{_CONFIG}->{separator_alphabet}}));
+    }
+    # the permutations from the padding digits (if any)
+    $b_seen_perms->badd(Math::BigInt->new(($self->{_CONFIG}->{padding_digits_before} + $self->{_CONFIG}->{padding_digits_after}) ** 10));
+    $ans{permutations_seen} = $b_seen_perms;
+    $_CLASS->_debug('got permutations_seen='.$ans{permutations_seen});
+    
+    # calculate the entropy values based on the permutations
+    $ans{entropy_blind_min} = $ans{permutations_blind_min}->copy()->blog(2)->numify();
+    $_CLASS->_debug('got entropy_blind_min='.$ans{entropy_blind_min});
+    $ans{entropy_blind_max} = $ans{permutations_blind_max}->copy()->blog(2)->numify();
+    $_CLASS->_debug('got entropy_blind_max='.$ans{entropy_blind_max});
+    $ans{entropy_blind} = $ans{permutations_blind}->copy()->blog(2)->numify();
+    $_CLASS->_debug('got entropy_blind='.$ans{entropy_blind});
+    $ans{entropy_seen} = $ans{permutations_seen}->copy()->blog(2)->numify();
+    $_CLASS->_debug('got entropy_seen='.$ans{entropy_seen});
+    
+    # return the stats
+    return %ans;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : A function to check if passwords genereated with the loaded
+#              config would contian a symbol
+# Returns    : 1 if the config will produce passwords with a symbol, or 0
+#              otherwise
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation
+# Notes      : This function is used by _calculate_entropy_stats() to figure out
+#              whether or not there are symbols in the alphabet when calculating
+#              the brute-force entropy.
+# See Also   : _calculate_entropy_stats()
+sub _passwords_will_contain_symbol{
+    my $self = shift;
+    
+    # validate args
+    unless(defined $self && $self->isa($_CLASS)){
+        $_CLASS->_error('invalid invocation of instance method');
+    }
+    
+    # assume no symbol, if we find one, set to 1
+    my $symbol_used = 0;
+    
+    ## no critic (ProhibitEnumeratedClasses);
+    # first check the padding
+    if($self->{_CONFIG}->{padding_type} ne 'NONE'){
+        if($self->{_CONFIG}->{padding_character} eq 'RANDOM'){
+            my $all_pad_chars = join q{}, @{$self->{_CONFIG}->{symbol_alphabet}};
+            if($all_pad_chars =~ m/[^0-9a-zA-Z]/sx){ # if we have just one non-word character
+                $symbol_used = 1;
+            }
+        }else{
+            if($self->{_CONFIG}->{padding_character} =~ m/[^0-9a-zA-Z]/sx){ # the padding character is not a word character
+                $symbol_used = 1;
+            }
+        }
+    }
+    
+    # then check the separator
+    if($self->{_CONFIG}->{separator_character} ne 'NONE'){
+        if($self->{_CONFIG}->{separator_character} eq 'RANDOM'){
+            if(defined $self->{_CONFIG}->{separator_alphabet}){
+                my $all_sep_chars = join q{}, @{$self->{_CONFIG}->{separator_alphabet}};
+                if($all_sep_chars =~ m/[^0-9a-zA-Z]/sx){ # if we have just one non-word character
+                    $symbol_used = 1;
+                }
+            }else{
+                my $all_sep_chars = join q{}, @{$self->{_CONFIG}->{symbol_alphabet}};
+                if($all_sep_chars =~ m/[^0-9a-zA-Z]/sx){ # if we have just one non-word character
+                    $symbol_used = 1;
+                }
+            }
+        }else{
+            if($self->{_CONFIG}->{separator_character} =~ m/[^0-9a-zA-Z]/sx){ # the separator is not a word character
+                $symbol_used = 1;
+            }
+        }
+    }
+    ## use critic
+    
+    # return
+    return $symbol_used;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Update the entropy stats cache (and warn of low entropy if
+#              appropriate)
+# Returns    : always returns 1 (to keep perlcritic happy)
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation
+# Notes      : This function should only be called from config() or dictionary().
+#              The entropy is calculated with _calculate_entropy_stats(), and a
+#              reference to the hash returned from that function is stored in
+#              $self->{_CACHE_ENTROPYSTATS}.
+# See Also   : _calculate_entropy_stats(), config() & dictionary()
+sub _update_entropystats_cache{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        $_CLASS->_error('invalid invocation of instance method');
+    }
+    
+    # do nothing if the dictionary has not been loaded yet (should only happen while the constructor is building an instance)
+    return 1 unless($self->{_DICTIONARY_PATH});
+    
+    # calculate and store the entropy stats
+    my %stats = $self->_calculate_entropy_stats();
+    $self->{_CACHE_ENTROPYSTATS} = \%stats;
+    
+    # warn if we need to
+    unless(uc $SUPRESS_ENTROPY_WARNINGS eq 'ALL'){
+        # blind warning if needed
+        unless(uc $SUPRESS_ENTROPY_WARNINGS eq 'BLIND'){
+            if($self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min} < $ENTROPY_MIN_BLIND){
+                $_CLASS->_warn('loaded dictionary and config combination results in low minimum entropy for blind attacks ('.$self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min}.", warning threshold is $ENTROPY_MIN_BLIND)");
+            }
+        }
+        
+        # seen warnings if needed
+        unless(uc $SUPRESS_ENTROPY_WARNINGS eq 'SEEN'){
+            if($self->{_CACHE_ENTROPYSTATS}->{entropy_seen} < $ENTROPY_MIN_SEEN){
+                $_CLASS->_warn('loaded dictionary and config combination results in low minimum entropy for attacks assuming full knowledge ('.$self->{_CACHE_ENTROPYSTATS}->{entropy_seen}.", warning threshold is $ENTROPY_MIN_SEEN)");
+            }
+        }
+    }
+    
+    # to keep perl critic happy
+    return 1;
+}
+
 1; # because Perl is just a little bit odd :)
 __END__
 
@@ -2560,7 +2794,8 @@ random increment. The default value is c<AUTO>.
 
 C<separator_alphabet> - this key is optional. It can be used to override
 the contents of C<symbol_alphabet> when C<separator_character> is set to
-C<RANDOM>.
+C<RANDOM>. If present this key must contain an arrayref containing at
+least two single characters as scalars.
 
 =item *
 
@@ -2573,7 +2808,7 @@ is C<RANDOM>.
 
 =item *
 
-C<symbol_alphabet> - an arrayref containing at least three single characters as
+C<symbol_alphabet> - an arrayref containing at least two single characters as
 scalars. This alphabet will be used when selecting random characters to act as
 the separator between words, or the padding at the start and/or end of
 generated passwords. The default value returned by C<default_config()> is
@@ -2699,6 +2934,82 @@ form:
     Revalue-Skippy-Gustful-Daddle
 
 =back
+
+=head2 ENTROPY CHECKING
+
+For security reasons, this module's default behaviour is to warn (using
+C<carp()>) when ever the loaded combination dictionary file and configuration
+would result in low-entropy passwords. When the constructor is invoked, or when
+a new dictionary file or new config hashref are loaded into an object (using
+C<dictionary()> or C<config()>) the entropy of the resulting new state of the
+object is calculated and checked against definded minima.
+
+Entropy is calculated and checked for two scenarios. Firstly, for the best-case
+scenario, when an attacker has no prior kowledge about the password, and must
+resort to brute-force attacks. And secondly, for the worst-case scenario, when
+the attacker is assumed to know that this module was used to generate the
+password, and, that the attacker has a copy of the dictionary file and config
+settings used to generate the password.
+
+Entropy checking is controled via three package variables:
+
+=over 4
+
+=item *
+
+C<$XKPasswd::ENTROPY_MIN_BLIND> - the minimum acceptable entropy (in bits) for
+a brute-force attack. The default value for this variable is 78 (equivalent to
+a 12 character password consisting of mixed-case letters, digits, and symbols).
+
+=item *
+
+C<$XKPasswd::ENTROPY_MIN_SEEN> - the minimum acceptable entropy (in bits) for a
+worst-case attack (where the dictionary and configuration are known). The default
+value for this variable is 52 (equivalent to an 8 character password consisting
+of mixed-case letters, digits, and symbols).
+
+=item *
+
+C<$XKPasswd::SUPRESS_ENTROPY_WARNINGS> - this varialbe can be used to suppress
+one or both of the entropy warnings. The following values are valid (invalid
+values are treated as being 'NONE'):
+
+=over 4
+
+=item -
+
+C<NONE> - no warnings are suppressed. This is the default value.
+
+=item -
+
+C<SEEN> - only warnings for the worst-case scenario are suppressed.
+
+=item -
+
+C<BLIND> - only warnings for the best-case scenario are suppressed.
+
+=back
+
+=back
+
+=head3 CAVEATS
+
+The entropy calculations make some assumptions which may in some cases lead to
+the results being inacurate. In general, an attempt has been made to always
+round down, meaning that in reality the entropy of the produced passwords may
+be higher than the values culculated by the package.
+
+When calculating the entropy for brute force attacks on configurations that can
+result in variable length passwords, the shortest possible password is assumed.
+
+When calculating the entropy for brute force attacks on configurations that
+contain at least one symbol, it is assumed that an attacker would have to
+brute-force-check 33 symbols. This is the same value used by Steve Gibson's
+'Password Haystacks' calculator (L<https://www.grc.com/haystack.htm>).
+
+When calculating the entropy for worst-case attacks on configurations that
+contain symbol substitutions where the replacement is more than 1 character
+long the possible extra length is ignored.
 
 =head2 RANDOM FUNCTIONS
 

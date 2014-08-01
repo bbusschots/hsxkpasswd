@@ -2,7 +2,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-<title></title>
+<title>XKPasswd.pm</title>
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />
 <link rev="made" href="mailto:_mdnsresponder@jackson.apple.com" />
 </head>
@@ -26,6 +26,11 @@
       <li><a href="#DICTIONARY-FILES">DICTIONARY FILES</a></li>
       <li><a href="#CONFIGURATION-HASHREFS">CONFIGURATION HASHREFS</a></li>
       <li><a href="#PRESETS">PRESETS</a></li>
+      <li><a href="#ENTROPY-CHECKING">ENTROPY CHECKING</a>
+        <ul>
+          <li><a href="#CAVEATS">CAVEATS</a></li>
+        </ul>
+      </li>
       <li><a href="#RANDOM-FUNCTIONS">RANDOM FUNCTIONS</a></li>
       <li><a href="#FUNCTIONAL-INTERFACE">FUNCTIONAL INTERFACE</a>
         <ul>
@@ -318,13 +323,13 @@
 <li><p><code>random_increment</code> - the number of random digits to generate at a time when ever the instance&#39;s cache of randomness runs low. Must be an integer greater than or equal to 1, or the special value <code>AUTO</code>. When the value is set to <code>AUTO</code> a call to <code>config_stats()</code> is used to determine the amount of random numbers needed to generate a single password, and this value is used as the random increment. The default value is c&lt;AUTO&gt;.</p>
 
 </li>
-<li><p><code>separator_alphabet</code> - this key is optional. It can be used to override the contents of <code>symbol_alphabet</code> when <code>separator_character</code> is set to <code>RANDOM</code>.</p>
+<li><p><code>separator_alphabet</code> - this key is optional. It can be used to override the contents of <code>symbol_alphabet</code> when <code>separator_character</code> is set to <code>RANDOM</code>. If present this key must contain an arrayref containing at least two single characters as scalars.</p>
 
 </li>
 <li><p><code>separator_character</code> - the character to use to separate the words in the generated password. Must be a scalar, and acceptable values are a single character, or, the special values <code>NONE</code> (indicating that no separator should be used), or <code>RANDOM</code>, indicating that a character should be chosen at random from the <code>symbol_alphabet</code>. The default value returned by <code>default_config()</code> is <code>RANDOM</code>.</p>
 
 </li>
-<li><p><code>symbol_alphabet</code> - an arrayref containing at least three single characters as scalars. This alphabet will be used when selecting random characters to act as the separator between words, or the padding at the start and/or end of generated passwords. The default value returned by <code>default_config()</code> is <code>[qw{! @ $ % ^ &amp; * - _ + = : | ~ ?}]</code></p>
+<li><p><code>symbol_alphabet</code> - an arrayref containing at least two single characters as scalars. This alphabet will be used when selecting random characters to act as the separator between words, or the padding at the start and/or end of generated passwords. The default value returned by <code>default_config()</code> is <code>[qw{! @ $ % ^ &amp; * - _ + = : | ~ ?}]</code></p>
 
 </li>
 <li><p><code>word_length_min</code> &amp; <code>word_length_max</code> - the minimum and maximum length of the words that will make up the generated password. The two keys must be scalars, and can hold equal values, but <code>word_length_max</code> may not be smaller than <code>word_length_min</code>. For security reasons, both values must be greater than 3. The default values returned by <code>default_config()</code> is are 4 &amp; 8.</p>
@@ -407,6 +412,59 @@
 
 </li>
 </ul>
+
+<h2 id="ENTROPY-CHECKING">ENTROPY CHECKING</h2>
+
+<p>For security reasons, this module&#39;s default behaviour is to warn (using <code>carp()</code>) when ever the loaded combination dictionary file and configuration would result in low-entropy passwords. When the constructor is invoked, or when a new dictionary file or new config hashref are loaded into an object (using <code>dictionary()</code> or <code>config()</code>) the entropy of the resulting new state of the object is calculated and checked against definded minima.</p>
+
+<p>Entropy is calculated and checked for two scenarios. Firstly, for the best-case scenario, when an attacker has no prior kowledge about the password, and must resort to brute-force attacks. And secondly, for the worst-case scenario, when the attacker is assumed to know that this module was used to generate the password, and, that the attacker has a copy of the dictionary file and config settings used to generate the password.</p>
+
+<p>Entropy checking is controled via three package variables:</p>
+
+<ul>
+
+<li><p><code>$XKPasswd::ENTROPY_MIN_BLIND</code> - the minimum acceptable entropy (in bits) for a brute-force attack. The default value for this variable is 78 (equivalent to a 12 character password consisting of mixed-case letters, digits, and symbols).</p>
+
+</li>
+<li><p><code>$XKPasswd::ENTROPY_MIN_SEEN</code> - the minimum acceptable entropy (in bits) for a worst-case attack (where the dictionary and configuration are known). The default value for this variable is 52 (equivalent to an 8 character password consisting of mixed-case letters, digits, and symbols).</p>
+
+</li>
+<li><p><code>$XKPasswd::SUPRESS_ENTROPY_WARNINGS</code> - this varialbe can be used to suppress one or both of the entropy warnings. The following values are valid (invalid values are treated as being &#39;NONE&#39;):</p>
+
+<dl>
+
+<dt id="pod-10">-</dt>
+<dd>
+
+<p><code>NONE</code> - no warnings are suppressed. This is the default value.</p>
+
+</dd>
+<dt id="pod-11">-</dt>
+<dd>
+
+<p><code>SEEN</code> - only warnings for the worst-case scenario are suppressed.</p>
+
+</dd>
+<dt id="pod-12">-</dt>
+<dd>
+
+<p><code>BLIND</code> - only warnings for the best-case scenario are suppressed.</p>
+
+</dd>
+</dl>
+
+</li>
+</ul>
+
+<h3 id="CAVEATS">CAVEATS</h3>
+
+<p>The entropy calculations make some assumptions which may in some cases lead to the results being inacurate. In general, an attempt has been made to always round down, meaning that in reality the entropy of the produced passwords may be higher than the values culculated by the package.</p>
+
+<p>When calculating the entropy for brute force attacks on configurations that can result in variable length passwords, the shortest possible password is assumed.</p>
+
+<p>When calculating the entropy for brute force attacks on configurations that contain at least one symbol, it is assumed that an attacker would have to brute-force-check 33 symbols. This is the same value used by Steve Gibson&#39;s &#39;Password Haystacks&#39; calculator (<a href="https://www.grc.com/haystack.htm">https://www.grc.com/haystack.htm</a>).</p>
+
+<p>When calculating the entropy for worst-case attacks on configurations that contain symbol substitutions where the replacement is more than 1 character long the possible extra length is ignored.</p>
 
 <h2 id="RANDOM-FUNCTIONS">RANDOM FUNCTIONS</h2>
 
