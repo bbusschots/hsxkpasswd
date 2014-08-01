@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use English qw( -no_match_vars ); # for more readable code
-#use POSIX; # for floor() and ceil()
+use B qw(svref_2object); # for code ref->name conversion
 use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
 use Devel::StackTrace; # for better error reporting
@@ -496,6 +496,7 @@ sub new{
         _CACHE_DICTIONARY_LIMITED => [], # a cache of all the words found in the dictionary file that meet the length criteria
         _CACHE_ENTROPYSTATS => {}, # a cache of the entropy stats for the current combination of dictionary and config
         _CACHE_RANDOM => [], # a cache of random numbers (as floating points between 0 and 1)
+        _PASSWORD_COUNTER => 0, # the number of passwords this instance has generated
     };
     bless $instance, $class;
     
@@ -505,13 +506,8 @@ sub new{
     # load the dictionary (can't be done until the config is loaded)
     $instance->dictionary($dictionary_path);
     
-    # if debugging, print out meta data
-    if($DEBUG){
-        print {$LOG_STREAM} "\nInitialised XKPasswd Instance with the following details:\nConfig:\n---\n";
-        print {$LOG_STREAM} $instance->config_string();
-        print {$LOG_STREAM} "Cache Status:\n---\n";
-        print {$LOG_STREAM} $instance->caches_state()."\n";
-    }
+    # if debugging, print status
+    $_CLASS->_debug("instantiated $_CLASS object with the following details:\n".$instance->status());
     
     # return the initialised object
     return $instance;
@@ -819,25 +815,29 @@ sub config_to_string{
         ## no critic (ProhibitCascadingIfElse);
         if($_KEYS->{$key}->{ref} eq q{}){
             # the key is a scalar
-            $ans .= $key.q{=}.$config->{$key}.qq{\n};
+            $ans .= $key.q{: '}.$config->{$key}.qq{'\n};
         }elsif($_KEYS->{$key}->{ref} eq 'ARRAY'){
             # the key is an array ref
-            $ans .= "$key=[";
-            $ans .= join q{, }, sort @{$config->{$key}};
+            $ans .= "$key: [";
+            my @parts = ();
+            foreach my $subval (sort @{$config->{$key}}){
+                push @parts, "'$subval'";
+            }
+            $ans .= join q{, }, @parts;
             $ans .= "]\n";
         }elsif($_KEYS->{$key}->{ref} eq 'HASH'){
-            $ans .= "$key={";
+            $ans .= "$key: {";
             my @parts = ();
             foreach my $subkey (sort keys %{$config->{$key}}){
-                push @parts, "$subkey=$config->{$key}->{$subkey}";
+                push @parts, "$subkey: '$config->{$key}->{$subkey}'";
             }
             $ans .= join q{, }, @parts;
             $ans .= "}\n";
         }elsif($_KEYS->{$key}->{ref} eq 'CODE'){
-            $ans .= $key.q{=}.$config->{$key}.qq{\n};
+            $ans .= $key.q{: }.$_CLASS->_coderef_to_subname($config->{$key}).qq{\n};
         }else{
-            # this should never happen, but just in case, throw an error
-            $_CLASS->_error("encounterd an un-handled key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
+            # this should never happen, but just in case, throw a warning
+            $_CLASS->_warn("encounterd an un-handled key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
         }
         ## use critic
     }
@@ -1203,6 +1203,9 @@ sub update_config{
     $self->{_CONFIG} = $new_config;
     $self->{_CACHE_DICTIONARY_LIMITED} = [@cache_limited];
     
+    # update the instance's entropy cache
+    $self->_update_entropystats_cache();
+    
     # return a reference to self
     return $self;
 }
@@ -1315,6 +1318,9 @@ sub password{
         $_CLASS->_error("Failed to generate password with the following error: $EVAL_ERROR");
     };
     
+    # increment the passwords generated counter
+    $self->{_PASSWORD_COUNTER}++;
+    
     # return the finished password
     return $password;
 }
@@ -1332,7 +1338,7 @@ sub passwords{
     my $num_pws = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
+    unless(defined $self && $self->isa($_CLASS)){
         $_CLASS->_error('invalid invocation of instance method');
     }
     unless(defined $num_pws && ref $num_pws eq q{} && $num_pws =~ m/^\d+$/sx && $num_pws > 0){
@@ -1349,6 +1355,165 @@ sub passwords{
     
     # return the passwords
     return @passwords;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE
+# Purpose    : Return statistics about the instance
+# Returns    : A hash of statistics indexed by the following keys:
+#              * 'dictionary_path' - the path to the dictionary file the
+#                instance is using
+#              * 'dictionary_words_total' - the total number of words loaded
+#                from the dictionary file
+#              * 'dictionary_words_filtered' - the number of words loaded from
+#                the dictionary file that meet the lenght criteria set in the
+#                loaded config
+#              * 'password_entropy_blind_min' - the entropy of the shortest
+#                password this config can generate from the point of view of a
+#                brute-force attacker in bits
+#              * 'password_entropy_blind_max' - the entropy of the longest
+#                password this config can generate from the point of view of a
+#                brute-force attacker in bits
+#              * 'password_entropy_blind' - the entropy of the average length
+#                of password generated by this configuration from the point of
+#                view of a brute-force attacker in bits
+#              * 'password_entropy_seen' - the true entropy of passwords
+#                generated by this instance assuming the dictionary and config
+#                are known to the attacker in bits
+#              * 'password_length_min' - the minimum length of passwords
+#                generated with this instance's config
+#              * 'password_length_max' - the maximum length of passwords
+#                generated with this instance's config
+#              * 'password_permutations_blind_min' - the number of permutations
+#                a brute-froce attacker would have to try to be sure of success
+#                on the shortest possible passwords geneated by this instance
+#                as a Math::BigInt object
+#              * 'password_permutations_blind_max' - the number of permutations
+#                a brute-froce attacker would have to try to be sure of success
+#                on the longest possible passwords geneated by this instance as
+#                a Math::BigInt object
+#              * 'password_permutations_blind' - the number of permutations
+#                a brute-froce attacker would have to try to be sure of success
+#                on the average length password geneated by this instance as a
+#                Math::BigInt object
+#              * 'password_permutations_seen' - the number of permutations an
+#                attacker with a copy of the dictionary and config would need to
+#                try to be sure of cracking a password generated by this
+#                instance as a Math::BigInt object
+#              * 'password_random_numbers_required' - the number of random
+#                numbers needed to generate a single password using the loaded
+#                config
+#              * 'passwords_generated' - the number of passwords this instance
+#                has generated
+#              * 'randomnumbers_cached' - the number of random numbers
+#                currently cached within the instance
+#              * 'randomnumbers_cache_increment' - the number of random numbers
+#                generated at once to re-plenish the cache when it's empty
+#              * 'randomnumbers_generator_function' - the name of the function used to
+#                generate random numbers (resoved with _coderef_to_subname())
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation
+# Notes      : 
+# See Also   : _coderef_to_subname()
+sub stats{
+    my $self = shift;
+    
+    # validate args
+    unless(defined $self && $self->isa($_CLASS)){
+        $_CLASS->_error('invalid invocation of instance method');
+    }
+    
+    # create a hash to assemble all the stats into
+    my %stats = ();
+    
+    # deal with the config-specific stats
+    my %config_stats = $_CLASS->config_stats($self->{_CONFIG});
+    $stats{password_length_min} = $config_stats{length_min};
+    $stats{password_length_max} = $config_stats{length_max};
+    $stats{password_random_numbers_required} = $config_stats{random_numbers_required};
+    
+    # deal with the dictionary file
+    $stats{dictionary_path} = $self->{_DICTIONARY_PATH};
+    $stats{dictionary_words_total} = scalar @{$self->{_CACHE_DICTIONARY_FULL}};
+    $stats{dictionary_words_filtered} = scalar @{$self->{_CACHE_DICTIONARY_LIMITED}};
+    
+    # deal with the entropy stats
+    $stats{password_entropy_blind_min} = $self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min};
+    $stats{password_entropy_blind_max} = $self->{_CACHE_ENTROPYSTATS}->{entropy_blind_max};
+    $stats{password_entropy_blind} = $self->{_CACHE_ENTROPYSTATS}->{entropy_blind};
+    $stats{password_entropy_seen} = $self->{_CACHE_ENTROPYSTATS}->{entropy_seen};
+    $stats{password_permutations_blind_min} = $self->{_CACHE_ENTROPYSTATS}->{permutations_blind_min};
+    $stats{password_permutations_blind_max} = $self->{_CACHE_ENTROPYSTATS}->{permutations_blind_max};
+    $stats{password_permutations_blind} = $self->{_CACHE_ENTROPYSTATS}->{permutations_blind};
+    $stats{password_permutations_seen} = $self->{_CACHE_ENTROPYSTATS}->{permutations_seen};
+    
+    # deal with password counter
+    $stats{passwords_generated} = $self->{_PASSWORD_COUNTER};
+    
+    # deal with the random number generator
+    $stats{randomnumbers_cached} = scalar @{$self->{_CACHE_RANDOM}};
+    $stats{randomnumbers_cache_increment} = $self->{_CONFIG}->{random_increment};
+    $stats{randomnumbers_generator_function} = $_CLASS->_coderef_to_subname($self->{_CONFIG}->{random_function});
+    
+    # return the stats
+    return %stats;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE
+# Purpose    : Represent the current state of the instance as a string.
+# Returns    : Returns a multi-line string as as scalar containing details of the
+#              loaded dictionary file, config, and caches
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation
+# Notes      :
+# See Also   :
+sub status{
+    my $self = shift;
+    
+    # validate args
+    unless(defined $self && $self->isa($_CLASS)){
+        $_CLASS->_error('invalid invocation of instance method');
+    }
+    
+    # assemble the response
+    my %stats = $self->stats();
+    my $status = q{};
+    
+    # the dictionary
+    $status .= "*DICTIONARY*\n";
+    $status .= "File path: $stats{dictionary_path}\n";
+    $status .= "# words: $stats{dictionary_words_total}\n";
+    $status .= "# words of valid length: $stats{dictionary_words_filtered}\n";
+    
+    # the config
+    $status .= "\n*CONFIG*\n";
+    $status .= $self->config_string();
+    
+    # the random number cache
+    $status .= "\n*RANDOM NUMBER CACHE*\n";
+    $status .= "# in cache: $stats{randomnumbers_cached}\n";
+    
+    # password statistics
+    $status .= "\n*PASSWORD STATISTICS*\n";
+    if($stats{password_length_min} == $stats{password_length_max}){
+        $status .= "Password length: $stats{password_length_max}\n";
+        $status .= 'Brute-Force permutations: '.$_CLASS->_render_bigint($stats{password_permutations_blind_max})."\n";
+    }else{
+        $status .= "Password length: between $stats{password_length_min} & $stats{password_length_max}\n";
+        $status .= 'Brute-Force permutations: between '.$_CLASS->_render_bigint($stats{password_permutations_blind_min}).q{ & }.$_CLASS->_render_bigint($stats{password_permutations_blind_max}).q{ (average }.$_CLASS->_render_bigint($stats{password_permutations_blind}).")\n";
+    }
+    $status .= 'Permutations (given dictionary & config): '.$_CLASS->_render_bigint($stats{password_permutations_seen})."\n";
+    if($stats{password_length_min} == $stats{password_length_max}){
+        $status .= "Brute-Force Entropy: $stats{password_entropy_blind_max}bits\n";
+    }else{
+        $status .= "Brute-Force Entropy (in bits): between $stats{password_entropy_blind_min} and $stats{password_entropy_blind_max} (average $stats{password_entropy_blind})\n";
+    }
+    $status .= "Entropy (given dictionary & config): $stats{password_entropy_seen}bits\n";
+    $status .= "Passwords Generated: $stats{passwords_generated}\n";
+    
+    # return the status
+    return $status;
 }
 
 #
@@ -2423,6 +2588,90 @@ sub _update_entropystats_cache{
     return 1;
 }
 
+#####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
+# Purpose    : To nicely print a Math::BigInt object
+# Returns    : a string representing the object's value in scientific notation
+#              with 1 digit before the decimal and 2 after
+# Arguments  : 1. a Math::BigInt object
+# Throws     : Croaks on invalid invocation or args
+# Notes      :
+# See Also   :
+sub _render_bigint{
+    my $class = shift;
+    my $bigint = shift;
+    
+    # validate the args
+    unless(defined $class && $class eq $_CLASS){
+        $_CLASS->_error('invalid invocation of class method');
+    }
+    unless(defined $bigint && $bigint->isa('Math::BigInt')){
+        $_CLASS->_error('invalid args, must pass a Math::BigInt object');
+    }
+    
+    # convert the bigint to an array of characters
+    my @chars = split //sx, "$bigint";
+    
+    # render nicely
+    if(scalar @chars < 3){
+        return q{}.join q{}, @chars;
+    }
+    # start with the three most signifficant digits (as a decimal)
+    my $ans = q{}.$chars[0].q{.}.$chars[1].$chars[2];
+    # then add the scientific notation bit
+    $ans .= 'x10^'.(scalar @chars - 1);
+    
+    # return the result
+    return $ans;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
+# Purpose    : To try resolve a code-ref to a function name
+# Returns    : A string as a scalar, or 'CODEREF' if unable to resolve
+# Arguments  : 1. A coderef
+# Throws     : Croaks on invalid invocation or args
+# Notes      : Based on code from: http://stackoverflow.com/a/7419346
+# See Also   :
+sub _coderef_to_subname{
+    my $class = shift;
+    my $coderef = shift;
+    
+    # validate the args
+    unless(defined $class && $class eq $_CLASS){
+        $_CLASS->_error('invalid invocation of class method');
+    }
+    unless(defined $coderef && ref $coderef eq 'CODE'){
+        $_CLASS->_error('invalid arguments, must pass a code ref');
+    }
+    
+    # try decode the reference
+    my $cv = svref_2object($coderef);
+    unless($cv && $cv->isa('B::CV')){
+        return 'CODEREF';
+    }
+    my $gv = $cv->GV;
+    unless($gv){
+        return 'CODEREF';
+    }
+    
+    # figure out what the ref is referring to
+    my $name = '';
+    if(my $st = $gv->STASH){ 
+        $name = $st->NAME.'::';
+    }
+    my $n = $gv->NAME;
+    if($n){ 
+        $name .= $n;
+        if($n eq '__ANON__'){ 
+            $name .= ' defined at '.$gv->FILE.':'.$gv->LINE;
+        }
+    }
+    
+    # return the name
+    return $name;
+}
+
 1; # because Perl is just a little bit odd :)
 __END__
 
@@ -3264,6 +3513,152 @@ This function generates a number of passwords and returns them all as an array.
 
 The function uses C<password()> to genereate the passwords, and hence will
 croak if there is an error generating any of the requested passwords.
+
+=head3 stats()
+
+    my %stats = $xkpasswd_instance->stats();
+    
+This function generates a hash containing stats about the instance indexed by
+the following keys:
+
+=over 4
+
+=item *
+
+C<dictionary_path> - the path to the dictionary file loaded into the instance.
+
+=item *
+
+C<dictionary_words_total> - the total number of words loaded from the
+dictionary file.
+
+=item *
+
+C<dictionary_words_filtered> - the number of words loaded from the dictionary
+file that meet the criteria defined by the loaded config.
+
+=item *
+
+C<password_entropy_blind_min> - the entropy (in bits) of the shortest password
+the loaded config can generate from the point of view of a brute-force
+attacker.
+
+=item *
+
+C<password_entropy_blind_max> - the entropy (in bits) of the longest password
+the loaded config can generate from the point of view of a brute-force
+attacker.
+
+=item *
+
+C<password_entropy_blind> - the entropy (in bits) of the average length
+of passwords the loaded config can generate from the point of view of a
+brute-force attacker.
+
+=item *
+
+C<password_entropy_seen> - the  entropy (in bits) of passwords generated by the
+instance assuming the dictionary and config are known to the attacker.
+
+=item *
+
+C<password_length_min> - the minimum length of passwords generated by the
+loaded config.
+
+=item *
+
+C<password_length_max> - the maximum length of passwords generated by the
+loaded config.
+
+=item *
+
+C<password_permutations_blind_min> - the number of permutations a brute-force
+attacker would have to try to be sure of cracking the shortest possible
+passwords geneated by this instance. Because this number can be very big, it's
+returned as a C<Math::BigInt> object.
+
+=item *
+
+C<password_permutations_blind_max> - the number of permutations a brute-force
+attacker would have to try to be sure of cracking the longest possible
+passwords geneated by this instance. Because this number can be very big, it's
+returned as a C<Math::BigInt> object.
+
+=item *
+
+C<password_permutations_blind> - the number of permutations a brute-force
+attacker would have to try to be sure of cracking an average length password
+geneated by this instance. Because this number can be very big, it's returned
+as a C<Math::BigInt> object.
+
+=item *
+
+C<password_permutations_seen> - the number of permutations an attacker with a
+copy of the dictionary and config would need to try to be sure of cracking a
+password generated by this instance. Because this number can be very big, it's
+returned as a C<Math::BigInt> object.
+
+=item *
+
+C<passwords_generated> - the number of passwords this instance has generated.
+
+=item *
+
+C<password_random_numbers_required> - the number of random numbers needed to
+generate a single password using the loaded config.
+
+=item *
+
+C<randomnumbers_cached> - the number of random numbers currently cached within
+the instance.
+
+=item *
+
+C<randomnumbers_cache_increment> - the number of random numbers generated at
+once to re-plenish the cache when it's empty.
+
+=item *
+
+C<randomnumbers_generator_function> - the function used by the instance to
+generate random numbers.
+
+=back
+
+=head3 status()
+
+    print $xkpasswd_instance->status();
+    
+Generates a string detailing the internal status of the instance. Below is a
+sample status string:
+
+    *DICTIONARY*
+    File path: /usr/share/dict/words
+    # words: 234252
+    # words of valid length: 87066
+
+    *CONFIG*
+    case_transform: 'CAPITALISE'
+    character_substitutions: {}
+    num_words: '4'
+    padding_digits_after: '0'
+    padding_digits_before: '0'
+    padding_type: 'NONE'
+    random_function: XKPasswd::basic_random_generator
+    random_increment: '4'
+    separator_character: '-'
+    word_length_max: '8'
+    word_length_min: '4'
+
+    *RANDOM NUMBER CACHE*
+    # in cache: 0
+
+    *PASSWORD STATISTICS*
+    Password length: between 19 & 35
+    Brute-Force permutations: between 2.29x10^33 & 2.85x10^61 (average 2.56x10^47)
+    Permutations (given dictionary & config): 5.74x10^19
+    Brute-Force Entropy (in bits): between 110 and 204 (average 157)
+    Entropy (given dictionary & config): 65bits
+    Passwords Generated: 0
 
 =head3 update_config()
 
