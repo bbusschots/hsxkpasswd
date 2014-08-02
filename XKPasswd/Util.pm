@@ -4,6 +4,8 @@ use strict;
 use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use English qw( -no_match_vars ); # for more readable code
+use lib '../'; # to keep Komodo edit happy while programming
+use XKPasswd;
 
 # Copyright (c) 2014, Bart Busschots T/A Bartificer Web Solutions All rights
 # reserved.
@@ -82,6 +84,38 @@ sub test_presets{
         print "$preset: BLIND=$stats{password_entropy_blind_min} (need $XKPasswd::ENTROPY_MIN_BLIND), SEEN=$stats{password_entropy_seen} (need $XKPasswd::ENTROPY_MIN_SEEN)\n";
     }
     print "INFO - Done testing entropy\n";
+    
+    # to keep perlcritic happy
+    return 1;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Generate a sample password with each preset with a given
+#              dictionary file
+# Returns    : Always returns 1 to keep perlcritic happy
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation
+# Notes      :
+# See Also   :
+sub print_preset_samples{
+    my $class = shift;
+    my $dict_path = shift;
+    
+    # validate the args
+    unless(defined $class && $class eq $_CLASS){
+        XKPasswd->_error('invalid invocation of class method');
+    }
+    unless(defined $dict_path && -f $dict_path){
+        XKPasswd->_error('invalid args, must pass a dictionary file path');
+    }
+    
+    foreach my $preset (XKPasswd->defined_presets()){
+        print "$preset: ".xkpasswd($dict_path, $preset)."\n";
+    }
+    
+    # to keep perlcritic happy
+    return 1;
 }
 
 1; # because perl is a bit special
