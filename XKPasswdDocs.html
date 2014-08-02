@@ -366,51 +366,45 @@
 
 <ul>
 
-<li><p><code>APPLEID</code> - a preset respecting the many prerequisites Apple places on Apple ID passwords. Apple&#39;s official password policy is located here: <a href="http://support.apple.com/kb/ht4232">http://support.apple.com/kb/ht4232</a>. Note that Apple&#39;s knowlege base article omits to mention that passwords can&#39;t be longer than 32 characters. This preset is also configured to use only characters that are easy to type on the standard iOS keyboard, i.e. those apearing on the letters keybard (<code>ABC</code>) or the numbers keyboard <code>.?123</code>, and not those on the harder to reach symbols keyboard <code>#+=</code>. This preset generates passwords of the following form:</p>
+<li><p><code>APPLEID</code> - a preset respecting the many prerequisites Apple places on Apple ID passwords. Apple&#39;s official password policy is located here: <a href="http://support.apple.com/kb/ht4232">http://support.apple.com/kb/ht4232</a>. Note that Apple&#39;s knowlege base article omits to mention that passwords can&#39;t be longer than 32 characters. This preset is also configured to use only characters that are easy to type on the standard iOS keyboard, i.e. those apearing on the letters keybard (<code>ABC</code>) or the numbers keyboard <code>.?123</code>, and not those on the harder to reach symbols keyboard <code>#+=</code>. Below is a sample password generated with this preset:</p>
 
-<pre><code>    @56.copilot.BOGLE.rinker.52@</code></pre>
-
-</li>
-<li><p><code>DEFAULT</code> - the default configuration. Results in passwords of the following form:</p>
-
-<pre><code>    %%57+Sensuous+Tannery+Layback+Accepter+27%%</code></pre>
+<pre><code>    @60:london:TOUGHT:forget:70@</code></pre>
 
 </li>
-<li><p><code>NTLM</code> - a preset for those people unfortunate enough to still need Windows NTLM version 1 passwords. Because of the 14 character limit on NTMLv1 passwords, this preset should only be used in extremis - i.e. when you really do need an NTLMv1 password. Results in passwords of the following form:</p>
+<li><p><code>DEFAULT</code> - the default configuration. Below is a sample password generated with this preset:</p>
+
+<pre><code>    ~~12:Settle:Whether:Succeed:Summer:48~~</code></pre>
+
+</li>
+<li><p><code>NTLM</code> - a preset for 14 character NTMLv1 (NTLM Version 1) passwords. ONLY USE THIS PRESET IF YOU MUST! The 14 character limit does not allow for sufficient entropy in the case where the attacker knows the dictionary and config used to generate the password, hence this preset will generate low entropy warnings. Below is a sample password generated with this preset:</p>
 
 <pre><code>    0=mAYAN=sCART@</code></pre>
 
 </li>
 <li><p><code>SECURITYQ</code> - a preset for creating fake answers to security questions. It generates long nonsense sentences ending in <code>.</code> <code>!</code> or <code>?</code>, for example:</p>
 
-<pre><code>    lakelike titrable skippet preshare Pictland fraying?
+<pre><code>    Wales outside full month minutes gentle?</code></pre>
+
+</li>
+<li><p><code>WEB16</code> - a preset for websites that don&#39;t allow more than 16 character long passwords. Because 16 characters is not very long, a large set of symbols are chosen from for the padding and separator. Below is a sample password generated with this preset:</p>
+
+<pre><code>    :baby.ohio.DEAR:
     </code></pre>
 
 </li>
-<li><p><code>WEB</code> - a preset for those websites which allow long passwords. Results in passwords of the following form:</p>
+<li><p><code>WEB32</code> - a preset for websites that don&#39;t allow more than 16 character long passwords. Below is a sample password generated with this preset:</p>
 
-<pre><code>    ||48-bounding-CLASSY-zabra-98||</code></pre>
-
-</li>
-<li><p><code>WEB16</code> - a preset for generating passwords on websites that do not allow more than 16 characters. Because 16 characters is not very long, a large set of symbols are chosen from for the padding and separator, and the unusual inverse case is used (the first letter lower-case, the rest upper). Results in passwords of the following form:</p>
-
-<pre><code>    =lEARN_rIGOR_35=
-    </code></pre>
+<pre><code>    +93-took-CASE-money-AHEAD-31+</code></pre>
 
 </li>
-<li><p><code>WEB20</code> - similar to <code>WEB16</code>, but consisting of six-letter words, and with two padding characters front and back. Results in passwords of the following form:</p>
+<li><p><code>WIFI</code> - a preset for generating 63 character long WPA2 keys (most routers allow 64 characters, but some only 63, hence the odd length). Below is a sample password generated with this preset:</p>
 
-<pre><code>    ||tWITCH-fLUSHY-45||</code></pre>
-
-</li>
-<li><p><code>WIFI</code> - a preset for generating 63 character long WPA2 keys (most routers allow 64 characters, but some only 63, hence the odd length). Results in passwords of the following form:</p>
-
-<pre><code>    3722|uncrook|outlaid|YAPPING|cheer|bestink|BROWNOUT|6852=======</code></pre>
+<pre><code>    2736_ITSELF_PARTIAL_QUICKLY_SCOTLAND_wild_people_7441!!!!!!!!!!</code></pre>
 
 </li>
-<li><p><code>XKCD</code> - a preset inspired by the original XKCD comic (<a href="http://xkcd.com/936/">http://xkcd.com/936/</a>), but with the alteration that words are separated by dashes rather than spaces. Results in passwords of the following form:</p>
+<li><p><code>XKCD</code> - a preset inspired by the original XKCD comic (<a href="http://xkcd.com/936/">http://xkcd.com/936/</a>), but with some alterations to provide sufficient entropy to avoid low entropy warnings. Below is a sample password generated with this preset:</p>
 
-<pre><code>    Revalue-Skippy-Gustful-Daddle</code></pre>
+<pre><code>    KING-madrid-exercise-BELGIUM</code></pre>
 
 </li>
 </ul>
@@ -676,13 +670,19 @@
 
 <ul>
 
+<li><p><code>dictionary_filter_length_min</code> &amp; <code>dictionary_filter_length_max</code> - the minimum and maximum word lengths allowed by the dictionary filter (defined by config keys <code>word_length_min</code> and <code>word_length_max</code>)</p>
+
+</li>
 <li><p><code>dictionary_path</code> - the path to the dictionary file loaded into the instance.</p>
 
 </li>
-<li><p><code>dictionary_words_total</code> - the total number of words loaded from the dictionary file.</p>
+<li><p><code>dictionary_words_filtered</code> - the number of words loaded from the dictionary file that meet the criteria defined by the loaded config.</p>
 
 </li>
-<li><p><code>dictionary_words_filtered</code> - the number of words loaded from the dictionary file that meet the criteria defined by the loaded config.</p>
+<li><p><code>dictionary_words_percent_avaialable</code> - the percentage of the words in the dictionary file that are available for use with the loaded config.</p>
+
+</li>
+<li><p><code>dictionary_words_total</code> - the total number of words loaded from the dictionary file.</p>
 
 </li>
 <li><p><code>password_entropy_blind_min</code> - the entropy (in bits) of the shortest password the loaded config can generate from the point of view of a brute-force attacker.</p>
