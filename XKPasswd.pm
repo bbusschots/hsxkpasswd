@@ -1368,6 +1368,13 @@ sub passwords{
 #              * 'dictionary_words_filtered' - the number of words loaded from
 #                the dictionary file that meet the lenght criteria set in the
 #                loaded config
+#              * 'dictionary_words_percent_avaialable' - the percentage of the
+#                total dictionary that is avialable for use with the loaded
+#                config
+#              * 'dictionary_filter_length_min' - the minimum length world
+#                permitted by the filter
+#              * 'dictionary_filter_length_max' - the maximum length world
+#                permitted by the filter
 #              * 'password_entropy_blind_min' - the entropy of the shortest
 #                password this config can generate from the point of view of a
 #                brute-force attacker in bits
@@ -1433,9 +1440,13 @@ sub stats{
     $stats{password_random_numbers_required} = $config_stats{random_numbers_required};
     
     # deal with the dictionary file
+    my %dict_stats = $self->_calcualte_dictionary_stats();
     $stats{dictionary_path} = $self->{_DICTIONARY_PATH};
-    $stats{dictionary_words_total} = scalar @{$self->{_CACHE_DICTIONARY_FULL}};
-    $stats{dictionary_words_filtered} = scalar @{$self->{_CACHE_DICTIONARY_LIMITED}};
+    $stats{dictionary_words_total} = $dict_stats{num_words_total};
+    $stats{dictionary_words_filtered} = $dict_stats{num_words_filtered};
+    $stats{dictionary_words_percent_avaialable} = $dict_stats{percent_words_available};
+    $stats{dictionary_filter_length_min} = $dict_stats{filter_length_min};
+    $stats{dictionary_filter_length_max} = $dict_stats{filter_length_max};
     
     # deal with the entropy stats
     $stats{password_entropy_blind_min} = $self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min};
@@ -1484,7 +1495,7 @@ sub status{
     $status .= "*DICTIONARY*\n";
     $status .= "File path: $stats{dictionary_path}\n";
     $status .= "# words: $stats{dictionary_words_total}\n";
-    $status .= "# words of valid length: $stats{dictionary_words_filtered}\n";
+    $status .= "# words of valid length: $stats{dictionary_words_filtered} ($stats{dictionary_words_percent_avaialable}%)\n";
     
     # the config
     $status .= "\n*CONFIG*\n";
@@ -2455,7 +2466,7 @@ sub _calculate_entropy_stats{
     }
     # the permutations from the padding character (if any)
     if($self->{_CONFIG}->{padding_type} ne 'NONE' && $self->{_CONFIG}->{padding_character} eq 'RANDOM'){
-        $b_seen_perms->badd(Math::BigInt->new(scalar @{$self->{_CONFIG}->{separator_alphabet}}));
+        $b_seen_perms->badd(Math::BigInt->new(scalar @{$self->{_CONFIG}->{symbol_alphabet}}));
     }
     # the permutations from the padding digits (if any)
     $b_seen_perms->badd(Math::BigInt->new(($self->{_CONFIG}->{padding_digits_before} + $self->{_CONFIG}->{padding_digits_after}) ** 10));
@@ -2471,6 +2482,44 @@ sub _calculate_entropy_stats{
     $_CLASS->_debug('got entropy_blind='.$ans{entropy_blind});
     $ans{entropy_seen} = $ans{permutations_seen}->copy()->blog(2)->numify();
     $_CLASS->_debug('got entropy_seen='.$ans{entropy_seen});
+    
+    # return the stats
+    return %ans;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE (PRIVATE)
+# Purpose    : Calculate statistics on the loaded dictionary file
+# Returns    : A hash of statistics indexed by:
+#              * 'filter_length_min' - the minimum allowed word length
+#              * 'filter_length_max' - the maximum allowed word length
+#              * 'num_words_total' - the number of words in the un-filtered
+#                dictionary file
+#              * 'num_words_filtered' - the number of words after filtering on
+#                size limitations
+#              * 'percent_words_available' - the percentage of the un-filtered
+#                words remaining in the filtered words list
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation
+# Notes      :
+# See Also   :
+sub _calcualte_dictionary_stats{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        $_CLASS->_error('invalid invocation of instance method');
+    }
+    
+    # create a hash to aggregate the stats into
+    my %ans = ();
+    
+    # deal with agregate numbers first
+    $ans{num_words_total} = scalar @{$self->{_CACHE_DICTIONARY_FULL}};
+    $ans{num_words_filtered} = scalar @{$self->{_CACHE_DICTIONARY_LIMITED}};
+    $ans{percent_words_available} = round(($ans{num_words_filtered}/$ans{num_words_total}) * 100);
+    $ans{filter_length_min} = $self->{_CONFIG}->{word_length_min};
+    $ans{filter_length_max} = $self->{_CONFIG}->{word_length_max};
     
     # return the stats
     return %ans;
@@ -3525,17 +3574,28 @@ the following keys:
 
 =item *
 
-C<dictionary_path> - the path to the dictionary file loaded into the instance.
+C<dictionary_filter_length_min> & C<dictionary_filter_length_max> - the minimum
+and maximum word lengths allowed by the dictionary filter (defined by config
+keys C<word_length_min> and C<word_length_max>)
 
 =item *
 
-C<dictionary_words_total> - the total number of words loaded from the
-dictionary file.
+C<dictionary_path> - the path to the dictionary file loaded into the instance.
 
 =item *
 
 C<dictionary_words_filtered> - the number of words loaded from the dictionary
 file that meet the criteria defined by the loaded config.
+
+=item *
+
+C<dictionary_words_percent_avaialable> - the percentage of the words in the
+dictionary file that are available for use with the loaded config.
+
+=item *
+
+C<dictionary_words_total> - the total number of words loaded from the
+dictionary file.
 
 =item *
 
