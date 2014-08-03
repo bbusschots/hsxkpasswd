@@ -1488,16 +1488,16 @@ sub status{
     $status .= "\n*PASSWORD STATISTICS*\n";
     if($stats{password_length_min} == $stats{password_length_max}){
         $status .= "Password length: $stats{password_length_max}\n";
-        $status .= 'Brute-Force permutations: '.$_CLASS->_render_bigint($stats{password_permutations_blind_max})."\n";
+        $status .= 'Permutations (brute-force): '.$_CLASS->_render_bigint($stats{password_permutations_blind_max})."\n";
     }else{
         $status .= "Password length: between $stats{password_length_min} & $stats{password_length_max}\n";
-        $status .= 'Brute-Force permutations: between '.$_CLASS->_render_bigint($stats{password_permutations_blind_min}).q{ & }.$_CLASS->_render_bigint($stats{password_permutations_blind_max}).q{ (average }.$_CLASS->_render_bigint($stats{password_permutations_blind}).")\n";
+        $status .= 'Permutations (brute-force): between '.$_CLASS->_render_bigint($stats{password_permutations_blind_min}).q{ & }.$_CLASS->_render_bigint($stats{password_permutations_blind_max}).q{ (average }.$_CLASS->_render_bigint($stats{password_permutations_blind}).")\n";
     }
     $status .= 'Permutations (given dictionary & config): '.$_CLASS->_render_bigint($stats{password_permutations_seen})."\n";
     if($stats{password_length_min} == $stats{password_length_max}){
-        $status .= "Brute-Force Entropy: $stats{password_entropy_blind_max}bits\n";
+        $status .= "Entropy (brute-force): $stats{password_entropy_blind_max}bits\n";
     }else{
-        $status .= "Brute-Force Entropy (in bits): between $stats{password_entropy_blind_min} and $stats{password_entropy_blind_max} (average $stats{password_entropy_blind})\n";
+        $status .= "Entropy (Brute-Force): between $stats{password_entropy_blind_min}bits and $stats{password_entropy_blind_max}bits (average $stats{password_entropy_blind}bits)\n";
     }
     $status .= "Entropy (given dictionary & config): $stats{password_entropy_seen}bits\n";
     $status .= "Passwords Generated: $stats{passwords_generated}\n";
@@ -2729,30 +2729,30 @@ This documentation refers to XKPasswd version 2.1.1.
     #
     
     # generate a single password using words from the file
-    # dict.txt using the default configuration
-    my $password = xkpasswd('dict.txt');
+    # sample_dict.txt using the default configuration
+    my $password = xkpasswd('sample_dict.txt');
     
     # generate a single password using one of the module's
     # predefined presets exactly
-    my $password = xkpasswd('dict.txt', 'XKCD');
+    my $password = xkpasswd('sample_dict.txt', 'XKCD');
     
     # generate a single password using one of the module's
     # predefined presets as a starting point, but with a
     # small customisation
-    my $password = xkpasswd('dict.txt', 'XKCD', {separator_character => q{ }});
+    my $password = xkpasswd('sample_dict.txt', 'XKCD', {separator_character => q{ }});
     
     #
     # Object Oriented Interface
     #
     
     # create a new instance with the default config
-    my $xkpasswd_instance = XKPasswd->new('dict.txt');
+    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt');
     
     # create an instance from the preset 'XKCD'
-    my $xkpasswd_instance = XKPasswd->new('dict.txt', 'XKCD');
+    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', 'XKCD');
     
     # create an instance based on the preset 'XKCD' with one customisation
-    my $xkpasswd_instance = XKPasswd->new('dict.txt', 'XKCD', {separator_character => q{ }});
+    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', 'XKCD', {separator_character => q{ }});
     
     # create an instance from a config based on a preset
     # but with many alterations
@@ -2763,7 +2763,7 @@ This documentation refers to XKPasswd version 2.1.1.
     $config->{padding_characters_before} = 1;
     $config->{padding_characters_after} = 1;
     $config->{padding_character} = '*';
-    my $xkpasswd_instance = XKPasswd->new('dict.txt', $config);
+    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', $config);
     
     # create an instance from an entirely custom configuration
     my $config = {
@@ -2784,7 +2784,7 @@ This documentation refers to XKPasswd version 2.1.1.
         random_increment => 'AUTO',
         character_substitutions => {}
     }
-    my $xkpasswd_instance = XKPasswd->new('dict.txt', $config);
+    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', $config);
     
     # generate a single password
     my $password = $xkpasswd_instance->password();
@@ -2795,132 +2795,270 @@ This documentation refers to XKPasswd version 2.1.1.
 =head1 DESCRIPTION
 
 A secure memorable password generator inspired by the wonderful XKCD webcomic
-L<http://www.xkcd.com/> and Steve Gibson's Password Haystacks page
+at L<http://www.xkcd.com/> and Steve Gibson's Password Haystacks page at
 L<https://www.grc.com/haystack.htm>. This is the Perl library that powers
 L<https://www.xkpasswd.net>.
 
 =head2 PHILOSOPHY
 
-The basic idea behind this password generator is that in this modern age of
-fast password crackers, the only secure password is a long password. Rather
-than assembling a password from an alphabet consisting of 26 lower case
-characters, 26 upper case characters, ten digits, and a few symbols, why
-not use a dictionary file as a massive alphabet containing hundreds or
-even thousands of words, then combine just a few of those with a randomly
-chosen but easy to remember symbol character, and perhaps pad it front
-and back with a few digits and repeated symbols.
+More and more of the things we do on our computer require passwords, and at the
+same time it seems we hear about organisations or sites losing user database on
+every day that ends in a 'y'. If we re-use our passwords we expose ourself to
+an ever greater risk, but we need more passwords than we can possibly remember
+or invent. Coming up with one good password is easy, but coming up with one
+good password a week is a lot harder, let alone one a day!
 
-You only need to remember the words, two symbols, and, if you choose, a few
-digits, and assuming an average word length of 6, you end up with a 37
-character password something like:
+Obviously we need some technological help. We need our computers to help us
+generate robust password and store them securely. There are many great password
+managers out there to help us securely store and sync our passwords, including
+commercial offerings and open-source projects. Many of these managers also offer
+to generate random passwords for us, usually in the form of a random string of
+meaningless letters numbers and symbols. These kinds of nonsense passwords are
+certainly secure, but they are often impractical.
 
-    ==67^Become^Matter^Finger^Animal^24==
+Regardless of how good your chosen password manager is, there will always be
+times when you need to type in your passwords, and that's when random gibberish
+passwords become a real pain point. As annoying as it is to have to glance over
+and back at a small cellphone screen to manually type a gibberish password into
+a computer, that's nothing compared to the annoyance of trying to communicate
+such a password to a family member, friend, colleague or customer over the phone.
 
-For comparison, here is a truly random eight character password:
+Surely it would be better to have passwords that are still truly random in the
+way humans can't be, but are also human-friendly in the way random gibberish
+never will be? This is the problem this module aims to solve.
 
-    RClo^9+e
+Rather than randomly choosing many letters, digits, and symbols from a fairly
+small alphabet of possible characters, this library chooses a small number of
+words from a large 'alphabet' of possible words as the basis for passwords.
+Words are easy to remember, easy to read from a screen, easy to type, and easy
+to communicate over the telephone.
 
-Most people will find the former easier to memorise than the latter, even
-though it's much longer, and much much harder to guess. If you plug both
-of the above example passwords into Password Haystacks
-(L<https://www.grc.com/haystack.htm>), you'll see that with the best modern
-hardware (as of 2014), the truly random 8 character password could be
-cracked in minutes, while the 37 character password would take trillions of
-times the age of the universe to crack. That's a very definite improvement!
+This module uses words to make up the bulk of the passwords it generates, but
+it also adds carefully placed random symbols and digits to add more security
+without the passwords difficult to remember, read, type, or speak.
 
-Given the fact that we should all be using separate passwords on every site,
-many people now use password managers like LastPass or 1Password, so arguably
-the memorability of our passwords has become irrelevant. However, with a
-password manager, your entire security hinges on the quality of your master
-password, so you need to make it a good one! Also, when you are not on your
-own computer, you may need to read your password from your phone or other
-mobile device and manually enter it. You'll find a long word-based password
-to be much easier to enter than a long truly random password.
+In shot, this module is for people who prefer passwords that look like this:
+
+    !15.play.MAJOR.fresh.FLAT.23!
+
+to passwords that look like this:
+
+    eB8.GJXa@TuM
 
 =head2 THE MATHS
 
-When describing the philosophy of XKPasswod we used the following two sample
-passwords:
+Before examining the password strength of passwords generated with this module
+we need to lay out the relatively simple maths underlying it all.
 
-=over 4
+=head3 Maths Primer
 
-=item *
+A coin could be used as a very simple password generator. Each character in
+the password would be the result of a single coin toss. If the coin lands
+heads up, we add a C<H> to our password, if it lands tails up, we add a C<T>.
 
-C<RClo^9+e> (eight random alphanumeric characters with mixed case and including
-symbols)
+If you made a one-letter password in this way there would only be two
+possibilities, C<H>, or C<T>, or two permutations. If you made a two-letter
+password in this way there would be four possible combinations, or
+permutations, C<HH>, C<HT>, C<TH>, and C<TT>. If you made a three-character
+password in this way there would be 16 permutations, a five character one
+would have 32 permutations, and so forth.
 
-=item *
+So, for a coin toss, which has two possible values for each character, the
+formula for the number of permutations C<P> for a given length of password C<L>
+is:
 
-C<==67^Become^Matter^Finger^Animal^24==> (four random words separate with a
-random character, padded with four random digits, and a random symbol)
+    P = 2^L
 
-=back
+Or, two to the power of the length of the password.
 
-If we only consider brute force attacks, then there are 6.70 x 10^15
-permutations for the random 8 character password, and 1.51 x 10^73 permutations
-for the sample XKPasswd-style password. Clearly, the latter is trillions of
-times better!
+If we now swapped our coin for a dice, we would go from two possible values
+per letter, to six possible values per letter. For one dice roll there would
+be six permutations, for two there would be 36, for three there would be 108
+and so on.
 
-This calculation assumes that the attacker does not know that you used XKPasswd
-to generate your password. This is a very reasonable assumption, but, for the
-sake or argument, let's assume it doesn't hold up. Let's assume the absolute
-worst-case scenario, and calculate the permutations an attacker would have to
-go through to guess your password.
+This means that for a dice, the number of permutations can be calculated with
+the formula:
 
-The worst-case scenario is that the attacker doesn't just know that you used
-XKPasswd to generate your password, but also the exact settings used, and, the
-dictionary file the words were chosen from. This is not actually a realistic
-scenario, because any attacker in a position to know all this probably has
-un-fettered access to your systems anyway, and so wouldn't need to crack your
-passwords! However, it serves as a very good worst-case for our calculations.
+    P = 6^L
 
-Given that the attackers knows that our password was generated by picking four
-random words, picking a single random symbol to act as a separator, picking
-four random digits, and finally picking one more random symbol to pad the front
-and back of the password with, how much randomness is left?
+When talking about passwords, the set of possible symbols used for each
+character in the password is referred to as the password's 'Alphabet'. So,
+for the coin toss the alphabet was just C<H> and C<T>, and for the dice it
+was C<1>, C<2>, C<3>, C<4>, C<5>, and C<6>. The actual characters used in
+the alphabet make no difference to the strength of the password, all that
+matters is the size of the alphabet, which we'll call C<A>.
 
-To do the math we first need to tie down the size of our dictionary, and the
-number of symbols to be choosing from. To make the math easy, lets say our
-dictionary contains one thousand words, and we are choosing symbols from a set
-of ten.
+As you can probably infer from the two examples above, the formula for the
+number of possible permutations C<P> for a password of length C<L> created from
+an alphabet of size C<A> is:
 
-What this means is that we are picking four words from a possible 1,000, four
-digits from a possible ten, and two symbols from a possible ten. I.e.:
+    P = A^L
 
-1000^4 * 10^4 * 10^2
+In the real world our passwords are generally made up of a mix of letters,
+digits, and symbols. If we use mixed case that gives us 52 letters alone,
+then add in the ten digits from C<0> to C<9> and we're already up to 62
+possible characters before we even start on the array of symbols and
+punctuation characters on our keyboards. It's generally accepted that if you
+include symbols and punctuation, there are 95 characters available for use in
+randomly generated passwords. Hence, in the real-world, the value for C<A> is
+assumed to be 95. When you start raising a number as big as 95 to even low
+powers the number of permutations quickly rises.
 
-This gives 1 x 10^18 permutations, which is three orders of magnitude more
-than for the 8 character random password. In other words, even in the worst
-possible scenario, assuming a good dictionary, and a reasonable configuration,
-XKPasswd is better than an 8 digit random password.
+A two character password with alphabet of 95 has 9025 permutations, increasing
+the length to three characters brings that up to 857,375, and so on. These
+numbers very quickly become too big to handle. For just an 8 character password
+we are talking about 6,634,204,312,890,625 permutations, which is a number
+so big most people couldn't say it (what do you call something a thousand times
+bigger than a trillion?).
 
-To get the worst-case scenario down to the same order of magnitude as the
-eight digit random password, the dictionary file would have to be reduced
-to about 100 words.
+Because the numbers get so astronomically big so quickly, computer scientists
+use bits of entropy to measure password strength rather than the number of
+permutations. The formula to turn permutations into bits of entropy C<E> is very
+simple:
 
-A more realistic scenario would be that the attacker might know you used
-XKPasswd, but not what dictionary you used, or what settings you used. In this
-case the attacker will need to try many more possible passwords to cover
-variations in padding length, dictionary content, and text transformations.
-The math on this is too complex for this manual, but will fall somewhere 
-between the 1 X 10^18 permutations of the worst-case, and the 1.51 x 10^73
-permutations of the best-case.
+    E = Log(2)P
+
+In other words, the entropy is the log to base two of the permutations. For our
+eight character example that equates to about 52 bits.
+
+There are two approaches to increasing the number of permutations, and hence
+the entropy, you can choose more characters, or, you can make the alphabet you
+are choosing from bigger.
+
+=head3 The Entropy of XKPasswd Passwords
+
+Exactly how much entropy does a password need? That's the subject of much
+debate, and the answer ultimately depends on the value of the assets being
+protected by the password.
+
+Two common recommendations you hear are 8 characters containing a mix of upper
+and lower case letters, digits, and symbols, or 12 characters with the same
+composition. These evaluation to approximately 52 bits of entropy and 78 bits
+of entropy respectively.
+
+When evaluating the entropy of passwords generated by this module, it has to be
+done from two points of view for the answer to be meaningful. Firstly, a
+best-case scenario - the attacker has absolutely no knowledge of how the
+password was generated, and hence must mount a brute-force attack. Then,
+secondly from the point of view of an attacker with full knowledge of how the
+password was generated. Not just the knowledge that this module was used, but
+a copy of the dictionary file used, and, a copy of the configuration settings
+used.
+
+For the purpose of this documentation, the entropy in the first scenario, the
+brute force attack, will be referred to as the blind entropy, and the entropy
+in the second scenario the seen entropy.
+
+The blind entropy is solely determined by the configuration settings, the seen
+entropy depends on both the settings and the dictionary file used.
+
+Calculating the bind entropy C<Eb> is quite straightforward, we just need to
+know the size of the alphabet resulting from the configuration C<A>, and the
+minimum length of passwords generated with the configuration C<L>, and plug
+those values into this formula:
+
+    Eb = Log(2)(A^L)
+
+Calculating C<A> simply involves determining whether or not the configuration
+results in a mix of letter cases (26 or 52 characters), the inclusion of at
+least one symbol (if any one is present, assume the industry standard of a 33
+character search space), and the inclusion of at least one digit
+(10 character). This will result in a value between 26 and 95.
+
+Calculating C<L> is also straightforward. The one minor complication is that
+some configurations result in a variable length password. In this case,
+assume the shortest possible length the configuration could produce.
+
+The example password from the L<PHILOSOPHY> section
+(C<!15.play.MAJOR.fresh.FLAT.23!>) was generated using the preset C<WEB32>.
+This preset uses four words of between four and five letters long, with the
+case of each word randomly set to all lower or all upper as the
+basis for the password, it then chooses two pairs of random digits as extra
+words to go front and back, before separating each 'word' with a copy of a
+randomly chosen symbol, and padding the front and back of the password with
+a copy of a different randomly chosen symbol. This results in passwords that
+contain a mix of cases, digits, and symbols, and are between 27 and 31
+characters long. If we add these values into the formula we find that the
+blind entropy for passwords created with this preset is:
+
+    Eb = Log(2)(95^27) = 163 bits
+
+This is spectacularly secure! And, this is the most likely kind of attack for
+a password to face. However, to have confidence in the password we must also
+now calculate the entropy when the attacker knows everything about how the
+password was generated.
+
+We will calculate the entropy resulting from the same C<WEB32> config being
+used to generate a password using the sample library file that ships with
+the module.
+
+The number of permutations the attacker needs to check is purely the product
+of possibly results for each random choice made during the assembly of the
+password.
+
+Lets start with the words that will form the core of the password. The
+configuration chooses four words of between four and five letters long from
+the dictionary, and then randomises their case, effectively making it a
+choice from twice as many words (each word in each case).
+
+The sample dictionary file contains 698 words of the configured length, which
+doubles to 1396. Choosing four words from that very large alphabet gives a
+starting point of C<1396^4>, or 3,797,883,801,856 permutations.
+
+Next we need to calculate the permutations for the separator character. The
+configuration specifies just nine permitted characters, and we choose just one,
+so that equates to 9 permutations.
+
+Similarly, the padding character on the end is chosen from 13 permitted symbols
+giving 13 more permutations.
+
+Finally, there are four randomly chosen digits, giving C<10^4>, or 10,000
+permutations.
+
+The total number of permutations is the product of all these permutations:
+
+    Pseen = 3,797,883,801,856 * 9 * 13 * 10,000 = 2.77x10^17
+    
+Finally, we convery this to entropy by taking the base 2 log:
+
+    Eseen = Log(2)2.77x10^17 = ~57bits
+    
+What this means is that most probably, passwords generated with this preset
+using the sample dictionary file are spectacularly more secure than even
+12 randomly chosen characters, and, that in the very unlikely event that an
+attackers knows absolutely everything about how the password was generated,
+it is still significantly more secure than 8 randomly chosen characters.
+
+Because the exact strength of the passwords produced by this module depend on
+the configuration and dictionary file used, the constructor does the above
+math when creating an XKPasswd object, and throws a warning if either the
+blind entropy falls below 78bits, or the seen entropy falls below 52 bits.
 
 =head1 SUBROUTINES/METHODS
 
 =head2 DICTIONARY FILES
 
-XKPasswd instances use text files as the source for the list of words to
-randomly choose from when generating the password. Each instance uses one text
-file, referred to as the Dictionary File, and specified via the
+XKPasswd instances load their word lists from text files. The constructor
+loads the words contained in a single file into memory when assembling an
+XKPasswd object. Once constructed, the object never reads from the file again.
+Throughout this documentation, the text file containing the words to be used is
+referred to as 'the Dictionary File', and specified via the
 C<dictionary_file_path> config variable.
 
-Dictionary files should contain one word per line. Words shorter than four
-letters will be ignored, as will all lines starting with the # symbol.
+The rules for the formatting of dictionary files are simple. Dictionary
+files must contain one word per line. Words shorter than four letters will be
+ignored, as will all lines starting with the # symbol.
 
 This format is the same as that of the standard Unix Words file, usually found
 at C</usr/share/dict/words> on Unix and Linux operating systems (including OS
 X).
+
+In order to produce secure passwords it's important to use a dictionary file
+that contains a large selection of words with a good mix of different word
+lengths.
+
+A sample dictionary file (C<'sample_dict.txt'>) is distributed with this
+module.
 
 =head2 CONFIGURATION HASHREFS
 
@@ -3117,18 +3255,18 @@ creating your own config hashref, as demonstrated by the following example:
 
     my $config = XKPasswd->preset_config('XKCD');
     $config->{separator_character} = q{ }; # change the separator to a space
-    my $xkpasswd = XKPasswd->new('mydict.txt', $config);
+    my $xkpasswd = XKPasswd->new('sample_dict.txt', $config);
     
 If you only wish to alter a small number of config settings, the following
 two shortcuts might be of interest (both produce the same result as the
 example above):
 
     my $config = XKPasswd->preset_config('XKCD', {separator_character => q{ }});
-    my $xkpasswd = XKPasswd->new('mydict.txt', $config);
+    my $xkpasswd = XKPasswd->new('sample_dict.txt', $config);
     
 or
 
-    my $xkpasswd = XKPasswd->new('mydict.txt', $config, {separator_character => q{ }});
+    my $xkpasswd = XKPasswd->new('sample_dict.txt', $config, {separator_character => q{ }});
 
 For more see the definitions for the class functions C<defined_presets()>,
 C<presets_to_string()>, and C<preset_config()>.
@@ -3141,10 +3279,10 @@ The following presets are defined:
 
 C<APPLEID> - a preset respecting the many prerequisites Apple places on Apple
 ID passwords. Apple's official password policy is located here:
-L<http://support.apple.com/kb/ht4232>. Note that Apple's knowlege base article
+L<http://support.apple.com/kb/ht4232>. Note that Apple's knowledge base article
 omits to mention that passwords can't be longer than 32 characters. This preset
 is also configured to use only characters that are easy to type on the standard
-iOS keyboard, i.e. those apearing on the letters keybard (C<ABC>) or the
+iOS keyboard, i.e. those appearing on the letters keyboard (C<ABC>) or the
 numbers keyboard C<.?123>, and not those on the harder to reach symbols
 keyboard C<#+=>. Below is a sample password generated with this preset:
 
@@ -3216,16 +3354,16 @@ C<carp()>) when ever the loaded combination dictionary file and configuration
 would result in low-entropy passwords. When the constructor is invoked, or when
 a new dictionary file or new config hashref are loaded into an object (using
 C<dictionary()> or C<config()>) the entropy of the resulting new state of the
-object is calculated and checked against definded minima.
+object is calculated and checked against the defined minima.
 
 Entropy is calculated and checked for two scenarios. Firstly, for the best-case
-scenario, when an attacker has no prior kowledge about the password, and must
+scenario, when an attacker has no prior knowledge about the password, and must
 resort to brute-force attacks. And secondly, for the worst-case scenario, when
 the attacker is assumed to know that this module was used to generate the
 password, and, that the attacker has a copy of the dictionary file and config
 settings used to generate the password.
 
-Entropy checking is controled via three package variables:
+Entropy checking is controlled via three package variables:
 
 =over 4
 
@@ -3244,7 +3382,7 @@ of mixed-case letters, digits, and symbols).
 
 =item *
 
-C<$XKPasswd::SUPRESS_ENTROPY_WARNINGS> - this varialbe can be used to suppress
+C<$XKPasswd::SUPRESS_ENTROPY_WARNINGS> - this variable can be used to suppress
 one or both of the entropy warnings. The following values are valid (invalid
 values are treated as being 'NONE'):
 
@@ -3269,9 +3407,9 @@ C<BLIND> - only warnings for the best-case scenario are suppressed.
 =head3 CAVEATS
 
 The entropy calculations make some assumptions which may in some cases lead to
-the results being inacurate. In general, an attempt has been made to always
+the results being inaccurate. In general, an attempt has been made to always
 round down, meaning that in reality the entropy of the produced passwords may
-be higher than the values culculated by the package.
+be higher than the values calculated by the package.
 
 When calculating the entropy for brute force attacks on configurations that can
 result in variable length passwords, the shortest possible password is assumed.
@@ -3321,32 +3459,36 @@ There is only a single function exported by the module:
 
 =head3 xkpasswd()
 
-    my $password = xkpasswd('mydict.txt');
+    my $password = xkpasswd('sample_dict.txt');
     
 This function call is equivalent to the following Object-Oriented code:
 
-    my $xkpasswd = XKPasswd->new('mydict.txt');
+    my $xkpasswd = XKPasswd->new('sample_dict.txt');
     my $password = $xkpasswd->password();
     
-This function passes it's arguments through to the constructor, so all arguments
+This function passes its arguments through to the constructor, so all arguments
 that are valid in C<new()> are valid here.
 
 This function Croaks if there is a problem generating the password.
+
+Note that it is inefficient to use this function to generate multiple passwords
+because the dictionary file will be re-loaded, and the entropy
+calculations for ensuring security repeated, each time a password is generated.
 
 
 =head2 CONSTRUCTOR
     
     # create a new instance with the default config
-    my $xkpasswd_instance = XKPasswd->new('dict.txt');
+    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt');
     
     # create an instance from the preset 'XKCD'
-    my $xkpasswd_instance = XKPasswd->new('dict.txt', 'XKCD');
+    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', 'XKCD');
     
     # create an instance based on the preset 'XKCD' with one customisation
-    my $xkpasswd_instance = XKPasswd->new('dict.txt', 'XKCD', {separator_character => q{ }});
+    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', 'XKCD', {separator_character => q{ }});
     
     # create an instance from a config hashref
-    my $xkpasswd_instance = XKPasswd->new('dict.txt', $config_hashref);
+    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', $config_hashref);
 
 The constructor must be called via the package name, and at least one argument
 must be passed, the path to the dictionary file to be used when generating the
@@ -3385,7 +3527,7 @@ following:
 
 =item *
 
-C<length_min> - the minimum length a password genereated with the given
+C<length_min> - the minimum length a password generated with the given
 config could be.
 
 =item *
@@ -3400,11 +3542,11 @@ password using the given config.
 
 =back
 
-There is one scenario in which the calcualted maximum length will not be
+There is one scenario in which the calculated maximum length will not be
 reliably accurate, and that's when a character substitution with a length
 greater than 1 is specified, and C<padding_type> is not set to C<ADAPTIVE>. If
 the config passed contains such a character substitution, the length will be
-calculated ignoring the posibility that one or more extra characters could
+calculated ignoring the possibility that one or more extra characters could
 be introduced depending on how many, if any, of the long substitutions get
 triggered by the randomly chosen words. If this happens the function will also
 carp with a warning.
@@ -3425,16 +3567,16 @@ This function returns a hashref containing a config with default values.
 This function can optionally be called with a single argument, a hashref
 containing keys with values to override the defaults with.
 
-    my $config = XKPasswd->default_config({dictionary_file_path => 'mydict.txt'});
+    my $config = XKPasswd->default_config({num_words => 3});
     
-When overrides are present, the function will carp if an invalid key or value is
-passed, and croak if the resulting merged config is invalid.
+When overrides are present, the function will carp if an invalid key or value
+is passed, and croak if the resulting merged config is invalid.
 
-This function is a shortcut for C<preset_config()>, and the above examples are
-equivalent to the following:
+This function is a shortcut for C<preset_config()>, and the two examples above
+are equivalent to the following:
 
     my $config = XKPasswd->preset_config('DEFAULT');
-    my $config = XKPasswd->default_config('DEFAULT', {dictionary_file_path => 'mydict.txt'});
+    my $config = XKPasswd->preset_config('DEFAULT', {num_words => 3});
 
 =head3 defined_presets()
 
@@ -3466,7 +3608,7 @@ that the function should croak on invalid configs rather than returning 0;
 This function returns the config hashref for a given preset. See above for the
 list of available presets.
 
-The first argument this function accpeps is the name of the desired preset as a
+The first argument this function accpets is the name of the desired preset as a
 scalar. If an invalid name is passed, the function will carp. If no preset is
 passed the preset C<'DEFAULT'> is assumed.
 
@@ -3512,7 +3654,7 @@ string. The function must be passed a valid config hashref or it will croak.
 =head3 dictionary()
 
     print $xkpasswd_instance->dictionary();
-    $xkpasswd_instance->dictionary('dict.txt');
+    $xkpasswd_instance->dictionary('sample_dict.txt');
     
 When called with no arguments this function returns the path to the currently
 loaded dictionary file. To load a dictionary file into an instance call this
@@ -3610,21 +3752,21 @@ loaded config.
 
 C<password_permutations_blind_min> - the number of permutations a brute-force
 attacker would have to try to be sure of cracking the shortest possible
-passwords geneated by this instance. Because this number can be very big, it's
+passwords generated by this instance. Because this number can be very big, it's
 returned as a C<Math::BigInt> object.
 
 =item *
 
 C<password_permutations_blind_max> - the number of permutations a brute-force
 attacker would have to try to be sure of cracking the longest possible
-passwords geneated by this instance. Because this number can be very big, it's
+passwords generated by this instance. Because this number can be very big, it's
 returned as a C<Math::BigInt> object.
 
 =item *
 
 C<password_permutations_blind> - the number of permutations a brute-force
 attacker would have to try to be sure of cracking an average length password
-geneated by this instance. Because this number can be very big, it's returned
+generated by this instance. Because this number can be very big, it's returned
 as a C<Math::BigInt> object.
 
 =item *
@@ -3651,7 +3793,7 @@ the instance.
 =item *
 
 C<randomnumbers_cache_increment> - the number of random numbers generated at
-once to re-plenish the cache when it's empty.
+once to replenish the cache when it's empty.
 
 =item *
 
@@ -3721,8 +3863,8 @@ debug messages will be printed to the stream C<$XKPasswd::LOG_STREAM>.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-TO DO - may not be needed, depends on whether or not configuration file support
-gets added
+This module does not currently support configuration files, nor does it
+currently interact with the environment. It may do so in future versions.
 
 =head1 DEPENDENCIES
 
