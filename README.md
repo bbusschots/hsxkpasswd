@@ -23,7 +23,11 @@ To see a list of defined presets use:
 
     perl -e 'use lib "/usr/local/xkpasswd.pm/";use XKPasswd; print join ", ", XKPasswd->defined_presets();'APPLEID, DEFAULT, NTLM, SECURITYQ, WEB16, WEB32, WIFI, XKCDbart-imac2013:bartbususe XKpasswd; print "".(join ", ", XKPasswd->defined_presets())."\n";'
 
-To generate a password using a preset you can use a command of the form:
+To see the details of a preset use a command of the form (replacing `WEB32` with which ever preset you want to view):
+
+    perl -e 'use lib "/usr/local/xkpasswd.pm/";use XKPasswd; my $xkpasswd = XKPasswd->new("/usr/local/xkpasswd.pm/sample_dict.txt", "WEB32"); print $xkpasswd->status();'
+
+To generate a password using a preset you can use a command of the form (replacing `WEB32` with which ever preset you want to view):
 
     perl -e 'use lib "/usr/local/xkpasswd.pm/";use XKPasswd; print xkpasswd("/usr/local/xkpasswd.pm/sample_dict.txt", "WEB32")."\n";'
     
