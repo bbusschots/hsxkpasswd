@@ -1,0 +1,911 @@
+<?xml version="1.0" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>XKPasswd.pm</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rev="made" href="mailto:_mdnsresponder@jackson.apple.com" />
+</head>
+
+<body style="background-color: white">
+
+
+
+<ul id="index">
+  <li><a href="#NAME">NAME</a></li>
+  <li><a href="#VERSION">VERSION</a></li>
+  <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
+  <li><a href="#DESCRIPTION">DESCRIPTION</a>
+    <ul>
+      <li><a href="#PHILOSOPHY">PHILOSOPHY</a></li>
+      <li><a href="#THE-MATHS">THE MATHS</a>
+        <ul>
+          <li><a href="#Maths-Primer">Maths Primer</a></li>
+          <li><a href="#The-Entropy-of-XKPasswd-Passwords">The Entropy of XKPasswd Passwords</a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#SUBROUTINES-METHODS">SUBROUTINES/METHODS</a>
+    <ul>
+      <li><a href="#DICTIONARY-FILES">DICTIONARY FILES</a></li>
+      <li><a href="#CONFIGURATION-HASHREFS">CONFIGURATION HASHREFS</a></li>
+      <li><a href="#PRESETS">PRESETS</a></li>
+      <li><a href="#ENTROPY-CHECKING">ENTROPY CHECKING</a>
+        <ul>
+          <li><a href="#CAVEATS">CAVEATS</a></li>
+        </ul>
+      </li>
+      <li><a href="#RANDOM-FUNCTIONS">RANDOM FUNCTIONS</a></li>
+      <li><a href="#FUNCTIONAL-INTERFACE">FUNCTIONAL INTERFACE</a>
+        <ul>
+          <li><a href="#xkpasswd-">xkpasswd()</a></li>
+        </ul>
+      </li>
+      <li><a href="#CONSTRUCTOR">CONSTRUCTOR</a></li>
+      <li><a href="#CLASS-METHODS">CLASS METHODS</a>
+        <ul>
+          <li><a href="#clone_config-">clone_config()</a></li>
+          <li><a href="#config_stats-">config_stats()</a></li>
+          <li><a href="#config_to_string-">config_to_string()</a></li>
+          <li><a href="#default_config-">default_config()</a></li>
+          <li><a href="#defined_presets-">defined_presets()</a></li>
+          <li><a href="#is_valid_config-">is_valid_config()</a></li>
+          <li><a href="#preset_config-">preset_config()</a></li>
+          <li><a href="#presets_to_string-">presets_to_string()</a></li>
+        </ul>
+      </li>
+      <li><a href="#METHODS">METHODS</a>
+        <ul>
+          <li><a href="#config-">config()</a></li>
+          <li><a href="#config_string-">config_string()</a></li>
+          <li><a href="#dictionary-">dictionary()</a></li>
+          <li><a href="#password-">password()</a></li>
+          <li><a href="#passwords-">passwords()</a></li>
+          <li><a href="#stats-">stats()</a></li>
+          <li><a href="#status-">status()</a></li>
+          <li><a href="#update_config-">update_config()</a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#DIAGNOSTICS">DIAGNOSTICS</a></li>
+  <li><a href="#CONFIGURATION-AND-ENVIRONMENT">CONFIGURATION AND ENVIRONMENT</a></li>
+  <li><a href="#DEPENDENCIES">DEPENDENCIES</a></li>
+  <li><a href="#INCOMPATIBILITIES">INCOMPATIBILITIES</a></li>
+  <li><a href="#BUGS-AND-LIMITATIONS">BUGS AND LIMITATIONS</a></li>
+  <li><a href="#LICENCE-AND-COPYRIGHT">LICENCE AND COPYRIGHT</a></li>
+  <li><a href="#AUTHOR">AUTHOR</a></li>
+</ul>
+
+<h1 id="NAME">NAME</h1>
+
+<p>XKPasswd - A secure memorable password generator</p>
+
+<h1 id="VERSION">VERSION</h1>
+
+<p>This documentation refers to XKPasswd version 2.1.1.</p>
+
+<h1 id="SYNOPSIS">SYNOPSIS</h1>
+
+<pre><code>    use XKPasswd;
+
+    #
+    # Functional Interface - for single passwords genereated from simple configs
+    #
+    
+    # generate a single password using words from the file
+    # sample_dict.txt using the default configuration
+    my $password = xkpasswd(&#39;sample_dict.txt&#39;);
+    
+    # generate a single password using one of the module&#39;s
+    # predefined presets exactly
+    my $password = xkpasswd(&#39;sample_dict.txt&#39;, &#39;XKCD&#39;);
+    
+    # generate a single password using one of the module&#39;s
+    # predefined presets as a starting point, but with a
+    # small customisation
+    my $password = xkpasswd(&#39;sample_dict.txt&#39;, &#39;XKCD&#39;, {separator_character =&gt; q{ }});
+    
+    #
+    # Object Oriented Interface
+    #
+    
+    # create a new instance with the default config
+    my $xkpasswd_instance = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;);
+    
+    # create an instance from the preset &#39;XKCD&#39;
+    my $xkpasswd_instance = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;, &#39;XKCD&#39;);
+    
+    # create an instance based on the preset &#39;XKCD&#39; with one customisation
+    my $xkpasswd_instance = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;, &#39;XKCD&#39;, {separator_character =&gt; q{ }});
+    
+    # create an instance from a config based on a preset
+    # but with many alterations
+    my $config = XKPasswd-&gt;preset_config(&#39;XKCD&#39;);
+    $config-&gt;{separator_character} = q{ };
+    $config-&gt;{case_transform} = &#39;INVERT&#39;;
+    $config-&gt;{padding_type} = &quot;FIXED&quot;;
+    $config-&gt;{padding_characters_before} = 1;
+    $config-&gt;{padding_characters_after} = 1;
+    $config-&gt;{padding_character} = &#39;*&#39;;
+    my $xkpasswd_instance = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;, $config);
+    
+    # create an instance from an entirely custom configuration
+    my $config = {
+        symbol_alphabet =&gt; [qw{! @ $ % ^ &amp; * + = : ~ ?}],
+        separator_alphabet =&gt; [qw{- + = . _ | ~}],
+        word_length_min =&gt; 6,
+        word_length_max =&gt; 6,
+        num_words =&gt; 3,
+        separator_character =&gt; &#39;RANDOM&#39;,
+        padding_digits_before =&gt; 2,
+        padding_digits_after =&gt; 2,
+        padding_type =&gt; &#39;FIXED&#39;,
+        padding_character =&gt; &#39;RANDOM&#39;,
+        padding_characters_before =&gt; 2,
+        padding_characters_after =&gt; 2,
+        case_transform =&gt; &#39;CAPITALISE&#39;,
+        random_function =&gt; \&amp;XKPasswd::basic_random_generator,
+        random_increment =&gt; &#39;AUTO&#39;,
+        character_substitutions =&gt; {}
+    }
+    my $xkpasswd_instance = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;, $config);
+    
+    # generate a single password
+    my $password = $xkpasswd_instance-&gt;password();
+    
+    # generate multiple passwords
+    my @passwords = $xkpasswd_instance-&gt;passwords(10);</code></pre>
+
+<h1 id="DESCRIPTION">DESCRIPTION</h1>
+
+<p>A secure memorable password generator inspired by the wonderful XKCD webcomic at <a href="http://www.xkcd.com/">http://www.xkcd.com/</a> and Steve Gibson&#39;s Password Haystacks page at <a href="https://www.grc.com/haystack.htm">https://www.grc.com/haystack.htm</a>. This is the Perl library that powers <a href="https://www.xkpasswd.net">https://www.xkpasswd.net</a>.</p>
+
+<h2 id="PHILOSOPHY">PHILOSOPHY</h2>
+
+<p>More and more of the things we do on our computer require passwords, and at the same time it seems we hear about organisations or sites losing user database on every day that ends in a <i>y</i>. If we re-use our passwords we expose ourself to an ever greater risk, but we need more passwords than we can possibly remember or invent. Coming up with one good password is easy, but coming up with one good password a week is a lot harder, let alone one a day!</p>
+
+<p>Obviously we need some technological help. We need our computers to help us generate robust password and store them securely. There are many great password managers out there to help us securely store and sync our passwords, including commercial offerings and open-source projects. Many of these managers also offer to generate random passwords for us, usually in the form of a random string of meaningless letters numbers and symbols. These kinds of nonsense passwords are certainly secure, but they are often impractical.</p>
+
+<p>Regardless of how good your chosen password manager is, there will always be times when you need to type in your passwords, and that&#39;s when random gibberish passwords become a real pain point. As annoying as it is to have to glance over and back at a small cellphone screen to manually type a gibberish password into a computer, that&#39;s nothing compared to the annoyance of trying to communicate such a password to a family member, friend, colleague or customer over the phone.</p>
+
+<p>Surely it would be better to have passwords that are still truly random in the way humans can&#39;t be, but are also human-friendly in the way random gibberish never will be? This is the problem this module aims to solve.</p>
+
+<p>Rather than randomly choosing many letters, digits, and symbols from a fairly small alphabet of possible characters, this library chooses a small number of words from a large <i>alphabet</i> of possible words as the basis for passwords. Words are easy to remember, easy to read from a screen, easy to type, and easy to communicate over the telephone.</p>
+
+<p>This module uses words to make up the bulk of the passwords it generates, but it also adds carefully placed random symbols and digits to add more security without the passwords difficult to remember, read, type, or speak.</p>
+
+<p>In shot, this module is for people who prefer passwords that look like this:</p>
+
+<pre><code>    !15.play.MAJOR.fresh.FLAT.23!</code></pre>
+
+<p>to passwords that look like this:</p>
+
+<pre><code>    eB8.GJXa@TuM</code></pre>
+
+<h2 id="THE-MATHS">THE MATHS</h2>
+
+<p>Before examining the password strength of passwords generated with this module we need to lay out the relatively simple maths underlying it all.</p>
+
+<h3 id="Maths-Primer">Maths Primer</h3>
+
+<p>A coin could be used as a very simple password generator. Each character in the password would be the result of a single coin toss. If the coin lands heads up, we add a <code>H</code> to our password, if it lands tails up, we add a <code>T</code>.</p>
+
+<p>If you made a one-letter password in this way there would only be two possibilities, <code>H</code>, or <code>T</code>, or two permutations. If you made a two-letter password in this way there would be four possible combinations, or permutations, <code>HH</code>, <code>HT</code>, <code>TH</code>, and <code>TT</code>. If you made a three-character password in this way there would be 16 permutations, a five character one would have 32 permutations, and so forth.</p>
+
+<p>So, for a coin toss, which has two possible values for each character, the formula for the number of permutations <code>P</code> for a given length of password <code>L</code> is:</p>
+
+<pre><code>    P = 2^L</code></pre>
+
+<p>Or, two to the power of the length of the password.</p>
+
+<p>If we now swapped our coin for a dice, we would go from two possible values per letter, to six possible values per letter. For one dice roll there would be six permutations, for two there would be 36, for three there would be 108 and so on.</p>
+
+<p>This means that for a dice, the number of permutations can be calculated with the formula:</p>
+
+<pre><code>    P = 6^L</code></pre>
+
+<p>When talking about passwords, the set of possible symbols used for each character in the password is referred to as the password&#39;s <i>alphabet</i>. So, for the coin toss the alphabet was just <code>H</code> and <code>T</code>, and for the dice it was <code>1</code>, <code>2</code>, <code>3</code>, <code>4</code>, <code>5</code>, and <code>6</code>. The actual characters used in the alphabet make no difference to the strength of the password, all that matters is the size of the alphabet, which we&#39;ll call <code>A</code>.</p>
+
+<p>As you can probably infer from the two examples above, the formula for the number of possible permutations <code>P</code> for a password of length <code>L</code> created from an alphabet of size <code>A</code> is:</p>
+
+<pre><code>    P = A^L</code></pre>
+
+<p>In the real world our passwords are generally made up of a mix of letters, digits, and symbols. If we use mixed case that gives us 52 letters alone, then add in the ten digits from <code>0</code> to <code>9</code> and we&#39;re already up to 62 possible characters before we even start on the array of symbols and punctuation characters on our keyboards. It&#39;s generally accepted that if you include symbols and punctuation, there are 95 characters available for use in randomly generated passwords. Hence, in the real-world, the value for <code>A</code> is assumed to be 95. When you start raising a number as big as 95 to even low powers the number of permutations quickly rises.</p>
+
+<p>A two character password with alphabet of 95 has 9025 permutations, increasing the length to three characters brings that up to 857,375, and so on. These numbers very quickly become too big to handle. For just an 8 character password we are talking about 6,634,204,312,890,625 permutations, which is a number so big most people couldn&#39;t say it (what do you call something a thousand times bigger than a trillion?).</p>
+
+<p>Because the numbers get so astronomically big so quickly, computer scientists use bits of entropy to measure password strength rather than the number of permutations. The formula to turn permutations into bits of entropy <code>E</code> is very simple:</p>
+
+<pre><code>    E = Log(2)P</code></pre>
+
+<p>In other words, the entropy is the log to base two of the permutations. For our eight character example that equates to about 52 bits.</p>
+
+<p>There are two approaches to increasing the number of permutations, and hence the entropy, you can choose more characters, or, you can make the alphabet you are choosing from bigger.</p>
+
+<h3 id="The-Entropy-of-XKPasswd-Passwords">The Entropy of XKPasswd Passwords</h3>
+
+<p>Exactly how much entropy does a password need? That&#39;s the subject of much debate, and the answer ultimately depends on the value of the assets being protected by the password.</p>
+
+<p>Two common recommendations you hear are 8 characters containing a mix of upper and lower case letters, digits, and symbols, or 12 characters with the same composition. These evaluation to approximately 52 bits of entropy and 78 bits of entropy respectively.</p>
+
+<p>When evaluating the entropy of passwords generated by this module, it has to be done from two points of view for the answer to be meaningful. Firstly, a best-case scenario - the attacker has absolutely no knowledge of how the password was generated, and hence must mount a brute-force attack. Then, secondly from the point of view of an attacker with full knowledge of how the password was generated. Not just the knowledge that this module was used, but a copy of the dictionary file used, and, a copy of the configuration settings used.</p>
+
+<p>For the purpose of this documentation, the entropy in the first scenario, the brute force attack, will be referred to as the blind entropy, and the entropy in the second scenario the seen entropy.</p>
+
+<p>The blind entropy is solely determined by the configuration settings, the seen entropy depends on both the settings and the dictionary file used.</p>
+
+<p>Calculating the bind entropy <code>Eb</code> is quite straightforward, we just need to know the size of the alphabet resulting from the configuration <code>A</code>, and the minimum length of passwords generated with the configuration <code>L</code>, and plug those values into this formula:</p>
+
+<pre><code>    Eb = Log(2)(A^L)</code></pre>
+
+<p>Calculating <code>A</code> simply involves determining whether or not the configuration results in a mix of letter cases (26 or 52 characters), the inclusion of at least one symbol (if any one is present, assume the industry standard of a 33 character search space), and the inclusion of at least one digit (10 character). This will result in a value between 26 and 95.</p>
+
+<p>Calculating <code>L</code> is also straightforward. The one minor complication is that some configurations result in a variable length password. In this case, assume the shortest possible length the configuration could produce.</p>
+
+<p>The example password from the <a href="#PHILOSOPHY">&quot;PHILOSOPHY&quot;</a> section (<code>!15.play.MAJOR.fresh.FLAT.23!</code>) was generated using the preset <code>WEB32</code>. This preset uses four words of between four and five letters long, with the case of each word randomly set to all lower or all upper as the basis for the password, it then chooses two pairs of random digits as extra words to go front and back, before separating each word with a copy of a randomly chosen symbol, and padding the front and back of the password with a copy of a different randomly chosen symbol. This results in passwords that contain a mix of cases, digits, and symbols, and are between 27 and 31 characters long. If we add these values into the formula we find that the blind entropy for passwords created with this preset is:</p>
+
+<pre><code>    Eb = Log(2)(95^27) = 163 bits</code></pre>
+
+<p>This is spectacularly secure! And, this is the most likely kind of attack for a password to face. However, to have confidence in the password we must also now calculate the entropy when the attacker knows everything about how the password was generated.</p>
+
+<p>We will calculate the entropy resulting from the same <code>WEB32</code> config being used to generate a password using the sample library file that ships with the module.</p>
+
+<p>The number of permutations the attacker needs to check is purely the product of possibly results for each random choice made during the assembly of the password.</p>
+
+<p>Lets start with the words that will form the core of the password. The configuration chooses four words of between four and five letters long from the dictionary, and then randomises their case, effectively making it a choice from twice as many words (each word in each case).</p>
+
+<p>The sample dictionary file contains 698 words of the configured length, which doubles to 1396. Choosing four words from that very large alphabet gives a starting point of <code>1396^4</code>, or 3,797,883,801,856 permutations.</p>
+
+<p>Next we need to calculate the permutations for the separator character. The configuration specifies just nine permitted characters, and we choose just one, so that equates to 9 permutations.</p>
+
+<p>Similarly, the padding character on the end is chosen from 13 permitted symbols giving 13 more permutations.</p>
+
+<p>Finally, there are four randomly chosen digits, giving <code>10^4</code>, or 10,000 permutations.</p>
+
+<p>The total number of permutations is the product of all these permutations:</p>
+
+<pre><code>    Pseen = 3,797,883,801,856 * 9 * 13 * 10,000 = 2.77x10^17
+    </code></pre>
+
+<p>Finally, we convery this to entropy by taking the base 2 log:</p>
+
+<pre><code>    Eseen = Log(2)2.77x10^17 = ~57bits
+    </code></pre>
+
+<p>What this means is that most probably, passwords generated with this preset using the sample dictionary file are spectacularly more secure than even 12 randomly chosen characters, and, that in the very unlikely event that an attackers knows absolutely everything about how the password was generated, it is still significantly more secure than 8 randomly chosen characters.</p>
+
+<p>Because the exact strength of the passwords produced by this module depend on the configuration and dictionary file used, the constructor does the above math when creating an XKPasswd object, and throws a warning if either the blind entropy falls below 78bits, or the seen entropy falls below 52 bits.</p>
+
+<h1 id="SUBROUTINES-METHODS">SUBROUTINES/METHODS</h1>
+
+<h2 id="DICTIONARY-FILES">DICTIONARY FILES</h2>
+
+<p>XKPasswd instances load their word lists from text files. The constructor loads the words contained in a single file into memory when assembling an XKPasswd object. Once constructed, the object never reads from the file again. Throughout this documentation, the text file containing the words to be used is referred to as <i>the Dictionary File</i>, and specified via the <code>dictionary_file_path</code> config variable.</p>
+
+<p>The rules for the formatting of dictionary files are simple. Dictionary files must contain one word per line. Words shorter than four letters will be ignored, as will all lines starting with the # symbol.</p>
+
+<p>This format is the same as that of the standard Unix Words file, usually found at <code>/usr/share/dict/words</code> on Unix and Linux operating systems (including OS X).</p>
+
+<p>In order to produce secure passwords it&#39;s important to use a dictionary file that contains a large selection of words with a good mix of different word lengths.</p>
+
+<p>A sample dictionary file (<code>sample_dict.txt</code>) is distributed with this module.</p>
+
+<h2 id="CONFIGURATION-HASHREFS">CONFIGURATION HASHREFS</h2>
+
+<p>A number of subroutines require a configuration hashref as an argument. The following are the valid keys for that hashref, what they mean, and what values are valid for each.</p>
+
+<ul>
+
+<li><p><code>case_transform</code> - the alterations that should be made to the case of the letters in the randomly chosen words that make up the bulk of the randomly generated passwords. Must be a scalar, and the only valid values for this key are:</p>
+
+<dl>
+
+<dt id="pod-">-</dt>
+<dd>
+
+<p><code>ALTERNATE</code> - each alternate word will be converted to all upper case and all lower case.</p>
+
+</dd>
+<dt id="pod-1">-</dt>
+<dd>
+
+<p><code>CAPITALISE</code> - the first letter in every word will be converted to upper case, all other letters will be converted to lower case.</p>
+
+</dd>
+<dt id="pod-2">-</dt>
+<dd>
+
+<p><code>INVERT</code> - the first letter in every word will be converted to lower case, all other letters will be converted to upper case.</p>
+
+</dd>
+<dt id="pod-3">-</dt>
+<dd>
+
+<p><code>LOWER</code> - all letters in all the words will be converted to lower case. <b>Use of this option is strongly discouraged for security reasons.</b></p>
+
+</dd>
+<dt id="pod-4">-</dt>
+<dd>
+
+<p><code>NONE</code> - the capitalisation used in the randomly generated password will be the same as it is in the dictionary file.</p>
+
+</dd>
+<dt id="pod-5">-</dt>
+<dd>
+
+<p><code>RANDOM</code> - each word will be randomly converted to all upper case or all lower case.</p>
+
+</dd>
+<dt id="pod-6">-</dt>
+<dd>
+
+<p><code>UPPER</code> - all letters in all the words will be converted to upper case. <b>Use of this option is strongly discouraged for security reasons.</b></p>
+
+</dd>
+</dl>
+
+<p>The default value returned by <code>default_config()</code> is <code>CAPITALISE</code>.</p>
+
+</li>
+<li><p><code>character_substitutions</code> - a hashref containing zero or more character substitutions to be applied to the words that make up the bulk of the generated passwords. The keys in the hashref are the characters to be replaced, and must be single alpha numeric characters, while the values in the hashrefs are the replacements, and can be longer.</p>
+
+</li>
+<li><p><code>num_words</code> - the number of randomly chosen words use as the basis for the generated passwords. The default value is four. For security reasons, at least two words must be used.</p>
+
+</li>
+<li><p><code>pad_to_length</code> - the total desired length of the password when using adaptive padding (<code>padding_type</code> set to <code>ADAPTIVE</code>). Must be a scalar with an integer values greater than or equal to 12 (for security reasons).</p>
+
+</li>
+<li><p><code>padding_character</code> - the character to use when padding the front and/or back of the randomly generated password. Must be a scalar containing either a single character or one of the special values <code>RANDOM</code> (indicating that a character should be chosen at random from the <code>symbol_alphabet</code>), or <code>SEPARATOR</code> (use the same character used to separate the words). This key is only needed if <code>padding_type</code> is set to <code>FIXED</code> or <code>ADAPTIVE</code>. The default value returned by <code>default_config</code> is <code>RANDOM</code>.</p>
+
+</li>
+<li><p><code>padding_characters_before</code> &amp; <code>padding_characters_after</code> - the number of symbols to pad the front and end of the randomly generated password with. Must be a scalar with an integer value greater than or equal to zero. These keys are only needed if <code>padding_type</code> is set to <code>FIXED</code>. The default value returned by <code>default_config()</code> for both these keys is 2.</p>
+
+</li>
+<li><p><code>padding_digits_before</code> &amp; <code>padding_digits_after</code> - the number of random digits to include before and after the randomly chosen words making up the bulk of the randomly generated password. Must be scalars containing integer values greater than or equal to zero. The default value returned by <code>default_config()</code> for both these keys is 2.</p>
+
+</li>
+<li><p><code>padding_type</code> - the type of symbol padding to be added at the start and/or end of the randomly generated password. Must be a scalar with one of the following values:</p>
+
+<dl>
+
+<dt id="pod-7">-</dt>
+<dd>
+
+<p><code>NONE</code> - do not pad the generated password with any symbol characters.</p>
+
+</dd>
+<dt id="pod-8">-</dt>
+<dd>
+
+<p><code>FIXED</code> - a specified number of symbols will be added to the front and/or back of the randomly generated password. If this option is chosen, you must also specify the keys <code>padding_character</code>, <code>padding_characters_before</code> &amp; <code>padding_characters_after</code>.</p>
+
+</dd>
+<dt id="pod-9">-</dt>
+<dd>
+
+<p><code>ADAPTIVE</code> - no symbols will be added to the start of the randomly generated password, and the appropriate number of symbols will be added to the end to make the generated password exactly a certain length. The desired length is specified with the key <code>pad_to_length</code>, which is required if this padding type is specified.</p>
+
+</dd>
+</dl>
+
+<p>The default value returned by <code>default_config()</code> is <code>FIXED</code>.</p>
+
+</li>
+<li><p><code>random_function</code> - a reference to the function to be used use to generate random numbers during the password generation process. The function generate an array of random decimal numbers between 0 and 1, take one argument, the number of random numbers to generate, and it must return an array. By default the function <code>XKPasswd::basic_random_generator()</code> is used.</p>
+
+</li>
+<li><p><code>random_increment</code> - the number of random digits to generate at a time when ever the instance&#39;s cache of randomness runs low. Must be an integer greater than or equal to 1, or the special value <code>AUTO</code>. When the value is set to <code>AUTO</code> a call to <code>config_stats()</code> is used to determine the amount of random numbers needed to generate a single password, and this value is used as the random increment. The default value is c&lt;AUTO&gt;.</p>
+
+</li>
+<li><p><code>separator_alphabet</code> - this key is optional. It can be used to override the contents of <code>symbol_alphabet</code> when <code>separator_character</code> is set to <code>RANDOM</code>. If present this key must contain an arrayref containing at least two single characters as scalars.</p>
+
+</li>
+<li><p><code>separator_character</code> - the character to use to separate the words in the generated password. Must be a scalar, and acceptable values are a single character, or, the special values <code>NONE</code> (indicating that no separator should be used), or <code>RANDOM</code>, indicating that a character should be chosen at random from the <code>symbol_alphabet</code>. The default value returned by <code>default_config()</code> is <code>RANDOM</code>.</p>
+
+</li>
+<li><p><code>symbol_alphabet</code> - an arrayref containing at least two single characters as scalars. This alphabet will be used when selecting random characters to act as the separator between words, or the padding at the start and/or end of generated passwords. The default value returned by <code>default_config()</code> is <code>[qw{! @ $ % ^ &amp; * - _ + = : | ~ ?}]</code></p>
+
+</li>
+<li><p><code>word_length_min</code> &amp; <code>word_length_max</code> - the minimum and maximum length of the words that will make up the generated password. The two keys must be scalars, and can hold equal values, but <code>word_length_max</code> may not be smaller than <code>word_length_min</code>. For security reasons, both values must be greater than 3. The default values returned by <code>default_config()</code> is are 4 &amp; 8.</p>
+
+</li>
+</ul>
+
+<h2 id="PRESETS">PRESETS</h2>
+
+<p>For ease of use, this module comes with a set of pre-defined presets. Preset names can be used in place of config hashrefs when instantiating an XKPasswd object, or, when using the functional interface to XKPasswd.</p>
+
+<p>Presets can be used as-is, or, they can be used as a starting point for creating your own config hashref, as demonstrated by the following example:</p>
+
+<pre><code>    my $config = XKPasswd-&gt;preset_config(&#39;XKCD&#39;);
+    $config-&gt;{separator_character} = q{ }; # change the separator to a space
+    my $xkpasswd = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;, $config);
+    </code></pre>
+
+<p>If you only wish to alter a small number of config settings, the following two shortcuts might be of interest (both produce the same result as the example above):</p>
+
+<pre><code>    my $config = XKPasswd-&gt;preset_config(&#39;XKCD&#39;, {separator_character =&gt; q{ }});
+    my $xkpasswd = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;, $config);
+    </code></pre>
+
+<p>or</p>
+
+<pre><code>    my $xkpasswd = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;, $config, {separator_character =&gt; q{ }});</code></pre>
+
+<p>For more see the definitions for the class functions <code>defined_presets()</code>, <code>presets_to_string()</code>, and <code>preset_config()</code>.</p>
+
+<p>The following presets are defined:</p>
+
+<ul>
+
+<li><p><code>APPLEID</code> - a preset respecting the many prerequisites Apple places on Apple ID passwords. Apple&#39;s official password policy is located here: <a href="http://support.apple.com/kb/ht4232">http://support.apple.com/kb/ht4232</a>. Note that Apple&#39;s knowledge base article omits to mention that passwords can&#39;t be longer than 32 characters. This preset is also configured to use only characters that are easy to type on the standard iOS keyboard, i.e. those appearing on the letters keyboard (<code>ABC</code>) or the numbers keyboard <code>.?123</code>, and not those on the harder to reach symbols keyboard <code>#+=</code>. Below is a sample password generated with this preset:</p>
+
+<pre><code>    @60:london:TOUGHT:forget:70@</code></pre>
+
+</li>
+<li><p><code>DEFAULT</code> - the default configuration. Below is a sample password generated with this preset:</p>
+
+<pre><code>    ~~12:Settle:Whether:Succeed:Summer:48~~</code></pre>
+
+</li>
+<li><p><code>NTLM</code> - a preset for 14 character NTMLv1 (NTLM Version 1) passwords. ONLY USE THIS PRESET IF YOU MUST! The 14 character limit does not allow for sufficient entropy in the case where the attacker knows the dictionary and config used to generate the password, hence this preset will generate low entropy warnings. Below is a sample password generated with this preset:</p>
+
+<pre><code>    0=mAYAN=sCART@</code></pre>
+
+</li>
+<li><p><code>SECURITYQ</code> - a preset for creating fake answers to security questions. It generates long nonsense sentences ending in <code>.</code> <code>!</code> or <code>?</code>, for example:</p>
+
+<pre><code>    Wales outside full month minutes gentle?</code></pre>
+
+</li>
+<li><p><code>WEB16</code> - a preset for websites that don&#39;t allow more than 16 character long passwords. Because 16 characters is not very long, a large set of symbols are chosen from for the padding and separator. Below is a sample password generated with this preset:</p>
+
+<pre><code>    :baby.ohio.DEAR:
+    </code></pre>
+
+</li>
+<li><p><code>WEB32</code> - a preset for websites that don&#39;t allow more than 16 character long passwords. Below is a sample password generated with this preset:</p>
+
+<pre><code>    +93-took-CASE-money-AHEAD-31+</code></pre>
+
+</li>
+<li><p><code>WIFI</code> - a preset for generating 63 character long WPA2 keys (most routers allow 64 characters, but some only 63, hence the odd length). Below is a sample password generated with this preset:</p>
+
+<pre><code>    2736_ITSELF_PARTIAL_QUICKLY_SCOTLAND_wild_people_7441!!!!!!!!!!</code></pre>
+
+</li>
+<li><p><code>XKCD</code> - a preset inspired by the original XKCD comic (<a href="http://xkcd.com/936/">http://xkcd.com/936/</a>), but with some alterations to provide sufficient entropy to avoid low entropy warnings. Below is a sample password generated with this preset:</p>
+
+<pre><code>    KING-madrid-exercise-BELGIUM</code></pre>
+
+</li>
+</ul>
+
+<h2 id="ENTROPY-CHECKING">ENTROPY CHECKING</h2>
+
+<p>For security reasons, this module&#39;s default behaviour is to warn (using <code>carp()</code>) when ever the loaded combination dictionary file and configuration would result in low-entropy passwords. When the constructor is invoked, or when a new dictionary file or new config hashref are loaded into an object (using <code>dictionary()</code> or <code>config()</code>) the entropy of the resulting new state of the object is calculated and checked against the defined minima.</p>
+
+<p>Entropy is calculated and checked for two scenarios. Firstly, for the best-case scenario, when an attacker has no prior knowledge about the password, and must resort to brute-force attacks. And secondly, for the worst-case scenario, when the attacker is assumed to know that this module was used to generate the password, and, that the attacker has a copy of the dictionary file and config settings used to generate the password.</p>
+
+<p>Entropy checking is controlled via three package variables:</p>
+
+<ul>
+
+<li><p><code>$XKPasswd::ENTROPY_MIN_BLIND</code> - the minimum acceptable entropy (in bits) for a brute-force attack. The default value for this variable is 78 (equivalent to a 12 character password consisting of mixed-case letters, digits, and symbols).</p>
+
+</li>
+<li><p><code>$XKPasswd::ENTROPY_MIN_SEEN</code> - the minimum acceptable entropy (in bits) for a worst-case attack (where the dictionary and configuration are known). The default value for this variable is 52 (equivalent to an 8 character password consisting of mixed-case letters, digits, and symbols).</p>
+
+</li>
+<li><p><code>$XKPasswd::SUPRESS_ENTROPY_WARNINGS</code> - this variable can be used to suppress one or both of the entropy warnings. The following values are valid (invalid values are treated as being <code>NONE</code>):</p>
+
+<dl>
+
+<dt id="pod-10">-</dt>
+<dd>
+
+<p><code>NONE</code> - no warnings are suppressed. This is the default value.</p>
+
+</dd>
+<dt id="pod-11">-</dt>
+<dd>
+
+<p><code>SEEN</code> - only warnings for the worst-case scenario are suppressed.</p>
+
+</dd>
+<dt id="pod-12">-</dt>
+<dd>
+
+<p><code>BLIND</code> - only warnings for the best-case scenario are suppressed.</p>
+
+</dd>
+</dl>
+
+</li>
+</ul>
+
+<h3 id="CAVEATS">CAVEATS</h3>
+
+<p>The entropy calculations make some assumptions which may in some cases lead to the results being inaccurate. In general, an attempt has been made to always round down, meaning that in reality the entropy of the produced passwords may be higher than the values calculated by the package.</p>
+
+<p>When calculating the entropy for brute force attacks on configurations that can result in variable length passwords, the shortest possible password is assumed.</p>
+
+<p>When calculating the entropy for brute force attacks on configurations that contain at least one symbol, it is assumed that an attacker would have to brute-force-check 33 symbols. This is the same value used by Steve Gibson&#39;s <i>Password Haystacks</i> calculator (<a href="https://www.grc.com/haystack.htm">https://www.grc.com/haystack.htm</a>).</p>
+
+<p>When calculating the entropy for worst-case attacks on configurations that contain symbol substitutions where the replacement is more than 1 character long the possible extra length is ignored.</p>
+
+<h2 id="RANDOM-FUNCTIONS">RANDOM FUNCTIONS</h2>
+
+<p>In order to avoid this module relying on any non-standard modules, the default source of randomness is Perl&#39;s built-in <code>rand()</code> function. This provides a reasonable level of randomness, and should suffice for most users, however, some users will prefer to make use of one of the many advanced randomisation modules in CPAN, or, reach out to a web service like <a href="http://random.org">http://random.org</a> for their randomness. To facilitate both of these options, this module uses a cache of randomness, and allows a custom randomness function to be specified by setting the config variable <code>random_function</code> to a coderef to the function.</p>
+
+<p>Functions specified in this way must take exactly one argument, an integer number greater than zero, and then return that many random decimal numbers between zero and one.</p>
+
+<p>The random function is not called each time a random number is needed, instead a number of random numbers are generated at once, and cached until they are needed. The amount of random numbers generated at once is controlled by the <code>random_increment</code> config variable. The reason the module works in this way is to facilitate web-based services which prefer you to generate many numbers at once rather than invoking them repeatedly. For example, Random.org ask developers to query them for more random numbers less frequently.</p>
+
+<h2 id="FUNCTIONAL-INTERFACE">FUNCTIONAL INTERFACE</h2>
+
+<p>Although the package was primarily designed to be used in an object-oriented way, there is a functional interface too. The functional interface initialises an object internally and then uses that object to generate a single password. If you only need one password, this is no less efficient than the object-oriented interface, however, if you are generating multiple passwords it is much less efficient.</p>
+
+<p>There is only a single function exported by the module:</p>
+
+<h3 id="xkpasswd-">xkpasswd()</h3>
+
+<pre><code>    my $password = xkpasswd(&#39;sample_dict.txt&#39;);
+    </code></pre>
+
+<p>This function call is equivalent to the following Object-Oriented code:</p>
+
+<pre><code>    my $xkpasswd = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;);
+    my $password = $xkpasswd-&gt;password();
+    </code></pre>
+
+<p>This function passes its arguments through to the constructor, so all arguments that are valid in <code>new()</code> are valid here.</p>
+
+<p>This function Croaks if there is a problem generating the password.</p>
+
+<p>Note that it is inefficient to use this function to generate multiple passwords because the dictionary file will be re-loaded, and the entropy calculations for ensuring security repeated, each time a password is generated.</p>
+
+<h2 id="CONSTRUCTOR">CONSTRUCTOR</h2>
+
+<pre><code>    # create a new instance with the default config
+    my $xkpasswd_instance = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;);
+    
+    # create an instance from the preset &#39;XKCD&#39;
+    my $xkpasswd_instance = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;, &#39;XKCD&#39;);
+    
+    # create an instance based on the preset &#39;XKCD&#39; with one customisation
+    my $xkpasswd_instance = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;, &#39;XKCD&#39;, {separator_character =&gt; q{ }});
+    
+    # create an instance from a config hashref
+    my $xkpasswd_instance = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;, $config_hashref);</code></pre>
+
+<p>The constructor must be called via the package name, and at least one argument must be passed, the path to the dictionary file to be used when generating the words.</p>
+
+<p>If only one argument is passed the default values are used for all config keys. To use a different configuration, a second argument can be passed. If this argument is a scalar it will be assumed to be the name of a preset, and if it is a hashref it is assumed to be the config to load.</p>
+
+<p>If a preset name is passed as a second argument, a hashref with config key overrides can be passed as a third argument. If the second argument is a hashref the third argument is ignored.</p>
+
+<h2 id="CLASS-METHODS">CLASS METHODS</h2>
+
+<p><b>NOTE</b> - All class methods must be invoked via the package name, or they will croak.</p>
+
+<h3 id="clone_config-">clone_config()</h3>
+
+<pre><code>    my $clone = XKPasswd-&gt;clone_config($config);
+    </code></pre>
+
+<p>This function must be passed a valid config hashref as the first argument or it will croak. The function returns a hashref.</p>
+
+<h3 id="config_stats-">config_stats()</h3>
+
+<pre><code>    my %stats = XKPasswd-&gt;config_stats($config);
+    </code></pre>
+
+<p>This function requires one argument, a valid config hashref. It returns a hash of statistics about a given configuration. The hash is indexed by the following:</p>
+
+<ul>
+
+<li><p><code>length_min</code> - the minimum length a password generated with the given config could be.</p>
+
+</li>
+<li><p><code>length_max</code> - the maximum length a password generated with the given config could be. (see caveat below)</p>
+
+</li>
+<li><p><code>random_numbers_required</code> - the amount of random numbers needed to generate a password using the given config.</p>
+
+</li>
+</ul>
+
+<p>There is one scenario in which the calculated maximum length will not be reliably accurate, and that&#39;s when a character substitution with a length greater than 1 is specified, and <code>padding_type</code> is not set to <code>ADAPTIVE</code>. If the config passed contains such a character substitution, the length will be calculated ignoring the possibility that one or more extra characters could be introduced depending on how many, if any, of the long substitutions get triggered by the randomly chosen words. If this happens the function will also carp with a warning.</p>
+
+<h3 id="config_to_string-">config_to_string()</h3>
+
+<pre><code>    my $config_string = XKPasswd-&gt;config_to_string($config);
+    </code></pre>
+
+<p>This function returns the content of the passed config hashref as a scalar string. The function must be passed a valid config hashref or it will croak.</p>
+
+<h3 id="default_config-">default_config()</h3>
+
+<pre><code>    my $config = XKPasswd-&gt;default_config();</code></pre>
+
+<p>This function returns a hashref containing a config with default values.</p>
+
+<p>This function can optionally be called with a single argument, a hashref containing keys with values to override the defaults with.</p>
+
+<pre><code>    my $config = XKPasswd-&gt;default_config({num_words =&gt; 3});
+    </code></pre>
+
+<p>When overrides are present, the function will carp if an invalid key or value is passed, and croak if the resulting merged config is invalid.</p>
+
+<p>This function is a shortcut for <code>preset_config()</code>, and the two examples above are equivalent to the following:</p>
+
+<pre><code>    my $config = XKPasswd-&gt;preset_config(&#39;DEFAULT&#39;);
+    my $config = XKPasswd-&gt;preset_config(&#39;DEFAULT&#39;, {num_words =&gt; 3});</code></pre>
+
+<h3 id="defined_presets-">defined_presets()</h3>
+
+<pre><code>    my @preset_names = XKPasswd-&gt;defined_presets();
+    </code></pre>
+
+<p>This function returns the list of defined preset names as an array of scalars.</p>
+
+<h3 id="is_valid_config-">is_valid_config()</h3>
+
+<pre><code>    my $is_ok = XKPasswd-&gt;is_valid_config($config);
+    </code></pre>
+
+<p>This function must be passed a hashref to test as the first argument or it will croak. The function returns 1 if the passed config is valid, and 0 otherwise.</p>
+
+<p>Optionally, any truthy value can be passed as a second argument to indicate that the function should croak on invalid configs rather than returning 0;</p>
+
+<pre><code>    use English qw( -no_match_vars );
+    eval{
+        XKPasswd-&gt;is_valid_config($config, &#39;do_croak&#39;);
+    }or do{
+        print &quot;ERROR - config is invalid because: $EVAL_ERROR\n&quot;;
+    }</code></pre>
+
+<h3 id="preset_config-">preset_config()</h3>
+
+<pre><code>    my $config = XKPasswd-&gt;preset_config(&#39;XKCD&#39;);
+    </code></pre>
+
+<p>This function returns the config hashref for a given preset. See above for the list of available presets.</p>
+
+<p>The first argument this function accpets is the name of the desired preset as a scalar. If an invalid name is passed, the function will carp. If no preset is passed the preset <code>DEFAULT</code> is assumed.</p>
+
+<p>This function can optionally accept a second argument, a hashref containing keys with values to override the defaults with.</p>
+
+<pre><code>    my $config = XKPasswd-&gt;preset_config(&#39;XKCD&#39;, {case_transform =&gt; &#39;INVERT&#39;});
+    </code></pre>
+
+<p>When overrides are present, the function will carp if an invalid key or value is passed, and croak if the resulting merged config is invalid.</p>
+
+<h3 id="presets_to_string-">presets_to_string()</h3>
+
+<pre><code>    print XKPasswd-&gt;presets_to_string();
+    </code></pre>
+
+<p>This function returns a string containing a description of each defined preset and the configs associated with the presets.</p>
+
+<h2 id="METHODS">METHODS</h2>
+
+<p><b>NOTE</b> - all methods must be invoked on an XKPasswd object or they will croak.</p>
+
+<h3 id="config-">config()</h3>
+
+<pre><code>    my $config = $xkpasswd_instance-&gt;config(); # getter
+    $xkpasswd_instance-&gt;config($config); # setter</code></pre>
+
+<p>When called with no arguments the function returns a clone of the instance&#39;s config hashref.</p>
+
+<p>When called with a single argument the function sets the config of the instance to a clone of the passed hashref. If present, the argument must be a hashref, and must contain valid config keys and values. The function will croak if an invalid config is passed.</p>
+
+<h3 id="config_string-">config_string()</h3>
+
+<pre><code>    my $config_string = $xkpasswd_instance-&gt;config_string();
+    </code></pre>
+
+<p>This function returns the content of the passed config hashref as a scalar string. The function must be passed a valid config hashref or it will croak.</p>
+
+<h3 id="dictionary-">dictionary()</h3>
+
+<pre><code>    print $xkpasswd_instance-&gt;dictionary();
+    $xkpasswd_instance-&gt;dictionary(&#39;sample_dict.txt&#39;);
+    </code></pre>
+
+<p>When called with no arguments this function returns the path to the currently loaded dictionary file. To load a dictionary file into an instance call this function with the path to the dictionary file.</p>
+
+<h3 id="password-">password()</h3>
+
+<pre><code>    my $password = $xkpasswd_instance-&gt;password();
+    </code></pre>
+
+<p>This function generates a random password based on the instance&#39;s loaded config and returns it as a scalar. The function takes no arguments.</p>
+
+<p>The function croaks if there is an error generating the password. The most likely cause of and error is the random number generation, particularly if the loaded random generation function relies on a cloud service or a non-standard library.</p>
+
+<h3 id="passwords-">passwords()</h3>
+
+<pre><code>    my @passwords = $xkpasswd_instance-&gt;passwords(10);
+    </code></pre>
+
+<p>This function generates a number of passwords and returns them all as an array.</p>
+
+<p>The function uses <code>password()</code> to genereate the passwords, and hence will croak if there is an error generating any of the requested passwords.</p>
+
+<h3 id="stats-">stats()</h3>
+
+<pre><code>    my %stats = $xkpasswd_instance-&gt;stats();
+    </code></pre>
+
+<p>This function generates a hash containing stats about the instance indexed by the following keys:</p>
+
+<ul>
+
+<li><p><code>dictionary_filter_length_min</code> &amp; <code>dictionary_filter_length_max</code> - the minimum and maximum word lengths allowed by the dictionary filter (defined by config keys <code>word_length_min</code> and <code>word_length_max</code>)</p>
+
+</li>
+<li><p><code>dictionary_path</code> - the path to the dictionary file loaded into the instance.</p>
+
+</li>
+<li><p><code>dictionary_words_filtered</code> - the number of words loaded from the dictionary file that meet the criteria defined by the loaded config.</p>
+
+</li>
+<li><p><code>dictionary_words_percent_avaialable</code> - the percentage of the words in the dictionary file that are available for use with the loaded config.</p>
+
+</li>
+<li><p><code>dictionary_words_total</code> - the total number of words loaded from the dictionary file.</p>
+
+</li>
+<li><p><code>password_entropy_blind_min</code> - the entropy (in bits) of the shortest password the loaded config can generate from the point of view of a brute-force attacker.</p>
+
+</li>
+<li><p><code>password_entropy_blind_max</code> - the entropy (in bits) of the longest password the loaded config can generate from the point of view of a brute-force attacker.</p>
+
+</li>
+<li><p><code>password_entropy_blind</code> - the entropy (in bits) of the average length of passwords the loaded config can generate from the point of view of a brute-force attacker.</p>
+
+</li>
+<li><p><code>password_entropy_seen</code> - the entropy (in bits) of passwords generated by the instance assuming the dictionary and config are known to the attacker.</p>
+
+</li>
+<li><p><code>password_length_min</code> - the minimum length of passwords generated by the loaded config.</p>
+
+</li>
+<li><p><code>password_length_max</code> - the maximum length of passwords generated by the loaded config.</p>
+
+</li>
+<li><p><code>password_permutations_blind_min</code> - the number of permutations a brute-force attacker would have to try to be sure of cracking the shortest possible passwords generated by this instance. Because this number can be very big, it&#39;s returned as a <code>Math::BigInt</code> object.</p>
+
+</li>
+<li><p><code>password_permutations_blind_max</code> - the number of permutations a brute-force attacker would have to try to be sure of cracking the longest possible passwords generated by this instance. Because this number can be very big, it&#39;s returned as a <code>Math::BigInt</code> object.</p>
+
+</li>
+<li><p><code>password_permutations_blind</code> - the number of permutations a brute-force attacker would have to try to be sure of cracking an average length password generated by this instance. Because this number can be very big, it&#39;s returned as a <code>Math::BigInt</code> object.</p>
+
+</li>
+<li><p><code>password_permutations_seen</code> - the number of permutations an attacker with a copy of the dictionary and config would need to try to be sure of cracking a password generated by this instance. Because this number can be very big, it&#39;s returned as a <code>Math::BigInt</code> object.</p>
+
+</li>
+<li><p><code>passwords_generated</code> - the number of passwords this instance has generated.</p>
+
+</li>
+<li><p><code>password_random_numbers_required</code> - the number of random numbers needed to generate a single password using the loaded config.</p>
+
+</li>
+<li><p><code>randomnumbers_cached</code> - the number of random numbers currently cached within the instance.</p>
+
+</li>
+<li><p><code>randomnumbers_cache_increment</code> - the number of random numbers generated at once to replenish the cache when it&#39;s empty.</p>
+
+</li>
+<li><p><code>randomnumbers_generator_function</code> - the function used by the instance to generate random numbers.</p>
+
+</li>
+</ul>
+
+<h3 id="status-">status()</h3>
+
+<pre><code>    print $xkpasswd_instance-&gt;status();
+    </code></pre>
+
+<p>Generates a string detailing the internal status of the instance. Below is a sample status string:</p>
+
+<pre><code>    *DICTIONARY*
+    File path: /usr/share/dict/words
+    # words: 234252
+    # words of valid length: 87066
+
+    *CONFIG*
+    case_transform: &#39;CAPITALISE&#39;
+    character_substitutions: {}
+    num_words: &#39;4&#39;
+    padding_digits_after: &#39;0&#39;
+    padding_digits_before: &#39;0&#39;
+    padding_type: &#39;NONE&#39;
+    random_function: XKPasswd::basic_random_generator
+    random_increment: &#39;4&#39;
+    separator_character: &#39;-&#39;
+    word_length_max: &#39;8&#39;
+    word_length_min: &#39;4&#39;
+
+    *RANDOM NUMBER CACHE*
+    # in cache: 0
+
+    *PASSWORD STATISTICS*
+    Password length: between 19 &amp; 35
+    Brute-Force permutations: between 2.29x10^33 &amp; 2.85x10^61 (average 2.56x10^47)
+    Permutations (given dictionary &amp; config): 5.74x10^19
+    Brute-Force Entropy (in bits): between 110 and 204 (average 157)
+    Entropy (given dictionary &amp; config): 65bits
+    Passwords Generated: 0</code></pre>
+
+<h3 id="update_config-">update_config()</h3>
+
+<pre><code>    $xkpasswd_instance-&gt;update_config({separator_character =&gt; &#39;+&#39;});
+    </code></pre>
+
+<p>The function updates the config within an XKPasswd instance. A hashref with the config options to be changed must be passed. The function returns a reference to the instance to enable function chaining. The function will croak if the updated config would be invalid in some way. Note that if this happens the running config will not have been altered in any way.</p>
+
+<h1 id="DIAGNOSTICS">DIAGNOSTICS</h1>
+
+<p>By default this module does all of it&#39;s error notification via the functions <code>carp()</code>, <code>croak()</code>, and <code>confess()</code> from the <code>Carp</code> module. Optionally, all error messages can also be printed. To enable the printing of messages, set <code>$XKPasswd::LOG_ERRORS</code> to a true. All error messages will then be printed to the stream at <code>$XKPasswd::LOG_STREAM</code>, which is set to <code>STDERR</code> by default.</p>
+
+<p>Ordinarly this module produces very little output, to enable more verbose output <code>$XKPasswd::DEBUG</code> can be set to a truthy value. If this is set, all debug messages will be printed to the stream <code>$XKPasswd::LOG_STREAM</code>.</p>
+
+<h1 id="CONFIGURATION-AND-ENVIRONMENT">CONFIGURATION AND ENVIRONMENT</h1>
+
+<p>This module does not currently support configuration files, nor does it currently interact with the environment. It may do so in future versions.</p>
+
+<h1 id="DEPENDENCIES">DEPENDENCIES</h1>
+
+<ul>
+
+<li><p><code>Carp</code> - <a href="http://search.cpan.org/perldoc?Carp">http://search.cpan.org/perldoc?Carp</a></p>
+
+</li>
+</ul>
+
+<h1 id="INCOMPATIBILITIES">INCOMPATIBILITIES</h1>
+
+<p>This module has no known incompatibilities.</p>
+
+<h1 id="BUGS-AND-LIMITATIONS">BUGS AND LIMITATIONS</h1>
+
+<p>There are no known bugs in this module.</p>
+
+<p>Please report problems to Bart Busschots (<a href="mailto:bart@bartificer.net">mailto:bart@bartificer.net</a>) Patches are welcome.</p>
+
+<h1 id="LICENCE-AND-COPYRIGHT">LICENCE AND COPYRIGHT</h1>
+
+<p>Copyright (c) 2014, Bart Busschots T/A Bartificer Web Solutions All rights reserved.</p>
+
+<p>Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:</p>
+
+<ol>
+
+<li><p>Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.</p>
+
+</li>
+<li><p>Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.</p>
+
+</li>
+</ol>
+
+<p>THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.</p>
+
+<h1 id="AUTHOR">AUTHOR</h1>
+
+<p>Bart Busschots (<a href="mailto:bart@bartificer.net">mailto:bart@bartificer.net</a>)</p>
+
+
+</body>
+
+</html>
+
+
