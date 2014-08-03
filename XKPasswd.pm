@@ -1,5 +1,6 @@
 package XKPasswd;
 
+# import required modules
 use strict;
 use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
@@ -7,7 +8,11 @@ use English qw( -no_match_vars ); # for more readable code
 use B qw(svref_2object); # for code ref->name conversion
 use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
-use Devel::StackTrace; # for better error reporting
+
+# import (or not) optional modules
+my $_CAN_STACK_TRACE = eval{
+    require Devel::StackTrace; # for better error reporting when debugging
+};
 
 ## no critic (ProhibitAutomaticExportation);
 use base qw( Exporter );
@@ -1502,6 +1507,16 @@ sub status{
     $status .= "Entropy (given dictionary & config): $stats{password_entropy_seen}bits\n";
     $status .= "Passwords Generated: $stats{passwords_generated}\n";
     
+    # debug-only info
+    if($DEBUG){
+        $status .= "\n*DEBUG INFO*\n";
+        if($_CAN_STACK_TRACE){
+            $status .= "Devel::StackTrace IS installed\n";
+        }else{
+            $status .= "Devel::StackTrace is NOT installed\n";
+        }
+    }
+    
     # return the status
     return $status;
 }
@@ -1596,7 +1611,8 @@ sub basic_random_generator{
 #                message is also printed
 #              * 'ERROR' - output is confessed if $DEBUG and croaked otherwise.
 #                If $LOG_ERRORS is true the message is also printed with a
-#                stack trace
+#                stack trace (the stack trace is omited if Devel::StackTrace) is
+#                not installed.
 # See Also   : _debug(), _warn() & _error()
 ## no critic (ProhibitExcessComplexity);
 sub _log{
@@ -1614,7 +1630,11 @@ sub _log{
     unless(defined $message && ref $message eq q{}){
         my $output = 'ERROR - '.(caller 0)[3]."(): invoked with severity '$severity' without message at ".(caller 1)[1].q{:}.(caller 1)[2];
         if($LOG_ERRORS){
-            print {$LOG_STREAM} "$output\nStack Trace:\n".Devel::StackTrace->new()->as_string();
+            my $log_output = $output;
+            if($_CAN_STACK_TRACE){
+                $log_output .= "\nStack Trace:\n".Devel::StackTrace->new()->as_string();
+            }
+            print {$LOG_STREAM} $log_output."\n";
         }
         confess($output);
     }
@@ -1672,11 +1692,12 @@ sub _log{
     }elsif($severity eq 'ERROR'){
         # error - print if needed, then confess or croak depending on whether or not debugging
         if($LOG_ERRORS){
-            if($DEBUG){
+            my $log_output = $output;
+            if($DEBUG && $_CAN_STACK_TRACE){
+                $log_output .= "\nStack Trace:\n".Devel::StackTrace->new()->as_string();
                 print {$LOG_STREAM} "$output\n";
-            }else{
-                print {$LOG_STREAM} "$output\nStack Trace:\n".Devel::StackTrace->new()->as_string();
             }
+            print {$LOG_STREAM} "$log_output\n";
         }
         if($DEBUG){
             confess($output);
@@ -1686,7 +1707,11 @@ sub _log{
     }else{
         # we have an unknown severity, so assume the worst and confess (also log if needed)
         if($LOG_ERRORS){
-            print {$LOG_STREAM} "$output\nStack Trace:\n".Devel::StackTrace->new()->as_string();
+            my $log_output = $output;
+            if($_CAN_STACK_TRACE){
+                $log_output .= "\nStack Trace:\n".Devel::StackTrace->new()->as_string();
+            }
+            print {$LOG_STREAM} "$log_output\n";
         }
         confess($output);
     }
@@ -2725,7 +2750,7 @@ This documentation refers to XKPasswd version 2.1.1.
     use XKPasswd;
 
     #
-    # Functional Interface - for single passwords genereated from simple configs
+    # Functional Interface - for single passwords generated from simple configs
     #
     
     # generate a single password using words from the file
@@ -3853,13 +3878,40 @@ config will not have been altered in any way.
 By default this module does all of it's error notification via the functions
 C<carp()>, C<croak()>, and C<confess()> from the C<Carp> module. Optionally,
 all error messages can also be printed. To enable the printing of messages,
-set C<$XKPasswd::LOG_ERRORS> to a true. All error messages will then be printed
-to the stream at C<$XKPasswd::LOG_STREAM>, which is set to C<STDERR> by
+set C<$XKPasswd::LOG_ERRORS> to a truthy value. All error messages will then be
+printed to the stream at C<$XKPasswd::LOG_STREAM>, which is set to C<STDERR> by
 default.
 
-Ordinarly this module produces very little output, to enable more verbose
+Ordinarily this module produces very little output, to enable more verbose
 output C<$XKPasswd::DEBUG> can be set to a truthy value. If this is set, all
 debug messages will be printed to the stream C<$XKPasswd::LOG_STREAM>.
+
+This module produces output at three severity levels:
+
+=over 4
+
+=item *
+
+C<DEBUG> - this output is completely suppressed unless C<$XKPasswd::DEBUG> is
+set to a truthy value. If not suppressed debug messages are always printed to
+C<$XKPasswd::LOG_STREAM> (regardless of the value of C<$XKPasswd::LOG_ERRORS>).
+
+=item *
+
+C<WARNING> - warning messages are always thrown with C<carp()>, and also
+printed to C<$XKPasswd::LOG_STREAM> if C<$XKPasswd::LOG_ERRORS> evaluates to
+true.
+
+=item *
+
+C<ERROR> - error messages are usually thrown with C<croak()>, but will be
+thrown with C<confess()> if C<$XKPasswd::DEBUG> evaluates to true. If
+C<$XKPasswd::LOG_ERRORS> evaluates to true errors are also printed to
+C<$XKPasswd::LOG_STREAM>, including a stack trace if C<$XKPasswd::DEBUG>
+evaluates to true and the module C<Devel::StackTrace> is installed.
+
+
+=back
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
@@ -3868,11 +3920,50 @@ currently interact with the environment. It may do so in future versions.
 
 =head1 DEPENDENCIES
 
+This module uses the following standard Perl modules:
+
 =over 4
 
 =item *
 
+C<strict> - L<http://search.cpan.org/perldoc?strict>
+
+=item *
+
+C<warnings> - L<http://search.cpan.org/perldoc?warnings>
+=item *
+
 C<Carp> - L<http://search.cpan.org/perldoc?Carp>
+
+=item *
+
+C<English> - L<http://search.cpan.org/perldoc?English>
+
+=item *
+
+C<B> - L<http://search.cpan.org/perldoc?B>
+
+=item *
+
+C<Math::Round> - L<http://search.cpan.org/perldoc?Math%3A%3ARound>
+
+=item *
+
+C<Math::BigInt> - L<http://search.cpan.org/perldoc?Math%3A%3ABigInt>
+
+=back
+
+The module can also optionally use the following non-standard Perl modules:
+
+=over 4
+
+=item *
+
+C<Devel::StackTrace> - L<http://search.cpan.org/perldoc?Devel%3A%3AStackTrace>
+
+Used for printing stack traces with error messages if
+C<$XKPasswd::DEBUG> and C<$XKPasswd::LOG_ERRORS> both evaluate to true. If the
+module is not installed the stack traces will be omitted from the log messages.
 
 =back
 
