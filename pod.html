@@ -91,7 +91,7 @@
 <pre><code>    use XKPasswd;
 
     #
-    # Functional Interface - for single passwords genereated from simple configs
+    # Functional Interface - for single passwords generated from simple configs
     #
     
     # generate a single password using words from the file
@@ -854,9 +854,24 @@
 
 <h1 id="DIAGNOSTICS">DIAGNOSTICS</h1>
 
-<p>By default this module does all of it&#39;s error notification via the functions <code>carp()</code>, <code>croak()</code>, and <code>confess()</code> from the <code>Carp</code> module. Optionally, all error messages can also be printed. To enable the printing of messages, set <code>$XKPasswd::LOG_ERRORS</code> to a true. All error messages will then be printed to the stream at <code>$XKPasswd::LOG_STREAM</code>, which is set to <code>STDERR</code> by default.</p>
+<p>By default this module does all of it&#39;s error notification via the functions <code>carp()</code>, <code>croak()</code>, and <code>confess()</code> from the <code>Carp</code> module. Optionally, all error messages can also be printed. To enable the printing of messages, set <code>$XKPasswd::LOG_ERRORS</code> to a truthy value. All error messages will then be printed to the stream at <code>$XKPasswd::LOG_STREAM</code>, which is set to <code>STDERR</code> by default.</p>
 
-<p>Ordinarly this module produces very little output, to enable more verbose output <code>$XKPasswd::DEBUG</code> can be set to a truthy value. If this is set, all debug messages will be printed to the stream <code>$XKPasswd::LOG_STREAM</code>.</p>
+<p>Ordinarily this module produces very little output, to enable more verbose output <code>$XKPasswd::DEBUG</code> can be set to a truthy value. If this is set, all debug messages will be printed to the stream <code>$XKPasswd::LOG_STREAM</code>.</p>
+
+<p>This module produces output at three severity levels:</p>
+
+<ul>
+
+<li><p><code>DEBUG</code> - this output is completely suppressed unless <code>$XKPasswd::DEBUG</code> is set to a truthy value. If not suppressed debug messages are always printed to <code>$XKPasswd::LOG_STREAM</code> (regardless of the value of <code>$XKPasswd::LOG_ERRORS</code>).</p>
+
+</li>
+<li><p><code>WARNING</code> - warning messages are always thrown with <code>carp()</code>, and also printed to <code>$XKPasswd::LOG_STREAM</code> if <code>$XKPasswd::LOG_ERRORS</code> evaluates to true.</p>
+
+</li>
+<li><p><code>ERROR</code> - error messages are usually thrown with <code>croak()</code>, but will be thrown with <code>confess()</code> if <code>$XKPasswd::DEBUG</code> evaluates to true. If <code>$XKPasswd::LOG_ERRORS</code> evaluates to true errors are also printed to <code>$XKPasswd::LOG_STREAM</code>, including a stack trace if <code>$XKPasswd::DEBUG</code> evaluates to true and the module <code>Devel::StackTrace</code> is installed.</p>
+
+</li>
+</ul>
 
 <h1 id="CONFIGURATION-AND-ENVIRONMENT">CONFIGURATION AND ENVIRONMENT</h1>
 
@@ -864,9 +879,39 @@
 
 <h1 id="DEPENDENCIES">DEPENDENCIES</h1>
 
+<p>This module uses the following standard Perl modules:</p>
+
 <ul>
 
-<li><p><code>Carp</code> - <a href="http://search.cpan.org/perldoc?Carp">http://search.cpan.org/perldoc?Carp</a></p>
+<li><p><code>strict</code> - <a href="http://search.cpan.org/perldoc?strict">http://search.cpan.org/perldoc?strict</a></p>
+
+</li>
+<li><p><code>warnings</code> - <a href="http://search.cpan.org/perldoc?warnings">http://search.cpan.org/perldoc?warnings</a> =item *</p>
+
+<p><code>Carp</code> - <a href="http://search.cpan.org/perldoc?Carp">http://search.cpan.org/perldoc?Carp</a></p>
+
+</li>
+<li><p><code>English</code> - <a href="http://search.cpan.org/perldoc?English">http://search.cpan.org/perldoc?English</a></p>
+
+</li>
+<li><p><code>B</code> - <a href="http://search.cpan.org/perldoc?B">http://search.cpan.org/perldoc?B</a></p>
+
+</li>
+<li><p><code>Math::Round</code> - <a href="http://search.cpan.org/perldoc?Math%3A%3ARound">http://search.cpan.org/perldoc?Math%3A%3ARound</a></p>
+
+</li>
+<li><p><code>Math::BigInt</code> - <a href="http://search.cpan.org/perldoc?Math%3A%3ABigInt">http://search.cpan.org/perldoc?Math%3A%3ABigInt</a></p>
+
+</li>
+</ul>
+
+<p>The module can also optionally use the following non-standard Perl modules:</p>
+
+<ul>
+
+<li><p><code>Devel::StackTrace</code> - <a href="http://search.cpan.org/perldoc?Devel%3A%3AStackTrace">http://search.cpan.org/perldoc?Devel%3A%3AStackTrace</a></p>
+
+<p>Used for printing stack traces with error messages if <code>$XKPasswd::DEBUG</code> and <code>$XKPasswd::LOG_ERRORS</code> both evaluate to true. If the module is not installed the stack traces will be omitted from the log messages.</p>
 
 </li>
 </ul>
