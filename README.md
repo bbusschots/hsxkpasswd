@@ -33,6 +33,6 @@ Sample Perl File
 This sample file assumes XKPasswd has been installed in `/usr/local/xkpasswd.pm/`, if you install it elsewhere, update the paths in the script accordingly.
 
     use lib '/usr/local/xkpasswd.pm/';
-    use XKPassed;
+    use XKPasswd;
     
     print xkpasswd('/usr/local/xkpasswd.pm/sample_dict.txt', 'WEB32')."\n";
