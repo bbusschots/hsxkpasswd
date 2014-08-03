@@ -2803,7 +2803,7 @@ L<https://www.xkpasswd.net>.
 
 More and more of the things we do on our computer require passwords, and at the
 same time it seems we hear about organisations or sites losing user database on
-every day that ends in a 'y'. If we re-use our passwords we expose ourself to
+every day that ends in a I<y>. If we re-use our passwords we expose ourself to
 an ever greater risk, but we need more passwords than we can possibly remember
 or invent. Coming up with one good password is easy, but coming up with one
 good password a week is a lot harder, let alone one a day!
@@ -2829,7 +2829,7 @@ never will be? This is the problem this module aims to solve.
 
 Rather than randomly choosing many letters, digits, and symbols from a fairly
 small alphabet of possible characters, this library chooses a small number of
-words from a large 'alphabet' of possible words as the basis for passwords.
+words from a large I<alphabet> of possible words as the basis for passwords.
 Words are easy to remember, easy to read from a screen, easy to type, and easy
 to communicate over the telephone.
 
@@ -2882,7 +2882,7 @@ the formula:
     P = 6^L
 
 When talking about passwords, the set of possible symbols used for each
-character in the password is referred to as the password's 'Alphabet'. So,
+character in the password is referred to as the password's I<alphabet>. So,
 for the coin toss the alphabet was just C<H> and C<T>, and for the dice it
 was C<1>, C<2>, C<3>, C<4>, C<5>, and C<6>. The actual characters used in
 the alphabet make no difference to the strength of the password, all that
@@ -2969,12 +2969,12 @@ Calculating C<L> is also straightforward. The one minor complication is that
 some configurations result in a variable length password. In this case,
 assume the shortest possible length the configuration could produce.
 
-The example password from the L<PHILOSOPHY> section
+The example password from the L</PHILOSOPHY> section
 (C<!15.play.MAJOR.fresh.FLAT.23!>) was generated using the preset C<WEB32>.
 This preset uses four words of between four and five letters long, with the
 case of each word randomly set to all lower or all upper as the
 basis for the password, it then chooses two pairs of random digits as extra
-words to go front and back, before separating each 'word' with a copy of a
+words to go front and back, before separating each word with a copy of a
 randomly chosen symbol, and padding the front and back of the password with
 a copy of a different randomly chosen symbol. This results in passwords that
 contain a mix of cases, digits, and symbols, and are between 27 and 31
@@ -3042,7 +3042,7 @@ XKPasswd instances load their word lists from text files. The constructor
 loads the words contained in a single file into memory when assembling an
 XKPasswd object. Once constructed, the object never reads from the file again.
 Throughout this documentation, the text file containing the words to be used is
-referred to as 'the Dictionary File', and specified via the
+referred to as I<the Dictionary File>, and specified via the
 C<dictionary_file_path> config variable.
 
 The rules for the formatting of dictionary files are simple. Dictionary
@@ -3057,7 +3057,7 @@ In order to produce secure passwords it's important to use a dictionary file
 that contains a large selection of words with a good mix of different word
 lengths.
 
-A sample dictionary file (C<'sample_dict.txt'>) is distributed with this
+A sample dictionary file (C<sample_dict.txt>) is distributed with this
 module.
 
 =head2 CONFIGURATION HASHREFS
@@ -3384,7 +3384,7 @@ of mixed-case letters, digits, and symbols).
 
 C<$XKPasswd::SUPRESS_ENTROPY_WARNINGS> - this variable can be used to suppress
 one or both of the entropy warnings. The following values are valid (invalid
-values are treated as being 'NONE'):
+values are treated as being C<NONE>):
 
 =over 4
 
@@ -3417,7 +3417,7 @@ result in variable length passwords, the shortest possible password is assumed.
 When calculating the entropy for brute force attacks on configurations that
 contain at least one symbol, it is assumed that an attacker would have to
 brute-force-check 33 symbols. This is the same value used by Steve Gibson's
-'Password Haystacks' calculator (L<https://www.grc.com/haystack.htm>).
+I<Password Haystacks> calculator (L<https://www.grc.com/haystack.htm>).
 
 When calculating the entropy for worst-case attacks on configurations that
 contain symbol substitutions where the replacement is more than 1 character
@@ -3503,10 +3503,10 @@ If a preset name is passed as a second argument, a hashref with config key
 overrides can be passed as a third argument. If the second argument is a hashref
 the third argument is ignored.
 
-=head2 'CLASS' FUNCTIONS
+=head2 CLASS METHODS
 
-All 'class functions' (for want of a better term) must be invoked via the
-package name, or they will croak.
+B<NOTE> - All class methods must be invoked via the package name, or they will
+croak.
 
 =head3 clone_config()
 
@@ -3610,7 +3610,7 @@ list of available presets.
 
 The first argument this function accpets is the name of the desired preset as a
 scalar. If an invalid name is passed, the function will carp. If no preset is
-passed the preset C<'DEFAULT'> is assumed.
+passed the preset C<DEFAULT> is assumed.
 
 This function can optionally accept a second argument, a hashref
 containing keys with values to override the defaults with.
@@ -3627,9 +3627,9 @@ passed, and croak if the resulting merged config is invalid.
 This function returns a string containing a description of each defined preset
 and the configs associated with the presets.
 
-=head2 INSTANCE FUNCTIONS
+=head2 METHODS
 
-Instance functions must be called on an XKPasswd object or they will croak.
+B<NOTE> - all methods must be invoked on an XKPasswd object or they will croak.
 
 =head3 config()
 
