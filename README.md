@@ -21,7 +21,7 @@ These commands all assume XKPasswd was installed in `/usr/local/xkpasswd.pm/`, i
 
 To see a list of defined presets use:
 
-    perl -e 'use lib "/usr/local/xkpasswd.pm/";use XKPasswd; print join ", ", XKPasswd->defined_presets();'APPLEID, DEFAULT, NTLM, SECURITYQ, WEB16, WEB32, WIFI, XKCDbart-imac2013:bartbususe XKpasswd; print "".(join ", ", XKPasswd->defined_presets())."\n";'
+    perl -e 'use lib "/usr/local/xkpasswd.pm/";use XKPasswd; print join ", ", XKPasswd->defined_presets(); print"\n";'
 
 To see the details of a preset use a command of the form (replacing `WEB32` with which ever preset you want to view):
 
