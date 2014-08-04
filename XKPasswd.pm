@@ -3291,7 +3291,7 @@ example above):
     
 or
 
-    my $xkpasswd = XKPasswd->new('sample_dict.txt', $config, {separator_character => q{ }});
+    my $xkpasswd = XKPasswd->new('sample_dict.txt', 'XKCD', {separator_character => q{ }});
 
 For more see the definitions for the class functions C<defined_presets()>,
 C<presets_to_string()>, and C<preset_config()>.
