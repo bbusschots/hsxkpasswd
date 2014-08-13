@@ -58,7 +58,7 @@ my $_KEYS = {
             my $key = shift;
             unless(scalar @{$key} >= 2){ return 0; }
             foreach my $symbol (@{$key}){
-                unless(ref $symbol eq q{} && $symbol =~ m/^.$/sx){ return 0; }
+                unless(ref $symbol eq q{} && length $symbol == 1){ return 0; }
             }
             return 1;
         },
@@ -71,7 +71,7 @@ my $_KEYS = {
             my $key = shift;
             unless(scalar @{$key} >= 2){ return 0; }
             foreach my $symbol (@{$key}){
-                unless(ref $symbol eq q{} && $symbol =~ m/^.$/sx){ return 0; }
+                unless(ref $symbol eq q{} && length $symbol == 1){ return 0; }
             }
             return 1;
         },
@@ -112,7 +112,7 @@ my $_KEYS = {
         ref => q{}, # SCALAR
         validate => sub {
             my $key = shift;
-            unless($key =~ m/^(.)|(NONE)|(RANDOM)$/sx){ return 0; }
+            unless(length $key == 1 || $key =~ m/^(NONE)|(RANDOM)$/sx){ return 0; }
             return 1;
         },
         desc => q{A scalar containing a single character, or the special value 'NONE' or 'RANDOM'},
@@ -182,7 +182,7 @@ my $_KEYS = {
         ref => q{}, # SCALAR
         validate => sub {
             my $key = shift;
-            unless($key =~ m/^[.]|(NONE)|(RANDOM)|(SEPARATOR)$/sx){return 0; }
+            unless(length $key == 1 || $key =~ m/^(NONE)|(RANDOM)|(SEPARATOR)$/sx){return 0; }
             return 1;
         },
         desc => q{A scalar containing a single character or one of the special values 'NONE', 'RANDOM', or 'SEPARATOR'},
