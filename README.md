@@ -3,8 +3,13 @@ xkpasswd.pm
 
 A Perl module for generating secure memorable passwords inspired by the fabulous XKCD web comic. This is the library that drives www.xkpasswd.net
 
-* Project Home Page: [www.bartb.ie/xkpasswd](http://www.bartb.ie/xkpasswd)
+* Project Home Page: [www.bartb.ie/xkpasswd](http://www.bartb.ie/xkpasswd) - **please consider making a donation here**
 * [Perl POD Documentation](http://bbusschots.github.io/xkpasswd.pm/pod.html)
+
+This library is provided entirely free of charge under a very liberal free
+licence. It has taken a signifficant amount of time to write, and continues to
+take time to maintain and update. If you'd like to contribute towards that time
+and efford please consider making a donation at the project's home page (linked above).
 
 Quick Install Guide
 -------------------
