@@ -3348,7 +3348,7 @@ password generated with this preset:
     
 =item *
 
-C<WEB32> - a preset for websites that don't allow more than 16 character long
+C<WEB32> - a preset for websites that don't allow more than 32 character long
 passwords. Below is a sample password generated with this preset:
 
     +93-took-CASE-money-AHEAD-31+
