@@ -3311,7 +3311,7 @@ iOS keyboard, i.e. those appearing on the letters keyboard (C<ABC>) or the
 numbers keyboard C<.?123>, and not those on the harder to reach symbols
 keyboard C<#+=>. Below is a sample password generated with this preset:
 
-    @60:london:TOUGHT:forget:70@
+    @60:london:TAUGHT:forget:70@
 
 =item *
 
