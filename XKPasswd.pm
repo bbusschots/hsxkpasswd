@@ -2322,7 +2322,7 @@ sub _substitute_characters{
     }
     
     # If we got here, go ahead and apply the substitutions
-    foreach my $i (0..(scalar @{$words_ref})){
+    foreach my $i (0..((scalar @{$words_ref}) - 1)){
         my $word = $words_ref->[$i];
         foreach my $char (keys %{$self->{_CONFIG}->{character_substitutions}}){
             my $sub = $self->{_CONFIG}->{character_substitutions}->{$char};
