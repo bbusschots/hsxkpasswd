@@ -847,7 +847,7 @@ sub defined_presets{
     }
     
     # return the preset names
-    my @preset_names = sort keys $_PRESETS;
+    my @preset_names = sort keys %{$_PRESETS};
     return @preset_names;
 }
 
