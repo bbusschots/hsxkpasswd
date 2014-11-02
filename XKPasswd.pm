@@ -2431,9 +2431,9 @@ sub _calculate_entropy_stats{
     my $b_length_max = Math::BigInt->new($config_stats{length_max});
     
     # calculate the blind permutations - (based purely on length and alphabet)
-    my $alphabet_count = 12; # all passwords have at least one case of letters
+    my $alphabet_count = 26; # all passwords have at least one case of letters
     if($self->{_CONFIG}->{case_transform} =~ m/^(ALTERNATE)|(CAPITALISE)|(INVERT)|(RANDOM)$/sx){
-        $alphabet_count += 12; # these configs guarantee a mix of cases
+        $alphabet_count += 26; # these configs guarantee a mix of cases
     }
     if($self->{_CONFIG}->{padding_digits_before} > 0 || $self->{_CONFIG}->{padding_digits_after} > 0){
         $alphabet_count += 10; # these configs guarantee digits in the mix
