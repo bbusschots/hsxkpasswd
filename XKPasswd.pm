@@ -77,6 +77,19 @@ my $_KEYS = {
         },
         desc => 'An array ref containing at least 2 single-character scalars',
     },
+    padding_alphabet => {
+        req => 0,
+        ref => 'ARRAY', # ARRAY REF
+        validate => sub { # at least 2 scalar elements
+            my $key = shift;
+            unless(scalar @{$key} >= 2){ return 0; }
+            foreach my $symbol (@{$key}){
+                unless(ref $symbol eq q{} && length $symbol == 1){ return 0; }
+            }
+            return 1;
+        },
+        desc => 'An array ref containing at least 2 single-character scalars',
+    },
     word_length_min => {
         req => 1,
         ref => q{}, # SCALAR
@@ -257,7 +270,7 @@ my $_PRESETS = {
     WEB32 => {
         description => q{A preset for websites that allow passwords up to 32 characteres long.},
         config => {
-            symbol_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+            padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
             separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
             word_length_min => 4,
             word_length_max => 5,
@@ -278,7 +291,7 @@ my $_PRESETS = {
     WEB16 => {
         description => 'A preset for websites that insit passwords not be longer than 16 characters.',
         config => {
-            symbol_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+            padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
             separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
             word_length_min => 4,
             word_length_max => 4,
@@ -299,7 +312,7 @@ my $_PRESETS = {
     WIFI => {
         description => 'A preset for generating 63 character long WPA2 keys (most routers allow 64 characters, but some only 63, hence the odd length).',
         config => {
-            symbol_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+            padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
             separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
             word_length_min => 4,
             word_length_max => 8,
@@ -319,7 +332,7 @@ my $_PRESETS = {
     APPLEID => {
         description => 'A preset respecting the many prerequisites Apple places on Apple ID passwords. The preset also limits itself to symbols found on the iOS letter and number keyboards (i.e. not the awkward to reach symbol keyboard)',
         config => {
-            symbol_alphabet => [qw{! ? @ &}],
+            padding_alphabet => [qw{! ? @ &}],
             separator_alphabet => [qw{- : .}, q{,}],
             word_length_min => 5,
             word_length_max => 7,
@@ -340,7 +353,7 @@ my $_PRESETS = {
     NTLM => {
         description => 'A preset for 14 character Windows NTLMv1 password. WARNING - only use this preset if you have to, it is too short to be acceptably secure and will always generate entropy warnings for the case where the config and dictionary are known.',
         config => {
-            symbol_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+            padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
             separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
             word_length_min => 5,
             word_length_max => 5,
@@ -369,7 +382,7 @@ my $_PRESETS = {
             padding_digits_after => 0,
             padding_type => 'FIXED',
             padding_character => 'RANDOM',
-            symbol_alphabet => [qw{. ! ?}],
+            padding_alphabet => [qw{. ! ?}],
             padding_characters_before => 0,
             padding_characters_after => 1,
             case_transform => 'NONE',
@@ -647,6 +660,12 @@ sub clone_config{
             push @{$clone->{separator_alphabet}}, $symbol;
         }
     }
+    if(defined $config->{padding_alphabet} && ref $config->{padding_alphabet} eq 'ARRAY'){
+        $clone->{padding_alphabet} = [];
+        foreach my $symbol (@{$config->{padding_alphabet}}){
+            push @{$clone->{padding_alphabet}}, $symbol;
+        }
+    }
     $clone->{random_function} = $config->{random_function};
     $clone->{character_substitutions} = {};
     foreach my $key (keys %{$config->{character_substitutions}}){
@@ -730,8 +749,8 @@ sub is_valid_config{
             return 0;
         }
         if($config->{padding_character} eq 'RANDOM'){
-            unless(defined $config->{symbol_alphabet}){
-                croak(qq{padding_character='$config->{padding_character}' requires a symbol_alphabet be specified}) if $croak;
+            unless(defined $config->{symbol_alphabet} || defined $config->{padding_alphabet}){
+                croak(qq{padding_character='$config->{padding_character}' requires either a symbol_alphabet or padding_alphabet be specified}) if $croak;
             return 0;
             }
         }
@@ -2213,7 +2232,11 @@ sub _padding_char{
     if($padc eq 'SEPARATOR'){
         $padc = $sep;
     }elsif($padc eq 'RANDOM'){
-        $padc = $self->{_CONFIG}->{symbol_alphabet}->[$self->_random_int(scalar @{$self->{_CONFIG}->{symbol_alphabet}})];
+        if(defined $self->{_CONFIG}->{padding_alphabet}){
+            $padc = $self->{_CONFIG}->{padding_alphabet}->[$self->_random_int(scalar @{$self->{_CONFIG}->{padding_alphabet}})];
+        }else{
+            $padc = $self->{_CONFIG}->{symbol_alphabet}->[$self->_random_int(scalar @{$self->{_CONFIG}->{symbol_alphabet}})];
+        }
     }
     
     # return the padding character
@@ -2471,7 +2494,11 @@ sub _calculate_entropy_stats{
     }
     # multiply in the permutations from the padding character (if any - i.e. if it's randomly chosen)
     if($self->{_CONFIG}->{padding_type} ne 'NONE' && $self->{_CONFIG}->{padding_character} eq 'RANDOM'){
-        $b_seen_perms->bmul(Math::BigInt->new(scalar @{$self->{_CONFIG}->{symbol_alphabet}}));
+        if(defined $self->{_CONFIG}->{padding_alphabet}){
+            $b_seen_perms->bmul(Math::BigInt->new(scalar @{$self->{_CONFIG}->{padding_alphabet}}));
+        }else{
+            $b_seen_perms->bmul(Math::BigInt->new(scalar @{$self->{_CONFIG}->{symbol_alphabet}}));
+        }
     }
     # multiply in the permutations from the padding digits (if any)
     my $num_padding_digits = $self->{_CONFIG}->{padding_digits_before} + $self->{_CONFIG}->{padding_digits_after};
@@ -2561,9 +2588,16 @@ sub _passwords_will_contain_symbol{
     # first check the padding
     if($self->{_CONFIG}->{padding_type} ne 'NONE'){
         if($self->{_CONFIG}->{padding_character} eq 'RANDOM'){
-            my $all_pad_chars = join q{}, @{$self->{_CONFIG}->{symbol_alphabet}};
-            if($all_pad_chars =~ m/[^0-9a-zA-Z]/sx){ # if we have just one non-word character
-                $symbol_used = 1;
+            if(defined $self->{_CONFIG}->{padding_alphabet}){
+                my $all_pad_chars = join q{}, @{$self->{_CONFIG}->{padding_alphabet}};
+                if($all_pad_chars =~ m/[^0-9a-zA-Z]/sx){ # if we have just one non-word character
+                    $symbol_used = 1;
+                }
+            }else{
+                my $all_pad_chars = join q{}, @{$self->{_CONFIG}->{symbol_alphabet}};
+                if($all_pad_chars =~ m/[^0-9a-zA-Z]/sx){ # if we have just one non-word character
+                    $symbol_used = 1;
+                }
             }
         }else{
             if($self->{_CONFIG}->{padding_character} =~ m/[^0-9a-zA-Z]/sx){ # the padding character is not a word character
@@ -2792,7 +2826,7 @@ This documentation refers to XKPasswd version 2.1.1.
     
     # create an instance from an entirely custom configuration
     my $config = {
-        symbol_alphabet => [qw{! @ $ % ^ & * + = : ~ ?}],
+        padding_alphabet => [qw{! @ $ % ^ & * + = : ~ ?}],
         separator_alphabet => [qw{- + = . _ | ~}],
         word_length_min => 6,
         word_length_max => 6,
@@ -3163,6 +3197,13 @@ values greater than or equal to 12 (for security reasons).
 
 =item *
 
+C<padding_alphabet> - this key is optional. It can be used to override
+the contents of C<symbol_alphabet> when C<padding_character> is set to
+C<RANDOM>. If present this key must contain an arrayref containing at
+least two single characters as scalars.
+
+=item *
+
 C<padding_character> - the character to use when padding the front and/or back
 of the randomly generated password. Must be a scalar containing either a single
 character or one of the special values C<RANDOM> (indicating that a character
@@ -3256,8 +3297,9 @@ is C<RANDOM>.
 C<symbol_alphabet> - an arrayref containing at least two single characters as
 scalars. This alphabet will be used when selecting random characters to act as
 the separator between words, or the padding at the start and/or end of
-generated passwords. The default value returned by C<default_config()> is
-C<[qw{! @ $ % ^ & * - _ + = : | ~ ?}]>
+generated passwords. Note that this key can be overridden by setting either or
+both C<padding_alphabet> and C<separator_alphabet>. The default value returned
+by C<default_config()> is C<[qw{! @ $ % ^ & * - _ + = : | ~ ?}]>
 
 =item *
 
