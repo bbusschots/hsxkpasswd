@@ -7,6 +7,13 @@ use English qw( -no_match_vars ); # for more readable code
 use lib '../'; # to keep Komodo edit happy while programming
 use XKPasswd;
 
+# conitionally load optional modules
+my $JSON_AVAILABLE = 0;
+eval{
+    require JSON;
+    $JSON_AVAILABLE = 1;
+};
+
 # Copyright (c) 2014, Bart Busschots T/A Bartificer Web Solutions All rights
 # reserved.
 #
@@ -116,6 +123,47 @@ sub print_preset_samples{
     
     # to keep perlcritic happy
     return 1;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Convert a JSON string into an XKPasswd config hashref
+# Returns    : an XKPasswd config hashref
+# Arguments  : 1. the JSON string as a scalar
+# Throws     : Croaks on invalid invocation, invalid args, invalid config, and
+#              if the JSON module is not available
+# Notes      :
+# See Also   :
+sub config_from_json{
+    my $class = shift;
+    my $json_string = shift;
+    
+    # validate the args
+    unless(defined $class && $class eq $_CLASS){
+        XKPasswd->_error('invalid invocation of class method');
+    }
+    unless(defined $json_string && ref $json_string eq q{} && length $json_string){
+        XKPasswd->_error('invalid args, must pass a JSON string');
+    }
+    
+    # make sure the JSON module is available
+    unless($JSON_AVAILABLE){
+        XKPasswd->_error(q{Perl JSON module not avaialble, and required for this function});
+    }
+    
+    # try parse the passed string
+    my $loaded_config = JSON->new->utf8->decode($json_string);
+    unless($loaded_config){
+        XKPasswd->_error('Failed to parse JSON string');
+    }
+    eval{
+        XKPasswd->is_valid_config($loaded_config, 'do_croak'); # returns 1 on success
+    }or do{
+        XKPasswd->_error("Config failed to validate with error: $EVAL_ERROR");
+    };
+    
+    # return the config
+    return $loaded_config;
 }
 
 1; # because perl is a bit special

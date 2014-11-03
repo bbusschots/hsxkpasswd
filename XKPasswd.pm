@@ -231,7 +231,7 @@ my $_KEYS = {
         desc => q{A scalar containing an integer value greater than or equal to one, or 'AUTO'},
     },
     character_substitutions => {
-        req => 1,
+        req => 0,
         ref => 'HASH', # Hashref REF
         validate => sub {
             my $key = shift;
@@ -264,7 +264,6 @@ my $_PRESETS = {
             case_transform => 'CAPITALISE',
             random_function => \&XKPasswd::basic_random_generator,
             random_increment => 'AUTO',
-            character_substitutions => {},
         },
     },
     WEB32 => {
@@ -285,7 +284,6 @@ my $_PRESETS = {
             case_transform => 'ALTERNATE',
             random_function => \&XKPasswd::basic_random_generator,
             random_increment => 10,
-            character_substitutions => {},
         },
     },
     WEB16 => {
@@ -306,7 +304,6 @@ my $_PRESETS = {
             case_transform => 'RANDOM',
             random_function => \&XKPasswd::basic_random_generator,
             random_increment => 8,
-            character_substitutions => {},
         },
     },
     WIFI => {
@@ -326,7 +323,6 @@ my $_PRESETS = {
             case_transform => 'RANDOM',
             random_function => \&XKPasswd::basic_random_generator,
             random_increment => 22,
-            character_substitutions => {},
         },
     },
     APPLEID => {
@@ -347,7 +343,6 @@ my $_PRESETS = {
             case_transform => 'RANDOM',
             random_function => \&XKPasswd::basic_random_generator,
             random_increment => 12,
-            character_substitutions => {},
         },
     },
     NTLM => {
@@ -368,7 +363,6 @@ my $_PRESETS = {
             case_transform => 'INVERT',
             random_function => \&XKPasswd::basic_random_generator,
             random_increment => 5,
-            character_substitutions => {},
         },
     },
     SECURITYQ => {
@@ -388,7 +382,6 @@ my $_PRESETS = {
             case_transform => 'NONE',
             random_function => \&XKPasswd::basic_random_generator,
             random_increment => 7,
-            character_substitutions => {},
         },
     },
     XKCD => {
@@ -404,7 +397,6 @@ my $_PRESETS = {
             case_transform => 'RANDOM',
             random_function => \&XKPasswd::basic_random_generator,
             random_increment => 8,
-            character_substitutions => {},
         },
     },
 };
@@ -667,9 +659,11 @@ sub clone_config{
         }
     }
     $clone->{random_function} = $config->{random_function};
-    $clone->{character_substitutions} = {};
-    foreach my $key (keys %{$config->{character_substitutions}}){
-        $clone->{character_substitutions}->{$key} = $config->{character_substitutions}->{$key};
+    if(defined $config->{character_substitutions}){
+        $clone->{character_substitutions} = {};
+        foreach my $key (keys %{$config->{character_substitutions}}){
+            $clone->{character_substitutions}->{$key} = $config->{character_substitutions}->{$key};
+        }
     }
     
     # return the clone
@@ -994,11 +988,13 @@ sub config_stats{
     
     # detect whether or not we need to carp about multi-character replacements
     if($config->{padding_type} ne 'ADAPTIVE' && !$suppres_warnings){
-        CHAR_SUB:
-        foreach my $char (keys %{$config->{character_substitutions}}){
-            if(length $config->{character_substitutions}->{$char} > 1){
-                $_CLASS->_warn('maximum length calculation is unreliable because the config contains a character substituion with length greater than 1 character');
-                last CHAR_SUB;
+        if(defined $config->{character_substitutions}){
+            CHAR_SUB:
+            foreach my $char (keys %{$config->{character_substitutions}}){
+                if(length $config->{character_substitutions}->{$char} > 1){
+                    $_CLASS->_warn('maximum length calculation is unreliable because the config contains a character substituion with length greater than 1 character');
+                    last CHAR_SUB;
+                }
             }
         }
     }
@@ -2841,7 +2837,6 @@ This documentation refers to XKPasswd version 2.1.1.
         case_transform => 'CAPITALISE',
         random_function => \&XKPasswd::basic_random_generator,
         random_increment => 'AUTO',
-        character_substitutions => {}
     }
     my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', $config);
     
