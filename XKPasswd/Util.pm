@@ -132,7 +132,8 @@ sub print_preset_samples{
 # Arguments  : 1. the JSON string as a scalar
 # Throws     : Croaks on invalid invocation, invalid args, invalid config, and
 #              if the JSON module is not available
-# Notes      :
+# Notes      : Since you can't send code refs via JSON, the random function
+#              in all hashrefs is set to the default value
 # See Also   :
 sub config_from_json{
     my $class = shift;
@@ -156,6 +157,11 @@ sub config_from_json{
     unless($loaded_config){
         XKPasswd->_error('Failed to parse JSON string');
     }
+    
+    # set the ranom generator to the default value (can't sned code refs via JSON)
+    $loaded_config->{random_function} = \&XKPasswd::basic_random_generator;
+    
+    # make sure the config is valid
     eval{
         XKPasswd->is_valid_config($loaded_config, 'do_croak'); # returns 1 on success
     }or do{
