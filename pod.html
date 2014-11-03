@@ -4,7 +4,7 @@
 <head>
 <title>XKPasswd.pm</title>
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />
-<link rev="made" href="mailto:_mdnsresponder@jackson.apple.com" />
+<link rev="made" href="mailto:vxd@glow.apple.com" />
 </head>
 
 <body style="background-color: white">
@@ -39,32 +39,32 @@
       <li><a href="#RANDOM-FUNCTIONS">RANDOM FUNCTIONS</a></li>
       <li><a href="#FUNCTIONAL-INTERFACE">FUNCTIONAL INTERFACE</a>
         <ul>
-          <li><a href="#xkpasswd-">xkpasswd()</a></li>
+          <li><a href="#xkpasswd">xkpasswd()</a></li>
         </ul>
       </li>
       <li><a href="#CONSTRUCTOR">CONSTRUCTOR</a></li>
       <li><a href="#CLASS-METHODS">CLASS METHODS</a>
         <ul>
-          <li><a href="#clone_config-">clone_config()</a></li>
-          <li><a href="#config_stats-">config_stats()</a></li>
-          <li><a href="#config_to_string-">config_to_string()</a></li>
-          <li><a href="#default_config-">default_config()</a></li>
-          <li><a href="#defined_presets-">defined_presets()</a></li>
-          <li><a href="#is_valid_config-">is_valid_config()</a></li>
-          <li><a href="#preset_config-">preset_config()</a></li>
-          <li><a href="#presets_to_string-">presets_to_string()</a></li>
+          <li><a href="#clone_config">clone_config()</a></li>
+          <li><a href="#config_stats">config_stats()</a></li>
+          <li><a href="#config_to_string">config_to_string()</a></li>
+          <li><a href="#default_config">default_config()</a></li>
+          <li><a href="#defined_presets">defined_presets()</a></li>
+          <li><a href="#is_valid_config">is_valid_config()</a></li>
+          <li><a href="#preset_config">preset_config()</a></li>
+          <li><a href="#presets_to_string">presets_to_string()</a></li>
         </ul>
       </li>
       <li><a href="#METHODS">METHODS</a>
         <ul>
-          <li><a href="#config-">config()</a></li>
-          <li><a href="#config_string-">config_string()</a></li>
-          <li><a href="#dictionary-">dictionary()</a></li>
-          <li><a href="#password-">password()</a></li>
-          <li><a href="#passwords-">passwords()</a></li>
-          <li><a href="#stats-">stats()</a></li>
-          <li><a href="#status-">status()</a></li>
-          <li><a href="#update_config-">update_config()</a></li>
+          <li><a href="#config">config()</a></li>
+          <li><a href="#config_string">config_string()</a></li>
+          <li><a href="#dictionary">dictionary()</a></li>
+          <li><a href="#password">password()</a></li>
+          <li><a href="#passwords">passwords()</a></li>
+          <li><a href="#stats">stats()</a></li>
+          <li><a href="#status">status()</a></li>
+          <li><a href="#update_config">update_config()</a></li>
         </ul>
       </li>
     </ul>
@@ -133,7 +133,7 @@
     
     # create an instance from an entirely custom configuration
     my $config = {
-        symbol_alphabet =&gt; [qw{! @ $ % ^ &amp; * + = : ~ ?}],
+        padding_alphabet =&gt; [qw{! @ $ % ^ &amp; * + = : ~ ?}],
         separator_alphabet =&gt; [qw{- + = . _ | ~}],
         word_length_min =&gt; 6,
         word_length_max =&gt; 6,
@@ -302,43 +302,43 @@
 
 <dl>
 
-<dt id="pod-">-</dt>
+<dt id="pod">-</dt>
 <dd>
 
 <p><code>ALTERNATE</code> - each alternate word will be converted to all upper case and all lower case.</p>
 
 </dd>
-<dt id="pod-1">-</dt>
+<dt id="pod1">-</dt>
 <dd>
 
 <p><code>CAPITALISE</code> - the first letter in every word will be converted to upper case, all other letters will be converted to lower case.</p>
 
 </dd>
-<dt id="pod-2">-</dt>
+<dt id="pod2">-</dt>
 <dd>
 
 <p><code>INVERT</code> - the first letter in every word will be converted to lower case, all other letters will be converted to upper case.</p>
 
 </dd>
-<dt id="pod-3">-</dt>
+<dt id="pod3">-</dt>
 <dd>
 
 <p><code>LOWER</code> - all letters in all the words will be converted to lower case. <b>Use of this option is strongly discouraged for security reasons.</b></p>
 
 </dd>
-<dt id="pod-4">-</dt>
+<dt id="pod4">-</dt>
 <dd>
 
 <p><code>NONE</code> - the capitalisation used in the randomly generated password will be the same as it is in the dictionary file.</p>
 
 </dd>
-<dt id="pod-5">-</dt>
+<dt id="pod5">-</dt>
 <dd>
 
 <p><code>RANDOM</code> - each word will be randomly converted to all upper case or all lower case.</p>
 
 </dd>
-<dt id="pod-6">-</dt>
+<dt id="pod6">-</dt>
 <dd>
 
 <p><code>UPPER</code> - all letters in all the words will be converted to upper case. <b>Use of this option is strongly discouraged for security reasons.</b></p>
@@ -358,6 +358,9 @@
 <li><p><code>pad_to_length</code> - the total desired length of the password when using adaptive padding (<code>padding_type</code> set to <code>ADAPTIVE</code>). Must be a scalar with an integer values greater than or equal to 12 (for security reasons).</p>
 
 </li>
+<li><p><code>padding_alphabet</code> - this key is optional. It can be used to override the contents of <code>symbol_alphabet</code> when <code>padding_character</code> is set to <code>RANDOM</code>. If present this key must contain an arrayref containing at least two single characters as scalars.</p>
+
+</li>
 <li><p><code>padding_character</code> - the character to use when padding the front and/or back of the randomly generated password. Must be a scalar containing either a single character or one of the special values <code>RANDOM</code> (indicating that a character should be chosen at random from the <code>symbol_alphabet</code>), or <code>SEPARATOR</code> (use the same character used to separate the words). This key is only needed if <code>padding_type</code> is set to <code>FIXED</code> or <code>ADAPTIVE</code>. The default value returned by <code>default_config</code> is <code>RANDOM</code>.</p>
 
 </li>
@@ -371,19 +374,19 @@
 
 <dl>
 
-<dt id="pod-7">-</dt>
+<dt id="pod7">-</dt>
 <dd>
 
 <p><code>NONE</code> - do not pad the generated password with any symbol characters.</p>
 
 </dd>
-<dt id="pod-8">-</dt>
+<dt id="pod8">-</dt>
 <dd>
 
 <p><code>FIXED</code> - a specified number of symbols will be added to the front and/or back of the randomly generated password. If this option is chosen, you must also specify the keys <code>padding_character</code>, <code>padding_characters_before</code> &amp; <code>padding_characters_after</code>.</p>
 
 </dd>
-<dt id="pod-9">-</dt>
+<dt id="pod9">-</dt>
 <dd>
 
 <p><code>ADAPTIVE</code> - no symbols will be added to the start of the randomly generated password, and the appropriate number of symbols will be added to the end to make the generated password exactly a certain length. The desired length is specified with the key <code>pad_to_length</code>, which is required if this padding type is specified.</p>
@@ -406,7 +409,7 @@
 <li><p><code>separator_character</code> - the character to use to separate the words in the generated password. Must be a scalar, and acceptable values are a single character, or, the special values <code>NONE</code> (indicating that no separator should be used), or <code>RANDOM</code>, indicating that a character should be chosen at random from the <code>symbol_alphabet</code>. The default value returned by <code>default_config()</code> is <code>RANDOM</code>.</p>
 
 </li>
-<li><p><code>symbol_alphabet</code> - an arrayref containing at least two single characters as scalars. This alphabet will be used when selecting random characters to act as the separator between words, or the padding at the start and/or end of generated passwords. The default value returned by <code>default_config()</code> is <code>[qw{! @ $ % ^ &amp; * - _ + = : | ~ ?}]</code></p>
+<li><p><code>symbol_alphabet</code> - an arrayref containing at least two single characters as scalars. This alphabet will be used when selecting random characters to act as the separator between words, or the padding at the start and/or end of generated passwords. Note that this key can be overridden by setting either or both <code>padding_alphabet</code> and <code>separator_alphabet</code>. The default value returned by <code>default_config()</code> is <code>[qw{! @ $ % ^ &amp; * - _ + = : | ~ ?}]</code></p>
 
 </li>
 <li><p><code>word_length_min</code> &amp; <code>word_length_max</code> - the minimum and maximum length of the words that will make up the generated password. The two keys must be scalars, and can hold equal values, but <code>word_length_max</code> may not be smaller than <code>word_length_min</code>. For security reasons, both values must be greater than 3. The default values returned by <code>default_config()</code> is are 4 &amp; 8.</p>
@@ -443,7 +446,7 @@
 
 <li><p><code>APPLEID</code> - a preset respecting the many prerequisites Apple places on Apple ID passwords. Apple&#39;s official password policy is located here: <a href="http://support.apple.com/kb/ht4232">http://support.apple.com/kb/ht4232</a>. Note that Apple&#39;s knowledge base article omits to mention that passwords can&#39;t be longer than 32 characters. This preset is also configured to use only characters that are easy to type on the standard iOS keyboard, i.e. those appearing on the letters keyboard (<code>ABC</code>) or the numbers keyboard <code>.?123</code>, and not those on the harder to reach symbols keyboard <code>#+=</code>. Below is a sample password generated with this preset:</p>
 
-<pre><code>    @60:london:TOUGHT:forget:70@</code></pre>
+<pre><code>    @60:london:TAUGHT:forget:70@</code></pre>
 
 </li>
 <li><p><code>DEFAULT</code> - the default configuration. Below is a sample password generated with this preset:</p>
@@ -467,7 +470,7 @@
     </code></pre>
 
 </li>
-<li><p><code>WEB32</code> - a preset for websites that don&#39;t allow more than 16 character long passwords. Below is a sample password generated with this preset:</p>
+<li><p><code>WEB32</code> - a preset for websites that don&#39;t allow more than 32 character long passwords. Below is a sample password generated with this preset:</p>
 
 <pre><code>    +93-took-CASE-money-AHEAD-31+</code></pre>
 
@@ -504,19 +507,19 @@
 
 <dl>
 
-<dt id="pod-10">-</dt>
+<dt id="pod10">-</dt>
 <dd>
 
 <p><code>NONE</code> - no warnings are suppressed. This is the default value.</p>
 
 </dd>
-<dt id="pod-11">-</dt>
+<dt id="pod11">-</dt>
 <dd>
 
 <p><code>SEEN</code> - only warnings for the worst-case scenario are suppressed.</p>
 
 </dd>
-<dt id="pod-12">-</dt>
+<dt id="pod12">-</dt>
 <dd>
 
 <p><code>BLIND</code> - only warnings for the best-case scenario are suppressed.</p>
@@ -551,7 +554,7 @@
 
 <p>There is only a single function exported by the module:</p>
 
-<h3 id="xkpasswd-">xkpasswd()</h3>
+<h3 id="xkpasswd">xkpasswd()</h3>
 
 <pre><code>    my $password = xkpasswd(&#39;sample_dict.txt&#39;);
     </code></pre>
@@ -592,14 +595,14 @@
 
 <p><b>NOTE</b> - All class methods must be invoked via the package name, or they will croak.</p>
 
-<h3 id="clone_config-">clone_config()</h3>
+<h3 id="clone_config">clone_config()</h3>
 
 <pre><code>    my $clone = XKPasswd-&gt;clone_config($config);
     </code></pre>
 
 <p>This function must be passed a valid config hashref as the first argument or it will croak. The function returns a hashref.</p>
 
-<h3 id="config_stats-">config_stats()</h3>
+<h3 id="config_stats">config_stats()</h3>
 
 <pre><code>    my %stats = XKPasswd-&gt;config_stats($config);
     </code></pre>
@@ -621,14 +624,14 @@
 
 <p>There is one scenario in which the calculated maximum length will not be reliably accurate, and that&#39;s when a character substitution with a length greater than 1 is specified, and <code>padding_type</code> is not set to <code>ADAPTIVE</code>. If the config passed contains such a character substitution, the length will be calculated ignoring the possibility that one or more extra characters could be introduced depending on how many, if any, of the long substitutions get triggered by the randomly chosen words. If this happens the function will also carp with a warning.</p>
 
-<h3 id="config_to_string-">config_to_string()</h3>
+<h3 id="config_to_string">config_to_string()</h3>
 
 <pre><code>    my $config_string = XKPasswd-&gt;config_to_string($config);
     </code></pre>
 
 <p>This function returns the content of the passed config hashref as a scalar string. The function must be passed a valid config hashref or it will croak.</p>
 
-<h3 id="default_config-">default_config()</h3>
+<h3 id="default_config">default_config()</h3>
 
 <pre><code>    my $config = XKPasswd-&gt;default_config();</code></pre>
 
@@ -646,14 +649,14 @@
 <pre><code>    my $config = XKPasswd-&gt;preset_config(&#39;DEFAULT&#39;);
     my $config = XKPasswd-&gt;preset_config(&#39;DEFAULT&#39;, {num_words =&gt; 3});</code></pre>
 
-<h3 id="defined_presets-">defined_presets()</h3>
+<h3 id="defined_presets">defined_presets()</h3>
 
 <pre><code>    my @preset_names = XKPasswd-&gt;defined_presets();
     </code></pre>
 
 <p>This function returns the list of defined preset names as an array of scalars.</p>
 
-<h3 id="is_valid_config-">is_valid_config()</h3>
+<h3 id="is_valid_config">is_valid_config()</h3>
 
 <pre><code>    my $is_ok = XKPasswd-&gt;is_valid_config($config);
     </code></pre>
@@ -669,7 +672,7 @@
         print &quot;ERROR - config is invalid because: $EVAL_ERROR\n&quot;;
     }</code></pre>
 
-<h3 id="preset_config-">preset_config()</h3>
+<h3 id="preset_config">preset_config()</h3>
 
 <pre><code>    my $config = XKPasswd-&gt;preset_config(&#39;XKCD&#39;);
     </code></pre>
@@ -685,7 +688,7 @@
 
 <p>When overrides are present, the function will carp if an invalid key or value is passed, and croak if the resulting merged config is invalid.</p>
 
-<h3 id="presets_to_string-">presets_to_string()</h3>
+<h3 id="presets_to_string">presets_to_string()</h3>
 
 <pre><code>    print XKPasswd-&gt;presets_to_string();
     </code></pre>
@@ -696,7 +699,7 @@
 
 <p><b>NOTE</b> - all methods must be invoked on an XKPasswd object or they will croak.</p>
 
-<h3 id="config-">config()</h3>
+<h3 id="config">config()</h3>
 
 <pre><code>    my $config = $xkpasswd_instance-&gt;config(); # getter
     $xkpasswd_instance-&gt;config($config); # setter</code></pre>
@@ -705,14 +708,14 @@
 
 <p>When called with a single argument the function sets the config of the instance to a clone of the passed hashref. If present, the argument must be a hashref, and must contain valid config keys and values. The function will croak if an invalid config is passed.</p>
 
-<h3 id="config_string-">config_string()</h3>
+<h3 id="config_string">config_string()</h3>
 
 <pre><code>    my $config_string = $xkpasswd_instance-&gt;config_string();
     </code></pre>
 
 <p>This function returns the content of the passed config hashref as a scalar string. The function must be passed a valid config hashref or it will croak.</p>
 
-<h3 id="dictionary-">dictionary()</h3>
+<h3 id="dictionary">dictionary()</h3>
 
 <pre><code>    print $xkpasswd_instance-&gt;dictionary();
     $xkpasswd_instance-&gt;dictionary(&#39;sample_dict.txt&#39;);
@@ -720,7 +723,7 @@
 
 <p>When called with no arguments this function returns the path to the currently loaded dictionary file. To load a dictionary file into an instance call this function with the path to the dictionary file.</p>
 
-<h3 id="password-">password()</h3>
+<h3 id="password">password()</h3>
 
 <pre><code>    my $password = $xkpasswd_instance-&gt;password();
     </code></pre>
@@ -729,7 +732,7 @@
 
 <p>The function croaks if there is an error generating the password. The most likely cause of and error is the random number generation, particularly if the loaded random generation function relies on a cloud service or a non-standard library.</p>
 
-<h3 id="passwords-">passwords()</h3>
+<h3 id="passwords">passwords()</h3>
 
 <pre><code>    my @passwords = $xkpasswd_instance-&gt;passwords(10);
     </code></pre>
@@ -738,7 +741,7 @@
 
 <p>The function uses <code>password()</code> to genereate the passwords, and hence will croak if there is an error generating any of the requested passwords.</p>
 
-<h3 id="stats-">stats()</h3>
+<h3 id="stats">stats()</h3>
 
 <pre><code>    my %stats = $xkpasswd_instance-&gt;stats();
     </code></pre>
@@ -809,7 +812,7 @@
 </li>
 </ul>
 
-<h3 id="status-">status()</h3>
+<h3 id="status">status()</h3>
 
 <pre><code>    print $xkpasswd_instance-&gt;status();
     </code></pre>
@@ -845,7 +848,7 @@
     Entropy (given dictionary &amp; config): 65bits
     Passwords Generated: 0</code></pre>
 
-<h3 id="update_config-">update_config()</h3>
+<h3 id="update_config">update_config()</h3>
 
 <pre><code>    $xkpasswd_instance-&gt;update_config({separator_character =&gt; &#39;+&#39;});
     </code></pre>
