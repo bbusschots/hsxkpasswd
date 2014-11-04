@@ -148,7 +148,6 @@
         case_transform =&gt; &#39;CAPITALISE&#39;,
         random_function =&gt; \&amp;XKPasswd::basic_random_generator,
         random_increment =&gt; &#39;AUTO&#39;,
-        character_substitutions =&gt; {}
     }
     my $xkpasswd_instance = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;, $config);
     
@@ -523,6 +522,12 @@
 <dd>
 
 <p><code>BLIND</code> - only warnings for the best-case scenario are suppressed.</p>
+
+</dd>
+<dt id="pod13">-</dt>
+<dd>
+
+<p><code>ALL</code> - all entryopy warnings are suppressed.</p>
 
 </dd>
 </dl>
