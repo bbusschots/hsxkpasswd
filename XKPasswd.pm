@@ -3462,6 +3462,10 @@ C<SEEN> - only warnings for the worst-case scenario are suppressed.
 
 C<BLIND> - only warnings for the best-case scenario are suppressed.
 
+=item -
+
+C<ALL> - all entryopy warnings are suppressed.
+
 =back
 
 =back
