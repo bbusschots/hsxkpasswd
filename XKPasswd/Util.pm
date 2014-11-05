@@ -172,4 +172,75 @@ sub config_from_json{
     return $loaded_config;
 }
 
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Generate n passwords and return them, and the entropy stats as a
+#              JSON string.
+# Returns    : A JSON string as a scalar representing a hashref contianing an
+#              array of passwords indexed by 'passwords', and a hashref of
+#              entropy stats indexed by 'stats'. The stats hashref itself is
+#              indexed by: 'password_entropy_blind',
+#              'password_permutations_blind', 'password_entropy_blind_min',
+#              'password_entropy_blind_max', 'password_permutations_blind_max',
+#              'password_entropy_seen' & 'password_permutations_seen'
+# Arguments  : 1. an XKPasswd object
+#              2. the number of passwords to generate
+# Throws     : Croaks on invalid invocation, invalid args, and if ther is a
+#              problem generating the passwords, statistics, or converting the
+#              results to a JSON string.
+# Notes      :
+# See Also   :
+sub passwords_json{
+    my $class = shift;
+    my $xkpasswd = shift;
+    my $num = shift;
+    
+    # validate the args
+    unless(defined $class && $class eq $_CLASS){
+        XKPasswd->_error('invalid invocation of class method');
+    }
+    unless(defined $xkpasswd && $xkpasswd->isa('XKPasswd')){
+        XKPasswd->_error('invalid args, must pass an XKPasswd object as the first arg');
+    }
+    unless(defined $num && ref $num eq q{} && $num =~ m/^\d+$/sx){
+        XKPasswd->_error('invalid args, must pass the number of passwords to generate as the second arg');
+    }
+    
+    # make sure the JSON module is available
+    unless($JSON_AVAILABLE){
+        XKPasswd->_error(q{Perl JSON module not avaialble, and required for this function});
+    }
+    
+    # try generate the passwords and stats - could croak
+    my @passwords = $xkpasswd->passwords($num);
+    my %stats = $xkpasswd->stats();
+    
+    # generate the hashref containing the results
+    my $responseObj = {
+        passwords => [@passwords],
+        stats => {
+            password_entropy_blind => $stats{password_entropy_blind},
+            password_permutations_blind => XKPasswd->_render_bigint($stats{password_permutations_blind}),
+            password_entropy_blind_min => $stats{password_entropy_blind_min},
+            password_permutations_blind_min => XKPasswd->_render_bigint($stats{password_permutations_blind_min}),
+            password_entropy_blind_max => $stats{password_entropy_blind_max},
+            password_permutations_blind_max => XKPasswd->_render_bigint($stats{password_permutations_blind_max}),
+            password_entropy_seen => $stats{password_entropy_seen},
+            password_permutations_seen => XKPasswd->_render_bigint($stats{password_permutations_seen}),
+        },
+    };
+    
+    # try generate the JSON string to return
+    my $json_string = q{};
+    eval{
+        $json_string = JSON->new()->encode($responseObj);
+        1; # ensure truthy evaluation on succesful execution
+    }or do{
+        XKPasswd->_error('failed to render hashref as JSON string with error: $EVAL_ERROR');
+    };
+    
+    # return the JSON string
+    return $json_string;
+}
+
 1; # because perl is a bit special
