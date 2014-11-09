@@ -845,6 +845,41 @@ sub config_to_string{
 
 #####-SUB-######################################################################
 # Type       : CLASS
+# Purpose    : Return the description for a given preset
+# Returns    : A scalar string
+# Arguments  : 1. OPTIONAL - the name of the preset to get the description for,
+#                 if no name is passed 'DEFAULT' is assumed
+# Throws     : Croaks on invalid invocation or invalid args
+# Notes      :
+# See Also   :
+sub preset_description{
+    my $class = shift;
+    my $preset = shift;
+    
+    # default blank presets to 'DEFAULT'
+    $preset = 'DEFAULT' unless defined $preset;
+    
+    # convert preset names to upper case
+    $preset = uc $preset;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        $_CLASS->_error('invalid invocation of class method');
+    }
+    unless(ref $preset eq q{}){
+        $_CLASS->_error('invalid args - if present, the first argument must be a scalar');
+    }
+    unless(defined $_PRESETS->{$preset}){
+        $_CLASS->_error("preset '$preset' does not exist");
+    }
+    
+    # return the description by loading the preset
+    return $_PRESETS->{$preset}->{description};
+}
+
+
+#####-SUB-######################################################################
+# Type       : CLASS
 # Purpose    : Return a list of all valid preset names
 # Returns    : An array of preset names as scalars
 # Arguments  : NONE
@@ -3331,7 +3366,7 @@ or
     my $xkpasswd = XKPasswd->new('sample_dict.txt', 'XKCD', {separator_character => q{ }});
 
 For more see the definitions for the class functions C<defined_presets()>,
-C<presets_to_string()>, and C<preset_config()>.
+C<presets_to_string()>, C<preset_description()>, and C<preset_config()>.
 
 The following presets are defined:
 
@@ -3685,6 +3720,17 @@ containing keys with values to override the defaults with.
     
 When overrides are present, the function will carp if an invalid key or value is
 passed, and croak if the resulting merged config is invalid.
+
+=head3 preset_description()
+
+    my $description = XKPasswd->preset_description('XKCD');
+    
+This function returns the description for a given preset. See above for the
+list of available presets.
+
+The first argument this function accpets is the name of the desired preset as a
+scalar. If an invalid name is passed, the function will carp. If no preset is
+passed the preset C<DEFAULT> is assumed.
 
 =head3 presets_to_string()
 
