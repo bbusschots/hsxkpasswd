@@ -185,10 +185,11 @@ sub config_from_json{
 #              'password_entropy_seen' & 'password_permutations_seen'
 # Arguments  : 1. an XKPasswd object
 #              2. the number of passwords to generate
-# Throws     : Croaks on invalid invocation, invalid args, and if ther is a
+# Throws     : Croaks on invalid invocation, invalid args, if there is a
 #              problem generating the passwords, statistics, or converting the
-#              results to a JSON string.
-# Notes      :
+#              results to a JSON string, or if the JSON module is not
+#              available.
+# Notes      : 
 # See Also   :
 sub passwords_json{
     my $class = shift;
@@ -237,6 +238,64 @@ sub passwords_json{
         1; # ensure truthy evaluation on succesful execution
     }or do{
         XKPasswd->_error('failed to render hashref as JSON string with error: $EVAL_ERROR');
+    };
+    
+    # return the JSON string
+    return $json_string;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Resturn the presets defined in the XKPasswd module as a JSON
+#              string
+# Returns    : A JSON String as a scalar. The JSON string represets a hashref
+#              with three keys  - 'defined_keys' contains an array of preset
+#              identifiers, 'presets' contains the preset configs indexed by
+#              preset identifier, and 'preset_descriptions' contains the a 
+#              hashref of descriptions indexed by preset identifiers
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation, if the JSON module is not
+#              available, or if there is a problem converting the objects to
+#              JSON
+# Notes      :
+# See Also   :
+sub presets_json{
+    my $class = shift;
+    
+    # validate the args
+    unless(defined $class && $class eq $_CLASS){
+        XKPasswd->_error('invalid invocation of class method');
+    }
+    
+    # make sure the JSON module is available
+    unless($JSON_AVAILABLE){
+        XKPasswd->_error(q{Perl JSON module not avaialble, and required for this function});
+    }
+    
+    # assemble an object cotaining the presets with any keys that can't be
+    #  converted to JSON removed
+    my @defined_presets = XKPasswd->defined_presets();
+    my $sanitised_presets = {};
+    my $preset_descriptions = {};
+    foreach my $preset_name (@defined_presets){
+        $sanitised_presets->{$preset_name} = XKPasswd->preset_config($preset_name);
+        $sanitised_presets->{$preset_name}->{random_function} = undef;
+        $sanitised_presets->{$preset_name}->{random_increment} = undef;
+        $preset_descriptions->{$preset_name} = XKPasswd->preset_description($preset_name);
+    }
+    my $return_object = {
+        defined_presets => [@defined_presets],
+        presets => $sanitised_presets,
+        preset_descriptions => $preset_descriptions,
+    };
+    
+    # try convert the object to a JSON string
+    my $json_string = q{};
+    eval{
+        $json_string = JSON->new()->encode($return_object);
+        1; # ensure truthy evaluation on succesful execution
+    }or do{
+        XKPasswd->_error("failed to render presets as JSON string with error: $EVAL_ERROR");
     };
     
     # return the JSON string
