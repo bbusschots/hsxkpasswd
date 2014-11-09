@@ -52,6 +52,7 @@
           <li><a href="#defined_presets">defined_presets()</a></li>
           <li><a href="#is_valid_config">is_valid_config()</a></li>
           <li><a href="#preset_config">preset_config()</a></li>
+          <li><a href="#preset_description">preset_description()</a></li>
           <li><a href="#presets_to_string">presets_to_string()</a></li>
         </ul>
       </li>
@@ -437,7 +438,7 @@
 
 <pre><code>    my $xkpasswd = XKPasswd-&gt;new(&#39;sample_dict.txt&#39;, &#39;XKCD&#39;, {separator_character =&gt; q{ }});</code></pre>
 
-<p>For more see the definitions for the class functions <code>defined_presets()</code>, <code>presets_to_string()</code>, and <code>preset_config()</code>.</p>
+<p>For more see the definitions for the class functions <code>defined_presets()</code>, <code>presets_to_string()</code>, <code>preset_description()</code>, and <code>preset_config()</code>.</p>
 
 <p>The following presets are defined:</p>
 
@@ -692,6 +693,15 @@
     </code></pre>
 
 <p>When overrides are present, the function will carp if an invalid key or value is passed, and croak if the resulting merged config is invalid.</p>
+
+<h3 id="preset_description">preset_description()</h3>
+
+<pre><code>    my $description = XKPasswd-&gt;preset_description(&#39;XKCD&#39;);
+    </code></pre>
+
+<p>This function returns the description for a given preset. See above for the list of available presets.</p>
+
+<p>The first argument this function accpets is the name of the desired preset as a scalar. If an invalid name is passed, the function will carp. If no preset is passed the preset <code>DEFAULT</code> is assumed.</p>
 
 <h3 id="presets_to_string">presets_to_string()</h3>
 
