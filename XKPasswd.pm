@@ -248,12 +248,12 @@ my $_KEYS = {
 # preset definitions
 my $_PRESETS = {
     DEFAULT => {
-        description => 'The default preset resulting in a password consisting of 4 random words of between 4 and 8 letters separated by a random character, with two random digits before and after, and padded with two random characters front and back',
+        description => 'The default preset resulting in a password consisting of 3 random words of between 4 and 8 letters with alternating case separated by a random character, with two random digits before and after, and padded with two random characters front and back',
         config => {
-            symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ?}],
+            symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ? / . ;}],
             word_length_min => 4,
             word_length_max => 8,
-            num_words => 4,
+            num_words => 3,
             separator_character => 'RANDOM',
             padding_digits_before => 2,
             padding_digits_after => 2,
@@ -261,7 +261,7 @@ my $_PRESETS = {
             padding_character => 'RANDOM',
             padding_characters_before => 2,
             padding_characters_after => 2,
-            case_transform => 'CAPITALISE',
+            case_transform => 'ALTERNATE',
             random_function => \&XKPasswd::basic_random_generator,
             random_increment => 'AUTO',
         },
@@ -3390,7 +3390,7 @@ keyboard C<#+=>. Below is a sample password generated with this preset:
 C<DEFAULT> - the default configuration. Below is a sample password generated
 with this preset:
 
-    ~~12:Settle:Whether:Succeed:Summer:48~~
+    ~~12:settle:SUCCEED:summer:48~~
 
 =item *
 
