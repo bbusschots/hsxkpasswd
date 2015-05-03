@@ -1,4 +1,4 @@
-package XKPasswd;
+package Crypt::HSXKPasswd;
 
 # import required modules
 use strict;
@@ -16,10 +16,10 @@ my $_CAN_STACK_TRACE = eval{
 
 ## no critic (ProhibitAutomaticExportation);
 use base qw( Exporter );
-our @EXPORT = qw( xkpasswd );
+our @EXPORT = qw( hsxkpasswd );
 ## use critic
 
-# Copyright (c) 2014, Bart Busschots T/A Bartificer Web Solutions All rights
+# Copyright (c) 2015, Bart Busschots T/A Bartificer Web Solutions All rights
 # reserved.
 #
 # Code released under the FreeBSD license (included in the POD at the bottom of
@@ -34,7 +34,7 @@ our @EXPORT = qw( xkpasswd );
 #
 
 # version info
-use version; our $VERSION = qv('2.1_01');
+use version; our $VERSION = qv('3.1_01');
 
 # acceptable entropy levels
 our $ENTROPY_MIN_BLIND = 78; # 78 bits - equivalent to 12 alpha numeric characters with mixed case and symbols
@@ -47,7 +47,7 @@ our $LOG_ERRORS = 0; # default to not logging errors
 our $DEBUG = 0; # default to not having debugging enabled
 
 # utility variables
-my $_CLASS = 'XKPasswd';
+my $_CLASS = 'Crypt::HSXKPasswd';
 
 # config key definitions
 my $_KEYS = {
