@@ -1,4 +1,4 @@
-package Crypt::HSXKPasswd::Dictionary::DefaultDictionary;
+package Crypt::HSXKPasswd::Dictionary::Default;
 
 use parent Crypt::HSXKPasswd::Dictionary;
 
@@ -16,7 +16,7 @@ use English qw( -no_match_vars ); # for more readable code
 use version; our $VERSION = qv('1.1_01');
 
 # utility variables
-my $_CLASS = 'Crypt::HSXKPasswd::Dictionary::DefaultDictionary';
+my $_CLASS = 'Crypt::HSXKPasswd::Dictionary::Default';
 
 # the word list
 my @_WORDS = (
@@ -1453,8 +1453,8 @@ my @_WORDS = (
 
 #####-SUB-#####################################################################
 # Type       : CONSTRUCTOR (CLASS)
-# Purpose    : Create a new instance of class Crypt::HSXKPasswd::Dictionary::DefaultDictionary
-# Returns    : An object of class Crypt::HSXKPasswd::Dictionary::DefaultDictionary
+# Purpose    : Create a new instance of class Crypt::HSXKPasswd::Dictionary::Default
+# Returns    : An object of class Crypt::HSXKPasswd::Dictionary::Default
 # Arguments  : NONE
 # Throws     : NOTHING
 # Notes      :

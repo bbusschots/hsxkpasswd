@@ -48,6 +48,7 @@ our $DEBUG = 0; # default to not having debugging enabled
 
 # utility variables
 my $_CLASS = 'Crypt::HSXKPasswd';
+my $_DICTIONARY_BASE_CLASS = $_CLASS.'::Dictionary';
 
 # config key definitions
 my $_KEYS = {
@@ -409,7 +410,14 @@ my $_PRESETS = {
 # Type       : CONSTRUCTOR (CLASS)
 # Purpose    : Instantiate an object of type XKPasswd
 # Returns    : An object of type XKPasswd
-# Arguments  : 1. The path to a dictionary file
+# Arguments  : 1. OPTIONAL - a word source, if none passed, An instance of
+#                 Crypt::HSXKPasswd::Dictionary::Default will be used. Valid
+#                 word sources are:
+#                 The path to a word file as a string
+#                     -OR-
+#                 An array ref of words
+#                     -OR-
+#                 An intance of a sub class of Crypt::HSXKPasswd::Dictionary
 #              2. OPTIONAL - the name of a preset as a scalar (an empty string,
 #                 undef, or 'DEFAULT' to get the default config)
 #                     -OR-
@@ -422,7 +430,7 @@ my $_PRESETS = {
 # See Also   : For valid configuarion options see POD documentation below
 sub new{
     my $class = shift;
-    my $dictionary_path = shift;
+    my $dictionary_source = shift;
     my $preset = shift;
     my $preset_override = shift;
     
@@ -430,13 +438,26 @@ sub new{
     unless($class && $class eq $_CLASS){
         $_CLASS->_error('invalid invocation of constructor');
     }
-    unless(defined $dictionary_path && -f $dictionary_path){
-        $_CLASS->_error('a valid dictionary path must be passed as the first argument');
-    }
     
     # before going any further, check the presets if debugging (doing later may cause an error before we test)
     if($DEBUG){
         $_CLASS->_check_presets();
+    }
+    
+    # process the dictionary
+    my $dictionary;
+    if(defined $dictionary_source){
+        # a value was passed, so make sure it's valid
+        if($dictionary_source->isa($_DICTIONARY_BASE_CLASS)){
+            $dictionary = $dictionary_source;
+        }elsif(ref $dictionary_source eq q{} || ref $dictionary_source eq 'ARRAY'){
+            $dictionary = $_DICTIONARY_BASE_CLASS.'::Basic'->new($dictionary_source);
+        }else{
+            $_CLASS->_error('invalid word source');
+        }
+    }else{
+        # no value was passed, so use a default dictionary
+        $dictionary = $_DICTIONARY_BASE_CLASS.'::Default'->new();
     }
     
     # assemble the config hashref
@@ -480,7 +501,7 @@ sub new{
         # 'public' instance variables (none so far)
         # 'PRIVATE' internal variables
         _CONFIG => {},
-        _DICTIONARY_PATH => q{}, # the path to the dictionary hashref
+        _DICTIONARY_SOURCE => {}, # the dictionary object to source words from
         _CACHE_DICTIONARY_FULL => [], # a cache of all words found in the dictionary file
         _CACHE_DICTIONARY_LIMITED => [], # a cache of all the words found in the dictionary file that meet the length criteria
         _CACHE_ENTROPYSTATS => {}, # a cache of the entropy stats for the current combination of dictionary and config
@@ -493,7 +514,7 @@ sub new{
     $instance->config($config);
     
     # load the dictionary (can't be done until the config is loaded)
-    $instance->dictionary($dictionary_path);
+    $instance->dictionary($dictionary);
     
     # if debugging, print status
     $_CLASS->_debug("instantiated $_CLASS object with the following details:\n".$instance->status());
@@ -1044,17 +1065,21 @@ sub config_stats{
 }
 
 #
-# Public Instance functions ---------------------------------------------------
+# --- Public Instance functions -----------------------------------------------
 #
 
-#####-SUB-######################################################################
+#####-SUB-#####################################################################
 # Type       : INSTANCE
-# Purpose    : Get the path to the currently loaded dictionary file, or, load a
-#              new dictionary file
-# Returns    : A scalar with the path to the loaded dictionary file if called
-#              with no argument, or, a reference to the instance (to enable
-#              function chaining) if called with a file path
-# Arguments  : 1. OPTIONAL - the path to the config file to load as a scalar
+# Purpose    : Get the currently loaded dictionary object, or, load a new
+#              dictionary
+# Returns    : An instance to the loaded dictionary object, or, a reference to
+#              the instance (to enable function chaining) if called as a setter
+# Arguments  : 1. OPTIONAL - the source for the dictionary, can be:
+#                 The path to a dictionary file
+#                     -OR-
+#                 A reference to an array of words
+#                     -OR-
+#                 An instance of a sub-class of Crypt::HSXKPasswd::Dictionary
 # Throws     : Croaks on invalid invocation, or, if there is a problem loading
 #              a dictionary file
 # Notes      :
@@ -1062,7 +1087,7 @@ sub config_stats{
 #              below
 sub dictionary{
     my $self = shift;
-    my $path = shift;
+    my $dictionary_source = shift;
     
     # validate args
     unless($self && $self->isa($_CLASS)){
@@ -1070,9 +1095,9 @@ sub dictionary{
     }
     
     # decide if we're a 'getter' or a 'setter'
-    if(!(defined $path)){
+    if(!(defined $dictionary_source)){
         # we are a getter, so just return
-        return $self->{_DICTIONARY_PATH};
+        return $self->{_DICTIONARY_SOURCE};
     }else{
         # we are a setter, so try load the dictionary
         
@@ -1081,14 +1106,24 @@ sub dictionary{
             $_CLASS->_error('failed to load dictionary file - config has not been loaded yet');
         }
         
-        # parse the file
-        my @cache_full = $_CLASS->_parse_words_file($path);
+        # get a dictionary instance
+        my $new_dict;
+        if($dictionary_source->isa($_DICTIONARY_BASE_CLASS)){
+            $new_dict = $dictionary_source;
+        }elsif(ref $dictionary_source eq q{} && ref $dictionary_source eq 'ARRAY'){
+            $new_dict = new $_DICTIONARY_BASE_CLASS.'::Basic'->new($dictionary_source); # could throw an error
+        }else{
+            $_CLASS->_error('invalid args - must pass a valid dictinary, hashref, or file path');
+        }
+        
+        # load the dictionary
+        my @cache_full = @{$new_dict->word_list()};
     
         # generate the valid word cache - croaks if too few words left after filtering
         my @cache_limited = $_CLASS->_filter_word_list(\@cache_full, $self->{_CONFIG}->{word_length_min}, $self->{_CONFIG}->{word_length_max});
     
         # if we got here all is well, so save the new path and caches into the object
-        $self->{_DICTIONARY_PATH} = $path;
+        $self->{_DICTIONARY_SOURCE} = $new_dict;
         $self->{_CACHE_DICTIONARY_FULL} = [@cache_full];
         $self->{_CACHE_DICTIONARY_LIMITED} = [@cache_limited];
         
@@ -1395,8 +1430,6 @@ sub passwords{
 # Type       : INSTANCE
 # Purpose    : Return statistics about the instance
 # Returns    : A hash of statistics indexed by the following keys:
-#              * 'dictionary_path' - the path to the dictionary file the
-#                instance is using
 #              * 'dictionary_words_total' - the total number of words loaded
 #                from the dictionary file
 #              * 'dictionary_words_filtered' - the number of words loaded from
@@ -1475,7 +1508,6 @@ sub stats{
     
     # deal with the dictionary file
     my %dict_stats = $self->_calcualte_dictionary_stats();
-    $stats{dictionary_path} = $self->{_DICTIONARY_PATH};
     $stats{dictionary_words_total} = $dict_stats{num_words_total};
     $stats{dictionary_words_filtered} = $dict_stats{num_words_filtered};
     $stats{dictionary_words_percent_avaialable} = $dict_stats{percent_words_available};
@@ -1579,7 +1611,14 @@ sub status{
 # Type       : SUBROUTINE
 # Purpose    : A functional interface to this library (exported)
 # Returns    : A random password as a scalar
-# Arguments  : 1. The path to a dictionary file
+# Arguments  : 1. OPTIONAL - a word source, if none passed, An instance of
+#                 Crypt::HSXKPasswd::Dictionary::Default will be used. Valid
+#                 word sources are:
+#                 The path to a word file as a string
+#                     -OR-
+#                 An array ref of words
+#                     -OR-
+#                 An intance of a sub class of Crypt::HSXKPasswd::Dictionary
 #              2. OPTIONAL - the name of a preset as a scalar (an empty string,
 #                 undef, or 'DEFAULT' to get the default config)
 #                     -OR-
@@ -1589,22 +1628,22 @@ sub status{
 # Throws     : Croaks on error
 # Notes      :
 # See Also   :
-sub xkpasswd{
-    my $dictionary_path = shift;
+sub hsxkpasswd{
+    my $dictionary_source = shift;
     my $preset = shift;
     my $preset_override = shift;
     
     # try initialise an xkpasswd object
-    my $xkpasswd;
+    my $hsxkpasswd;
     eval{
-        $xkpasswd = $_CLASS->new($dictionary_path, $preset, $preset_override);
+        $hsxkpasswd = $_CLASS->new($dictionary_source, $preset, $preset_override);
         1; # ensure truthy evaliation on successful execution
     } or do {
         $_CLASS->_error("Failed to generate password with the following error: $EVAL_ERROR");
     };
     
     # genereate and return a password - could croak
-    return $xkpasswd->password();
+    return $hsxkpasswd->password();
 }
 
 #####-SUB-######################################################################
@@ -1915,53 +1954,6 @@ sub _validate_key{
     
     # if we got here, all is well, so return 1
     return 1;
-}
-
-#####-SUB-######################################################################
-# Type       : CLASS (PRIVATE)
-# Purpose    : Parse a dictionary file into an array of words.
-# Returns    : An array of words as scalars.
-# Arguments  : 1. a scalar containing the path to the file to parse
-# Throws     : Croaks on invalid invocation, invalid args, and if there is an
-#              error reading the file.
-# Notes      :
-# See Also   :
-sub _parse_words_file{
-    my $class = shift;
-    my $path = shift;
-    
-    # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
-    unless(defined $path && ref $path eq q{} && -f $path){
-        $_CLASS->_error('invoked with invalid file path');
-    }
-    
-    # slurp the words file
-    open my $WORDSFILE, '<', $path or $_CLASS->_error("failed to open words file at $path");
-    my $words_raw = do{local $/ = undef; <$WORDSFILE>};
-    close $WORDSFILE;
-    
-    #loop throuh the lines and build up the word list
-    my @ans = ();
-    LINE:
-    foreach my $line (split /\n/sx, $words_raw){
-         # skip empty lines
-        next LINE if $line =~ m/^\s*$/sx;
-        
-        # skip comment lines
-        next LINE if $line =~ m/^[#]/sx;
-        
-        # skip anything that's not at least three letters
-        next LINE unless $line =~ m/^[[:alpha:]]{4,}$/sx;
-        
-        # store the word
-        push @ans, $line;
-    }
-    
-    # return the answer
-    return @ans;
 }
 
 #####-SUB-######################################################################
@@ -2684,7 +2676,7 @@ sub _update_entropystats_cache{
     }
     
     # do nothing if the dictionary has not been loaded yet (should only happen while the constructor is building an instance)
-    return 1 unless($self->{_DICTIONARY_PATH});
+    return 1 unless($self->{_DICTIONARY_SOURCE} && $self->{_DICTIONARY_SOURCE}->isa($_DICTIONARY_BASE_CLASS));
     
     # calculate and store the entropy stats
     my %stats = $self->_calculate_entropy_stats();
@@ -2804,56 +2796,65 @@ __END__
 
 =head1 NAME
 
-XKPasswd - A secure memorable password generator
+C<Crypt::HSXKPasswd> - A secure memorable password generator inspired by Steve
+Gibson's Passord Haystacks (L<https://www.grc.com/haystack.htm>), and the
+famous XKCD password cartoon (L<https://xkcd.com/936/>).
 
 =head1 VERSION
 
-This documentation refers to XKPasswd version 2.1.1.
+This documentation refers to C<Crypt::HSXKPasswd> version 3.1.1.
 
 =head1 SYNOPSIS
 
-    use XKPasswd;
+    use Crypt::HSXKPasswd;
 
     #
     # Functional Interface - for single passwords generated from simple configs
     #
     
+    # generate a single password using the default dictionary using the default
+    # configuration
+    my $password = hsxkpasswd();
+    
     # generate a single password using words from the file
     # sample_dict.txt using the default configuration
-    my $password = xkpasswd('sample_dict.txt');
+    my $password = hsxkpasswd('sample_dict.txt');
     
     # generate a single password using one of the module's
     # predefined presets exactly
-    my $password = xkpasswd('sample_dict.txt', 'XKCD');
+    my $password = hsxkpasswd('sample_dict.txt', 'XKCD');
     
     # generate a single password using one of the module's
     # predefined presets as a starting point, but with a
     # small customisation
-    my $password = xkpasswd('sample_dict.txt', 'XKCD', {separator_character => q{ }});
+    my $password = hsxkpasswd('sample_dict.txt', 'XKCD', {separator_character => q{ }});
     
     #
     # Object Oriented Interface
     #
     
+    # create a new instance with the default dictionary and a default config
+    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new();
+    
     # create a new instance with the default config
-    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt');
+    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new('sample_dict.txt');
     
     # create an instance from the preset 'XKCD'
-    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', 'XKCD');
+    my $hsxkpasswd_instance = HSXKPasswd->new('sample_dict.txt', 'XKCD');
     
     # create an instance based on the preset 'XKCD' with one customisation
-    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', 'XKCD', {separator_character => q{ }});
+    my $hsxkpasswd_instance = HSXKPasswd->new('sample_dict.txt', 'XKCD', {separator_character => q{ }});
     
     # create an instance from a config based on a preset
     # but with many alterations
-    my $config = XKPasswd->preset_config('XKCD');
+    my $config = HSXKPasswd->preset_config('XKCD');
     $config->{separator_character} = q{ };
     $config->{case_transform} = 'INVERT';
     $config->{padding_type} = "FIXED";
     $config->{padding_characters_before} = 1;
     $config->{padding_characters_after} = 1;
     $config->{padding_character} = '*';
-    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', $config);
+    my $hsxkpasswd_instance = HSXKPasswd->new('sample_dict.txt', $config);
     
     # create an instance from an entirely custom configuration
     my $config = {
@@ -2873,13 +2874,13 @@ This documentation refers to XKPasswd version 2.1.1.
         random_function => \&XKPasswd::basic_random_generator,
         random_increment => 'AUTO',
     }
-    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', $config);
+    my $hsxkpasswd_instance = HSXKPasswd->new('sample_dict.txt', $config);
     
     # generate a single password
-    my $password = $xkpasswd_instance->password();
+    my $password = $hsxkpasswd_instance->password();
     
     # generate multiple passwords
-    my @passwords = $xkpasswd_instance->passwords(10);
+    my @passwords = $hsxkpasswd_instance->passwords(10);
 
 =head1 DESCRIPTION
 
@@ -3125,14 +3126,33 @@ blind entropy falls below 78bits, or the seen entropy falls below 52 bits.
 
 =head1 SUBROUTINES/METHODS
 
-=head2 DICTIONARY FILES
+=head2 WORD SOURCES
 
-XKPasswd instances load their word lists from text files. The constructor
-loads the words contained in a single file into memory when assembling an
-XKPasswd object. Once constructed, the object never reads from the file again.
-Throughout this documentation, the text file containing the words to be used is
-referred to as I<the Dictionary File>, and specified via the
-C<dictionary_file_path> config variable.
+The abstract class C<Crypt::HSXKPasswd::Dictionary> acts as a base class for
+sources of words for this module. Word sources should extend the base class
+and implement the function C<word_list()>, which should return an array of
+words.
+
+In order to produce secure passwords it's important to use a dictionary file
+that contains a large selection of words with a good mix of different word
+lengths.
+
+The module ships with a number of pre-defined word sources:
+
+=head3 C<Crypt::HSXKPasswd::Dictionary::Default>
+
+A default word list consisting of English words and place names.
+
+=head3 C<Crypt::HSXKPasswd::Dictionary::Basic>
+
+This class can be initialised from a dictionary, or from an array ref
+containing words.
+
+=head4 Usage
+
+    my $word_source = Crypt::HSXKPasswd::Dictionary::Basic->new('file_path');
+    my $word_source = Crypt::HSXKPasswd::Dictionary::Basic->new($array_ref);
+
 
 The rules for the formatting of dictionary files are simple. Dictionary
 files must contain one word per line. Words shorter than four letters will be
@@ -3141,13 +3161,6 @@ ignored, as will all lines starting with the # symbol.
 This format is the same as that of the standard Unix Words file, usually found
 at C</usr/share/dict/words> on Unix and Linux operating systems (including OS
 X).
-
-In order to produce secure passwords it's important to use a dictionary file
-that contains a large selection of words with a good mix of different word
-lengths.
-
-A sample dictionary file (C<sample_dict.txt>) is distributed with this
-module.
 
 =head2 CONFIGURATION HASHREFS
 

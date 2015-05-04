@@ -11,14 +11,10 @@ use Crypt::HSXKPasswd;
 # reserved.
 #
 # Code released under the FreeBSD license (included in the POD at the bottom of
-# this file)
-
-#==============================================================================
-# Code
-#==============================================================================
+# HSXKPasswd.pm)
 
 #
-# 'Constants'------------------------------------------------------------------
+# --- 'Constants'--------------------------------------------------------------
 #
 
 # version info
@@ -43,7 +39,7 @@ my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 #              2) the path to the dictionary file
 # Throws     : Croaks on invalid args or file IO error
 # Notes      : This function can be called as a perl one-liner, e.g.
-#              perl -MCrypt::HSXKPasswd::Util -e 'Crypt::HSXKPasswd::Util->dictionary_from_text_file("DefaultDictionary", "sample_dict.txt")' > Crypt/HSXKPasswd/DefaultDictionary.pm
+#              perl -Ilib -MCrypt::HSXKPasswd::Util -e 'Crypt::HSXKPasswd::Util->dictionary_from_text_file("Default", "sample_dict.txt")' > lib/Crypt/HSXKPasswd/Dictionary/Default.pm
 # See Also   :
 sub dictionary_from_text_file{
     my $class = shift;

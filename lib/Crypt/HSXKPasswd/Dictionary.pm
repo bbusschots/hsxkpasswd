@@ -11,11 +11,7 @@ use Crypt::HSXKPasswd; # for the error function
 # reserved.
 #
 # Code released under the FreeBSD license (included in the POD at the bottom of
-# this file)
-
-#==============================================================================
-# Code
-#==============================================================================
+# HSXKPasswd.pm)
 
 #
 # --- 'Constants' -------------------------------------------------------------
@@ -34,21 +30,14 @@ my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 #####-SUB-#####################################################################
 # Type       : CONSTRUCTOR (CLASS)
-# Purpose    : A place-holder for the constructor - does nothing
-# Returns    : An object of type Crypt::HSXKPasswd::Dictionary
+# Purpose    : A place-holder for the constructor - just throws an error
+# Returns    : VOID
 # Arguments  : NONE
-# Throws     : NOTHING
+# Throws     : ALWAYS throws an error to say this class must be extended.
 # Notes      : 
 # See Also   : 
 sub new{
-    my $class = shift;
-    
-    # initialise and bless an empty object
-    my $instance = {};
-    bless $instance, $class;
-    
-    # return the object
-    return $instance;
+    $_MAIN_CLASS->_error("$_CLASS must be extended to be used");
 }
 
 #
@@ -65,9 +54,7 @@ sub new{
 # Notes      :
 # See Also   :
 sub word_list{
-    my $self = shift;
-    
-    croak("$_CLASS must be extended to be used, and the function word_list() must be overridden");
+    $_MAIN_CLASS->_error("$_CLASS must be extended to be used, and the function word_list() must be overridden");
 }
 
 #####-SUB-#####################################################################
