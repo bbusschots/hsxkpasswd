@@ -8,6 +8,7 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use English qw( -no_match_vars ); # for more readable code
 use Crypt::HSXKPasswd; # for the error function
+use Crypt::HSXKPasswd::Dictionary::Basic; # used to process the dictionary file
 
 # Copyright (c) 2015, Bart Busschots T/A Bartificer Web Solutions All rights
 # reserved.
@@ -64,7 +65,8 @@ sub new{
     
     # initialise and bless the object
     my $instance = {
-        system_dictionary => $_MAIN_CLASS.'::Dictionary::Basic'->new($dictionary),
+        file_path => $dictionary,
+        system_dictionary => Crypt::HSXKPasswd::Dictionary::Basic->new($dictionary),
     };
     bless $instance, $class;
     
@@ -95,6 +97,29 @@ sub word_list{
     
     # return a reference to the word list
     return $self->{system_dictionary}->word_list();
+}
+
+#####-SUB-#####################################################################
+# Type       : INSTANCE
+# Purpose    : Override source() from the parent class and return information
+#              about the word source.
+# Returns    : An array reference.
+# Arguments  : NONE
+# Throws     : NOTHING
+# Notes      :
+# See Also   :
+sub source{
+    my $self = shift;
+    
+    # validate args
+    unless(defined $self && $self->isa($_CLASS)){
+        $_MAIN_CLASS->_error('invalid invocation of instance method');
+    }
+    
+    my $source = $self->SUPER::source();
+    $source .= ' ('.$self->{file_path}.')';
+    
+    return $source;
 }
 
 1; # because Perl is just a little bit odd :)
