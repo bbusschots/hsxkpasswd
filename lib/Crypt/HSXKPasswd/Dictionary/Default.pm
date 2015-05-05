@@ -19,6 +19,7 @@ use version; our $VERSION = qv('1.1_01');
 my $_CLASS = 'Crypt::HSXKPasswd::Dictionary::Default';
 
 # the word list
+## no critic (CodeLayout::ProhibitQuotedWordLists);
 my @_WORDS = (
     'Africa',
     'Alabama',
@@ -1446,6 +1447,7 @@ my @_WORDS = (
     'your',
     'yourself',
 );
+## use critic
 
 #
 # --- Constructor -------------------------------------------------------------

@@ -36,10 +36,12 @@ my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 # Arguments  : NONE
 # Throws     : ALWAYS throws an error to say this class must be extended.
 # Notes      : 
-# See Also   : 
+# See Also   :
+## no critic (Subroutines::RequireFinalReturn);
 sub new{
     $_MAIN_CLASS->_error("$_CLASS must be extended to be used");
 }
+## use critic
 
 #
 # --- Public Instance functions -----------------------------------------------
@@ -54,9 +56,11 @@ sub new{
 #              this function must be overridden.
 # Notes      :
 # See Also   :
+## no critic (Subroutines::RequireFinalReturn);
 sub word_list{
     $_MAIN_CLASS->_error("$_CLASS must be extended to be used, and the function word_list() must be overridden");
 }
+## use critic
 
 #####-SUB-#####################################################################
 # Type       : INSTANCE
@@ -71,7 +75,7 @@ sub source{
     
     # validate args
     unless($self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error("invalid invocation of instance method");
+        $_MAIN_CLASS->_error('invalid invocation of instance method');
     }
     
     # return the instances class
@@ -81,7 +85,7 @@ sub source{
 #####-SUB-#####################################################################
 # Type       : INSTANCE
 # Purpose    : A function to print out the words in the dictionary
-# Returns    : VOID
+# Returns    : Always returns 1 (to keep PerlCritic happy)
 # Arguments  : NONE
 # Throws     : Croaks on invalid invocation, and throws any errors word_list()
 # Notes      :
@@ -96,6 +100,9 @@ sub print_words{
     
     print join "\n", @{$self->word_list()};
     print "\n";
+    
+    # final truthy return to keep perlcritic happy
+    return 1;
 }
 
 1; # because Perl is just a little bit odd :)

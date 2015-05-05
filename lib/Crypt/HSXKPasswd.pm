@@ -7,10 +7,8 @@ use Carp; # for nicer 'exception' handling for users of the module
 use Params::Validate qw(:all); # for varliable validation
 use English qw(-no_match_vars); # for more readable code
 use Scalar::Util qw(blessed); # for checking if a reference is blessed
-#use B qw(svref_2object); # for code ref->name conversion
 use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
-use Crypt::HSXKPasswd::Dictionary::Default;
 use Crypt::HSXKPasswd::Dictionary::Basic;
 use Crypt::HSXKPasswd::RNG::Basic;
 
@@ -18,23 +16,17 @@ use Crypt::HSXKPasswd::RNG::Basic;
 my $_CAN_STACK_TRACE = eval{
     require Devel::StackTrace; # for better error reporting when debugging
 };
+eval{
+    # the default dicrionary may not have been geneated using the Util module
+    require Crypt::HSXKPasswd::Dictionary::Default;
+}or do{
+    carp('WARNING - failed to load Crypt::HSXKPasswd::Dictionary::Default');
+};
 
 ## no critic (ProhibitAutomaticExportation);
 use base qw(Exporter);
 our @EXPORT = qw(hsxkpasswd);
 ## use critic
-
-#BEGIN{
-#    use Cwd qw(realpath);
-#    use File::Spec;
-#    my ($mod_volume, $mod_directories, $mod_file) = File::Spec->splitpath(realpath(__FILE__));
-#    my @local_lib_directories = File::Spec->splitdir($mod_directories);
-#    pop @local_lib_directories; # chop "/" from the end of the path
-#    pop @local_lib_directories; # chop "Crypt" from end of the path
-#    my $local_lib_path = File::Spec->catdir(@local_lib_directories);
-#   push @INC, $local_lib_path;
-#    require 'Crypt::HSXKPasswd::Util';
-#}
 
 # Copyright (c) 2015, Bart Busschots T/A Bartificer Web Solutions All rights
 # reserved.
@@ -416,9 +408,10 @@ my $_PRESETS = {
 #              preset 'DEFAULT' is used.
 # See Also   : For valid configuarion options see POD documentation below
 sub new{
-    my $class = shift;
+    my @args = @_;
+    my $class = shift @args;
     my %args = validate(
-        @_, {
+        @args, {
             dictionary => {isa => $_DICTIONARY_BASE_CLASS, optional => 1},
             dictionary_list => {type => ARRAYREF, optional => 1},
             dictionary_file => {type => SCALAR, optional => 1},
@@ -809,7 +802,6 @@ sub config_to_string{
         }
         
         # process the key
-        ## no critic (ProhibitCascadingIfElse);
         if($_KEYS->{$key}->{ref} eq q{}){
             # the key is a scalar
             $ans .= $key.q{: '}.$config->{$key}.qq{'\n};
@@ -834,7 +826,6 @@ sub config_to_string{
             # this should never happen, but just in case, throw a warning
             $_CLASS->_warn("encounterd an un-handled key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
         }
-        ## use critic
     }
     
     # return the string
@@ -1119,7 +1110,7 @@ sub dictionary{
         if($dictionary_source->isa($_DICTIONARY_BASE_CLASS)){
             $new_dict = $dictionary_source;
         }elsif(ref $dictionary_source eq q{} && ref $dictionary_source eq 'ARRAY'){
-            $new_dict = new Crypt::HSXKPasswd::Dictionary::Basic->new($dictionary_source); # could throw an error
+            $new_dict = Crypt::HSXKPasswd::Dictionary::Basic->new($dictionary_source); # could throw an error
         }else{
             $_CLASS->_error('invalid args - must pass a valid dictinary, hashref, or file path');
         }
@@ -1667,10 +1658,12 @@ sub status{
 # Notes      : See the Constructor
 # See Also   : For valid configuarion options see POD documentation below
 sub hsxkpasswd{
+    my @constructor_args = @_;
+    
     # try initialise an xkpasswd object
     my $hsxkpasswd;
     eval{
-        $hsxkpasswd = $_CLASS->new(@_);
+        $hsxkpasswd = $_CLASS->new(@constructor_args);
         1; # ensure truthy evaliation on successful execution
     } or do {
         $_CLASS->_error("Failed to generate password with the following error: $EVAL_ERROR");
@@ -2161,7 +2154,7 @@ sub _increment_random_cache{
     
     # validate them
     unless(scalar @random_numbers){
-        $_CLASS->_error("random function did not return any random numbers");
+        $_CLASS->_error('random function did not return any random numbers');
     }
     foreach my $num (@random_numbers){
         unless($num =~ m/^1|(0([.]\d+)?)$/sx){

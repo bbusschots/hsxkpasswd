@@ -33,7 +33,7 @@ my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 # Purpose    : Generate a Dictionary module from a text file. The function
 #              prints the code for the module.The function prints the code for
 #              the module.
-# Returns    : VOID
+# Returns    : Always returns 1 (to keep PerlCritic happy)
 # Arguments  : 1) the name of the module to generate (not including the
 #                 HSXKPasswd::Dictionary part)
 #              2) the path to the dictionary file
@@ -50,9 +50,11 @@ sub dictionary_from_text_file{
     unless($class && $class eq $_CLASS){
         $_MAIN_CLASS->_error('invalid invocation of class method');
     }
+    ## no critic (RegularExpressions::ProhibitEnumeratedClasses);
     unless($name && $name =~ m/^[a-zA-Z0-9_]+$/sx){
         $_MAIN_CLASS->error('invalid module name');
     }
+    ## use critic
     unless($file_path && -f $file_path){
         $_MAIN_CLASS->error('invalid file path');
     }
@@ -112,6 +114,7 @@ use version; our \$VERSION = qv('1.1_01');
 my \$_CLASS = '${_MAIN_CLASS}::Dictionary::$name';
 
 # the word list
+## no critic (CodeLayout::ProhibitQuotedWordLists);
 my \@_WORDS = (
 END_MOD_START
 
@@ -124,6 +127,7 @@ WORD_END
 
     $pkg_code .= <<"END_MOD_END";
 );
+## use critic
 
 #
 # --- Constructor -------------------------------------------------------------
@@ -167,6 +171,9 @@ END_MOD_END
     
     # print out the generated code
     print $pkg_code;
+    
+    # return a truthy value to keep perlcritic happy
+    return 1;
 }
 
 1; # because Perl is just a little bit odd :)

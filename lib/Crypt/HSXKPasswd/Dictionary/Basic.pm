@@ -6,7 +6,8 @@ use parent Crypt::HSXKPasswd::Dictionary;
 use strict;
 use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
-use English qw( -no_match_vars ); # for more readable code
+use English qw(-no_match_vars); # for more readable code
+use List::MoreUtils qw(uniq); # for array deduplication
 use Crypt::HSXKPasswd; # for the error function
 
 # Copyright (c) 2015, Bart Busschots T/A Bartificer Web Solutions All rights
@@ -110,7 +111,7 @@ sub source{
         $_MAIN_CLASS->_error('invalid invocation of instance method');
     }
     
-    my $source = $self->SUPER->source();
+    my $source = $self->SUPER::source();
     if($self->{sources}->{num_arrays} || scalar @{$self->{sources}->{files}}){
         $source .= ' (loaded from: ';
         if($self->{sources}->{num_arrays}){
@@ -178,7 +179,7 @@ sub add_words{
     }
     
     # try load the words from the relevant source
-    my $valid_word_re = qr/^[[:alpha:]]+$/;
+    my $valid_word_re = qr/^[[:alpha:]]+$/sx;
     my @words = ();
     if(ref $dict_source eq 'ARRAY'){
         # load valid words from the referenced array
@@ -224,9 +225,13 @@ sub add_words{
         if($word && ref $word eq q{} && $word =~ m/$valid_word_re/sx){
             push @{$self->{words}}, "$word";
         }else{
-            carp('Skipping invalid word: $word');
+            carp("Skipping invalid word: $word");
         }
     }
+    
+    # de-dupe the word list
+    my @unique_words = uniq(@{$self->{words}});
+    $self->{words} = [@unique_words];
     
     # return a reference to self
     return $self;

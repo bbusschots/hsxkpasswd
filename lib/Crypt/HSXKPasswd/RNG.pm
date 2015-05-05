@@ -36,10 +36,12 @@ my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 # Arguments  : NONE
 # Throws     : ALWAYS throws an error to say this class must be extended.
 # Notes      : 
-# See Also   : 
+# See Also   :
+## no critic (Subroutines::RequireFinalReturn);
 sub new{
     $_MAIN_CLASS->_error("$_CLASS must be extended to be used");
 }
+## use critic
 
 #
 # --- Public Instance functions -----------------------------------------------
@@ -56,8 +58,10 @@ sub new{
 #              this function must be overridden.
 # Notes      :
 # See Also   :
+## no critic (Subroutines::RequireFinalReturn);
 sub random_numbers{
     $_MAIN_CLASS->_error("$_CLASS must be extended to be used, and the function random_numbers() must be overridden");
 }
+## use critic
 
 1; # because Perl is just a little bit odd :)
