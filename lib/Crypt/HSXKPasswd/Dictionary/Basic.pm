@@ -23,7 +23,7 @@ use Crypt::HSXKPasswd; # for the error function
 use version; our $VERSION = qv('1.1_01');
 
 # utility variables
-my $_CLASS = 'Crypt::HSXKPasswd::Dictionary';
+my $_CLASS = 'Crypt::HSXKPasswd::Dictionary::Basic';
 my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 #
@@ -54,6 +54,10 @@ sub new{
     # start with a blank object
     my $instance = {
         words => [],
+        sources => {
+            files => [],
+            num_arrays => 0,
+        },
     };
     bless $instance, $class;
     
@@ -81,12 +85,47 @@ sub word_list{
     my $self = shift;
     
     # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_MAIN_CLASS->_error('invalid invocation of class method');
+    unless(defined $self && $self->isa($_CLASS)){
+        $_MAIN_CLASS->_error('invalid invocation of an instance method');
     }
     
     # return a reference to the word list
     return $self->{words};
+}
+
+#####-SUB-#####################################################################
+# Type       : INSTANCE
+# Purpose    : Override source() from the parent class and return information
+#              about the word sources.
+# Returns    : An array reference.
+# Arguments  : NONE
+# Throws     : NOTHING
+# Notes      :
+# See Also   :
+sub source{
+    my $self = shift;
+    
+    # validate args
+    unless(defined $self && $self->isa($_CLASS)){
+        $_MAIN_CLASS->_error('invalid invocation of instance method');
+    }
+    
+    my $source = $self->SUPER->source();
+    if($self->{sources}->{num_arrays} || scalar @{$self->{sources}->{files}}){
+        $source .= ' (loaded from: ';
+        if($self->{sources}->{num_arrays}){
+            $source .= $self->{sources}->{num_arrays}.' array refs';
+        }
+        if($self->{sources}->{num_arrays} && scalar @{$self->{sources}->{files}}){
+            $source .= ' and ';
+        }
+        if(scalar @{$self->{sources}->{files}}){
+            $source .= 'the file(s) '.(join q{, }, @{$self->{sources}->{files}});
+        }
+        $source .= ')';
+    }
+    
+    return $source;
 }
 
 #####-SUB-#####################################################################
@@ -105,8 +144,10 @@ sub empty{
         $_MAIN_CLASS->_error('invalid invocation of instance method');
     }
     
-    # blank the word list
+    # blank the word list and sources
     $self->{words} = [];
+    $self->{sources}->{files} = [];
+    $self->{sources}->{num_arrays} = 0;
     
     # return a reference to self
     return $self;
@@ -142,6 +183,9 @@ sub add_words{
     if(ref $dict_source eq 'ARRAY'){
         # load valid words from the referenced array
         @words = @{$dict_source};
+        
+        # increase the array source count
+        $self->{sources}->{num_arrays}++;
     }else{
         # load the words from a file path
         
@@ -155,7 +199,7 @@ sub add_words{
         my $word_file_contents = do{local $/ = undef; <$WORD_FILE_FH>};
         close $WORD_FILE_FH;
         LINE:
-        foreach $line (split /\n/sx, $word_file_contents){
+        foreach my $line (split /\n/sx, $word_file_contents){
             # skip empty lines
             next LINE if $line =~ m/^\s*$/sx;
         
@@ -165,6 +209,14 @@ sub add_words{
             # if we got here, store the word
             push @words, $line;
         }
+        
+        # make sure we got at least one word!
+        unless(scalar @words){
+            $_MAIN_CLASS->_error("file $dict_source contained no valid words");
+        }
+        
+        # add the file to the list of loaded files
+        push @{$self->{sources}->{files}}, $dict_source;
     }
     
     # process the words
@@ -179,3 +231,5 @@ sub add_words{
     # return a reference to self
     return $self;
 }
+
+1; # because Perl is just a little bit odd :)

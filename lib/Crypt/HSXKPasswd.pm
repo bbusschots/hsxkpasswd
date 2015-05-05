@@ -4,10 +4,15 @@ package Crypt::HSXKPasswd;
 use strict;
 use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
-use English qw( -no_match_vars ); # for more readable code
-use B qw(svref_2object); # for code ref->name conversion
+use Params::Validate qw(:all); # for varliable validation
+use English qw(-no_match_vars); # for more readable code
+use Scalar::Util qw(blessed); # for checking if a reference is blessed
+#use B qw(svref_2object); # for code ref->name conversion
 use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
+use Crypt::HSXKPasswd::Dictionary::Default;
+use Crypt::HSXKPasswd::Dictionary::Basic;
+use Crypt::HSXKPasswd::RNG::Basic;
 
 # import (or not) optional modules
 my $_CAN_STACK_TRACE = eval{
@@ -15,9 +20,21 @@ my $_CAN_STACK_TRACE = eval{
 };
 
 ## no critic (ProhibitAutomaticExportation);
-use base qw( Exporter );
-our @EXPORT = qw( hsxkpasswd );
+use base qw(Exporter);
+our @EXPORT = qw(hsxkpasswd);
 ## use critic
+
+#BEGIN{
+#    use Cwd qw(realpath);
+#    use File::Spec;
+#    my ($mod_volume, $mod_directories, $mod_file) = File::Spec->splitpath(realpath(__FILE__));
+#    my @local_lib_directories = File::Spec->splitdir($mod_directories);
+#    pop @local_lib_directories; # chop "/" from the end of the path
+#    pop @local_lib_directories; # chop "Crypt" from end of the path
+#    my $local_lib_path = File::Spec->catdir(@local_lib_directories);
+#   push @INC, $local_lib_path;
+#    require 'Crypt::HSXKPasswd::Util';
+#}
 
 # Copyright (c) 2015, Bart Busschots T/A Bartificer Web Solutions All rights
 # reserved.
@@ -48,7 +65,8 @@ our $DEBUG = 0; # default to not having debugging enabled
 
 # utility variables
 my $_CLASS = 'Crypt::HSXKPasswd';
-my $_DICTIONARY_BASE_CLASS = $_CLASS.'::Dictionary';
+my $_DICTIONARY_BASE_CLASS = 'Crypt::HSXKPasswd::Dictionary';
+my $_RNG_BASE_CLASS = 'Crypt::HSXKPasswd::RNG';
 
 # config key definitions
 my $_KEYS = {
@@ -213,24 +231,6 @@ my $_KEYS = {
         },
         desc => q{A scalar containing one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERT', 'ALTERNATE', or 'RANDOM'},
     },
-    random_function => {
-        req => 1,
-        ref => q{CODE}, # Code ref
-        validate => sub {
-            return 1; # no validation to do other than making sure it's a code ref
-        },
-        desc => q{A code ref to a function for generating n random numbers between 0 and 1},
-    },
-    random_increment => {
-        req => 1,
-        ref => q{}, # SCALAR
-        validate => sub { # positive integer >= 1, or 'AUTO'
-            my $key = shift;
-            unless(($key =~ m/^\d+$/sx && $key >= 1) || $key eq 'AUTO'){ return 0; }
-            return 1;
-        },
-        desc => q{A scalar containing an integer value greater than or equal to one, or 'AUTO'},
-    },
     character_substitutions => {
         req => 0,
         ref => 'HASH', # Hashref REF
@@ -263,8 +263,6 @@ my $_PRESETS = {
             padding_characters_before => 2,
             padding_characters_after => 2,
             case_transform => 'ALTERNATE',
-            random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 'AUTO',
         },
     },
     WEB32 => {
@@ -283,8 +281,6 @@ my $_PRESETS = {
             padding_characters_before => 1,
             padding_characters_after => 1,
             case_transform => 'ALTERNATE',
-            random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 10,
         },
     },
     WEB16 => {
@@ -303,8 +299,6 @@ my $_PRESETS = {
             padding_characters_before => 1,
             padding_characters_after => 1,
             case_transform => 'RANDOM',
-            random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 8,
         },
     },
     WIFI => {
@@ -322,8 +316,6 @@ my $_PRESETS = {
             padding_character => 'RANDOM',
             pad_to_length => 63,
             case_transform => 'RANDOM',
-            random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 22,
         },
     },
     APPLEID => {
@@ -342,8 +334,6 @@ my $_PRESETS = {
             padding_characters_before => 1,
             padding_characters_after => 1,
             case_transform => 'RANDOM',
-            random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 12,
         },
     },
     NTLM => {
@@ -362,8 +352,6 @@ my $_PRESETS = {
             padding_characters_before => 0,
             padding_characters_after => 1,
             case_transform => 'INVERT',
-            random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 5,
         },
     },
     SECURITYQ => {
@@ -381,8 +369,6 @@ my $_PRESETS = {
             padding_characters_before => 0,
             padding_characters_after => 1,
             case_transform => 'NONE',
-            random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 7,
         },
     },
     XKCD => {
@@ -396,8 +382,6 @@ my $_PRESETS = {
             padding_digits_after => 0,
             padding_type => 'NONE',
             case_transform => 'RANDOM',
-            random_function => \&XKPasswd::basic_random_generator,
-            random_increment => 8,
         },
     },
 };
@@ -410,27 +394,41 @@ my $_PRESETS = {
 # Type       : CONSTRUCTOR (CLASS)
 # Purpose    : Instantiate an object of type XKPasswd
 # Returns    : An object of type XKPasswd
-# Arguments  : 1. OPTIONAL - a word source, if none passed, An instance of
-#                 Crypt::HSXKPasswd::Dictionary::Default will be used. Valid
-#                 word sources are:
-#                 The path to a word file as a string
-#                     -OR-
-#                 An array ref of words
-#                     -OR-
-#                 An intance of a sub class of Crypt::HSXKPasswd::Dictionary
-#              2. OPTIONAL - the name of a preset as a scalar (an empty string,
-#                 undef, or 'DEFAULT' to get the default config)
-#                     -OR-
-#                 A hashref containing a full valid config
-#              3. OPTIONAL - a hashref continaing any keys from the preset to be
-#                 overridden (ignored if a hashref is passed as the second arg)
+# Arguments  : This function accepts the following named arguments - all
+#              optional:
+#              dictionary - an object that inherits from
+#                  Crypt::HSXKPasswd::Dictionary
+#              dictionary_list - an array ref of words to use as a dictionary.
+#              dictionary_file - the path to a dictionary file
+#              preset - the preset to use
+#              preset_overrides - a hashref of config options to override.
+#                  Ignored unless preset is set, and in use.
+#              config - a config hashref.
+#              rng - an object that inherits from Crypt::HSXKPasswd::RNG
 # Throws     : Croaks if the function is called in an invalid way, or with an
 #              invalid config
-# Notes      : 
+# Notes      : The order of preference for word sources is dictionary, then
+#              dictionary_list, then dictionary_file. If none are specified,
+#              then an instance of Crypt::HSXKPasswd::Dictionary::Default will
+#              be used.
+#              The order of preference for the configuration source is config
+#              then preset. If no configuration source is specified, then the
+#              preset 'DEFAULT' is used.
 # See Also   : For valid configuarion options see POD documentation below
 sub new{
     my $class = shift;
-    my $dictionary_source = shift;
+    my %args = validate(
+        @_, {
+            dictionary => {isa => $_DICTIONARY_BASE_CLASS, optional => 1},
+            dictionary_list => {type => ARRAYREF, optional => 1},
+            dictionary_file => {type => SCALAR, optional => 1},
+            config => {type => HASHREF, optional => 1},
+            preset => {type => SCALAR, optional => 1},
+            preset_overrides => {type => HASHREF, optional => 1},
+            rng => {isa => $_RNG_BASE_CLASS, optional => 1},
+        }
+    );
+    
     my $preset = shift;
     my $preset_override = shift;
     
@@ -444,56 +442,34 @@ sub new{
         $_CLASS->_check_presets();
     }
     
-    # process the dictionary
+    # process the word source
     my $dictionary;
-    if(defined $dictionary_source){
-        # a value was passed, so make sure it's valid
-        if($dictionary_source->isa($_DICTIONARY_BASE_CLASS)){
-            $dictionary = $dictionary_source;
-        }elsif(ref $dictionary_source eq q{} || ref $dictionary_source eq 'ARRAY'){
-            $dictionary = $_DICTIONARY_BASE_CLASS.'::Basic'->new($dictionary_source);
-        }else{
-            $_CLASS->_error('invalid word source');
-        }
+    if($args{dictionary}){
+        $dictionary = $args{dictionary};
+    }elsif($args{dictionary_list}){
+        $dictionary = Crypt::HSXKPasswd::Dictionary::Basic->new($args{dictionary_list});
+    }elsif($args{dictionary_file}){
+        $dictionary = Crypt::HSXKPasswd::Dictionary::Basic->new($args{dictionary_file});
     }else{
-        # no value was passed, so use a default dictionary
-        $dictionary = $_DICTIONARY_BASE_CLASS.'::Default'->new();
+        $dictionary = Crypt::HSXKPasswd::Dictionary::Default->new();
     }
     
-    # assemble the config hashref
+    # process the config source
     my $config = {};
-    if(defined $preset){
-        if(ref $preset eq q{}){
-            #we were passed a preset name
-            
-            # expand blank preset name to 'DEFAULT'
-            $preset = 'DEFAULT' if $preset eq q{};
-            
-            # convert name to caps
-            $preset = uc $preset;
-            
-            # make sure the preset exists
-            unless(defined $_PRESETS->{$preset}){
-                $_CLASS->_error("invalid arguments - preset '$preset' does not exist");
-            }
-            
-            # if overrides are defined, make sure they are hashrefs
-            if(defined $preset_override){
-                unless(ref $preset_override eq 'HASH'){
-                    $_CLASS->_error('invalid arguments - if present, the third argument must be a hashref');
-                }
-            }
-            
-            # load the preset
-            $config = $_CLASS->preset_config($preset, $preset_override);
-        }elsif(ref $preset eq 'HASH'){
-            # we were passed a hashref, so use it as the config
-            $config = $preset;
-        }else{
-            $_CLASS->_error('invalid argument - if present, the second argument must be a scalar or a hashref');
-        }
+    if($args{config}){
+        $config = $args{config};
+    }elsif($args{preset}){
+        $config = $_CLASS->preset_config(uc $args{preset}, $args{preset_overrides});
     }else{
         $config = $_CLASS->default_config();
+    }
+    
+    # process the random number source
+    my $rng = {};
+    if($args{rng}){
+        $rng = $args{rng};
+    }else{
+        $rng = Crypt::HSXKPasswd::RNG::Basic->new();
     }
     
     # initialise the object
@@ -502,6 +478,7 @@ sub new{
         # 'PRIVATE' internal variables
         _CONFIG => {},
         _DICTIONARY_SOURCE => {}, # the dictionary object to source words from
+        _RNG => {}, # the random number generator
         _CACHE_DICTIONARY_FULL => [], # a cache of all words found in the dictionary file
         _CACHE_DICTIONARY_LIMITED => [], # a cache of all the words found in the dictionary file that meet the length criteria
         _CACHE_ENTROPYSTATS => {}, # a cache of the entropy stats for the current combination of dictionary and config
@@ -515,6 +492,9 @@ sub new{
     
     # load the dictionary (can't be done until the config is loaded)
     $instance->dictionary($dictionary);
+    
+    # load the rng
+    $instance->rng($rng);
     
     # if debugging, print status
     $_CLASS->_debug("instantiated $_CLASS object with the following details:\n".$instance->status());
@@ -679,7 +659,6 @@ sub clone_config{
             push @{$clone->{padding_alphabet}}, $symbol;
         }
     }
-    $clone->{random_function} = $config->{random_function};
     if(defined $config->{character_substitutions}){
         $clone->{character_substitutions} = {};
         foreach my $key (keys %{$config->{character_substitutions}}){
@@ -851,8 +830,6 @@ sub config_to_string{
             }
             $ans .= join q{, }, @parts;
             $ans .= "}\n";
-        }elsif($_KEYS->{$key}->{ref} eq 'CODE'){
-            $ans .= $key.q{: }.$_CLASS->_coderef_to_subname($config->{$key}).qq{\n};
         }else{
             # this should never happen, but just in case, throw a warning
             $_CLASS->_warn("encounterd an un-handled key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
@@ -959,6 +936,49 @@ sub presets_to_string{
     return $ans;
 }
 
+#####-SUB-#####################################################################
+# Type       : CLASS
+# Purpose    : Calculate the number of random numbers needed to genereate a
+#              single password with a given config.
+# Returns    : An integer
+# Arguments  : 1) a valid config hashref
+#              2) OPTIONAL - a true value to indicate that valiation of the
+#                 config hashref should be skipped.
+# Throws     : Croaks in invalid invocation, or invalid args
+# Notes      :
+# See Also   :
+sub config_random_numbers_required{
+    my $class = shift;
+    my $config = shift;
+    my $skip_validation = shift;
+    
+    # validate the args
+    unless(defined $class && $class eq $_CLASS){
+        $_CLASS->_error('invalid invocation of class method');
+    }
+    unless(defined $config && ($skip_validation || $_CLASS->is_valid_config($config))){
+        $_CLASS->_error('invalid args - a valid config hashref must be passed');
+    }
+    
+    # calculate the number of random numbers needed to generate the password
+    my $num_rand = 0;
+    $num_rand += $config->{num_words};
+    if($config->{case_transform} eq 'RANDOM'){
+        $num_rand += $config->{num_words};
+    }
+    if($config->{separator_character} eq 'RANDOM'){
+        $num_rand++;
+    }
+    if(defined $config->{padding_character} && $config->{padding_character} eq 'RANDOM'){
+        $num_rand++;
+    }
+    $num_rand += $config->{padding_digits_before};
+    $num_rand += $config->{padding_digits_after};
+    
+    # return the number
+    return $num_rand;
+}
+
 #####-SUB-######################################################################
 # Type       : CLASS
 # Purpose    : Calculate statistics for a given configutration hashref.
@@ -1028,19 +1048,7 @@ sub config_stats{
     }
     
     # calculate the number of random numbers needed to generate the password
-    my $num_rand = 0;
-    $num_rand += $config->{num_words};
-    if($config->{case_transform} eq 'RANDOM'){
-        $num_rand += $config->{num_words};
-    }
-    if($config->{separator_character} eq 'RANDOM'){
-        $num_rand++;
-    }
-    if(defined $config->{padding_character} && $config->{padding_character} eq 'RANDOM'){
-        $num_rand++;
-    }
-    $num_rand += $config->{padding_digits_before};
-    $num_rand += $config->{padding_digits_after};
+    my $num_rand = $_CLASS->config_random_numbers_required($config, 'skip valiation');
     
     # detect whether or not we need to carp about multi-character replacements
     if($config->{padding_type} ne 'ADAPTIVE' && !$suppres_warnings){
@@ -1111,7 +1119,7 @@ sub dictionary{
         if($dictionary_source->isa($_DICTIONARY_BASE_CLASS)){
             $new_dict = $dictionary_source;
         }elsif(ref $dictionary_source eq q{} && ref $dictionary_source eq 'ARRAY'){
-            $new_dict = new $_DICTIONARY_BASE_CLASS.'::Basic'->new($dictionary_source); # could throw an error
+            $new_dict = new Crypt::HSXKPasswd::Dictionary::Basic->new($dictionary_source); # could throw an error
         }else{
             $_CLASS->_error('invalid args - must pass a valid dictinary, hashref, or file path');
         }
@@ -1279,6 +1287,47 @@ sub update_config{
     return $self;
 }
 
+#####-SUB-#####################################################################
+# Type       : INSTANCE
+# Purpose    : Get the currently loaded RNG object, or, load a new RNG
+# Returns    : An instance to the loaded RNG object, or, a reference to the
+#              instance (to enable function chaining) if called as a setter
+# Arguments  : 1. OPTIONAL - an object that is a Crypt::HSXKPasswd::RNG
+# Throws     : Croaks on invalid invocation, or invalid args
+# Notes      :
+# See Also   : 
+sub rng{
+    my $self = shift;
+    my $rng = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        $_CLASS->_error('invalid invocation of instance method');
+    }
+    
+    # decide if we're a 'getter' or a 'setter'
+    if(!(defined $rng)){
+        # we are a getter, so just return
+        return $self->{_RNG};
+    }else{
+        # we are a setter, so try load the RNG
+        
+        # croak if we were not passed a valid RNG
+        unless(defined $rng && blessed($rng) && $rng->isa($_RNG_BASE_CLASS)){
+            $_CLASS->_error('failed to set RNG - invalid value passed');
+        }
+        
+        # set the RNG
+        $self->{_RNG} = $rng;
+        
+        # empty the random cache
+        $self->{_CACHE_RANDOM} = [];
+    }
+    
+    # return a reference to self
+    return 1;
+}
+
 #####-SUB-######################################################################
 # Type       : INSTANCE
 # Purpose    : Return the status of the internal caches within the instnace.
@@ -1430,6 +1479,7 @@ sub passwords{
 # Type       : INSTANCE
 # Purpose    : Return statistics about the instance
 # Returns    : A hash of statistics indexed by the following keys:
+#              * 'dictionary_source' - the source of the word list
 #              * 'dictionary_words_total' - the total number of words loaded
 #                from the dictionary file
 #              * 'dictionary_words_filtered' - the number of words loaded from
@@ -1483,12 +1533,12 @@ sub passwords{
 #                currently cached within the instance
 #              * 'randomnumbers_cache_increment' - the number of random numbers
 #                generated at once to re-plenish the cache when it's empty
-#              * 'randomnumbers_generator_function' - the name of the function used to
-#                generate random numbers (resoved with _coderef_to_subname())
+#              * 'randomnumbers_source' - the name of the class used to
+#                generate random numbers
 # Arguments  : NONE
 # Throws     : Croaks on invalid invocation
 # Notes      : 
-# See Also   : _coderef_to_subname()
+# See Also   : 
 sub stats{
     my $self = shift;
     
@@ -1508,6 +1558,7 @@ sub stats{
     
     # deal with the dictionary file
     my %dict_stats = $self->_calcualte_dictionary_stats();
+    $stats{dictionary_source} = $dict_stats{source};
     $stats{dictionary_words_total} = $dict_stats{num_words_total};
     $stats{dictionary_words_filtered} = $dict_stats{num_words_filtered};
     $stats{dictionary_words_percent_avaialable} = $dict_stats{percent_words_available};
@@ -1529,8 +1580,7 @@ sub stats{
     
     # deal with the random number generator
     $stats{randomnumbers_cached} = scalar @{$self->{_CACHE_RANDOM}};
-    $stats{randomnumbers_cache_increment} = $self->{_CONFIG}->{random_increment};
-    $stats{randomnumbers_generator_function} = $_CLASS->_coderef_to_subname($self->{_CONFIG}->{random_function});
+    $stats{randomnumbers_source} = blessed($self->{_RNG});
     
     # return the stats
     return %stats;
@@ -1559,7 +1609,7 @@ sub status{
     
     # the dictionary
     $status .= "*DICTIONARY*\n";
-    $status .= "File path: $stats{dictionary_path}\n";
+    $status .= "Source: $stats{dictionary_source}\n";
     $status .= "# words: $stats{dictionary_words_total}\n";
     $status .= "# words of valid length: $stats{dictionary_words_filtered} ($stats{dictionary_words_percent_avaialable}%)\n";
     
@@ -1587,6 +1637,7 @@ sub status{
         $status .= "Entropy (Brute-Force): between $stats{password_entropy_blind_min}bits and $stats{password_entropy_blind_max}bits (average $stats{password_entropy_blind}bits)\n";
     }
     $status .= "Entropy (given dictionary & config): $stats{password_entropy_seen}bits\n";
+    $status .= "# Random Numbers needed per-password: $stats{password_random_numbers_required}\n";
     $status .= "Passwords Generated: $stats{passwords_generated}\n";
     
     # debug-only info
@@ -1611,32 +1662,15 @@ sub status{
 # Type       : SUBROUTINE
 # Purpose    : A functional interface to this library (exported)
 # Returns    : A random password as a scalar
-# Arguments  : 1. OPTIONAL - a word source, if none passed, An instance of
-#                 Crypt::HSXKPasswd::Dictionary::Default will be used. Valid
-#                 word sources are:
-#                 The path to a word file as a string
-#                     -OR-
-#                 An array ref of words
-#                     -OR-
-#                 An intance of a sub class of Crypt::HSXKPasswd::Dictionary
-#              2. OPTIONAL - the name of a preset as a scalar (an empty string,
-#                 undef, or 'DEFAULT' to get the default config)
-#                     -OR-
-#                 A hashref containing a full valid config
-#              3. OPTIONAL - a hashref continaing any keys from the preset to be
-#                 overridden (ignored if a hashref is passed as the second arg)
+# Arguments  : See the constructor
 # Throws     : Croaks on error
-# Notes      :
-# See Also   :
+# Notes      : See the Constructor
+# See Also   : For valid configuarion options see POD documentation below
 sub hsxkpasswd{
-    my $dictionary_source = shift;
-    my $preset = shift;
-    my $preset_override = shift;
-    
     # try initialise an xkpasswd object
     my $hsxkpasswd;
     eval{
-        $hsxkpasswd = $_CLASS->new($dictionary_source, $preset, $preset_override);
+        $hsxkpasswd = $_CLASS->new(@_);
         1; # ensure truthy evaliation on successful execution
     } or do {
         $_CLASS->_error("Failed to generate password with the following error: $EVAL_ERROR");
@@ -2121,25 +2155,13 @@ sub _increment_random_cache{
         $_CLASS->_error('invalid invocation of instance method');
     }
     
-    # figure out how many numbers to generate
-    my $num_rand = $self->{_CONFIG}->{random_increment};
-    if($num_rand eq 'AUTO'){
-        $_CLASS->_debug(q{random_increment='AUTO' - generating stats to determine increment to use});
-        my %conf_stats = $_CLASS->config_stats($self->{_CONFIG});
-        $num_rand = $conf_stats{random_numbers_required};
-        $_CLASS->_debug("using increment of $num_rand");
-    }else{
-        $_CLASS->_debug("using hard-coded increment of $num_rand");
-    }
-    
     # genereate the random numbers
-    my @random_numbers = &{$self->{_CONFIG}->{random_function}}($num_rand);
+    my @random_numbers = $self->{_RNG}->random_numbers($_CLASS->config_random_numbers_required($self->{_CONFIG}, 'skip valiation'));
     $_CLASS->_debug('generated '.(scalar @random_numbers).' random numbers ('.(join q{, }, @random_numbers).')');
     
     # validate them
-    my $num_generated = scalar @random_numbers;
-    unless($num_generated == $num_rand){
-        $_CLASS->_error("random function did not return the correct number of random numbers (expected $num_rand, got $num_generated)");
+    unless(scalar @random_numbers){
+        $_CLASS->_error("random function did not return any random numbers");
     }
     foreach my $num (@random_numbers){
         unless($num =~ m/^1|(0([.]\d+)?)$/sx){
@@ -2411,15 +2433,6 @@ sub _check_presets{
             $_CLASS->_warn("preset $preset has invalid config ($EVAL_ERROR)");
             $num_problems++;
         };
-        
-        # make sure the random_increment is optimal
-        if($_PRESETS->{$preset}->{config}->{random_increment} ne 'AUTO'){
-            my %stats = $_CLASS->config_stats($_PRESETS->{$preset}->{config});
-            unless($_PRESETS->{$preset}->{config}->{random_increment} == $stats{random_numbers_required}){
-                $_CLASS->_warn("preset $preset has sub-optimal random_increment (value=$_PRESETS->{$preset}->{config}->{random_increment}, required per password=$stats{random_numbers_required})");
-                $num_problems++;
-            }
-        }
     }
     if($num_problems == 0){
         $_CLASS->_debug('all presets OK');
@@ -2550,6 +2563,7 @@ sub _calculate_entropy_stats{
 # Type       : INSTANCE (PRIVATE)
 # Purpose    : Calculate statistics on the loaded dictionary file
 # Returns    : A hash of statistics indexed by:
+#              * 'source' - the source for the word list
 #              * 'filter_length_min' - the minimum allowed word length
 #              * 'filter_length_max' - the maximum allowed word length
 #              * 'num_words_total' - the number of words in the un-filtered
@@ -2574,6 +2588,7 @@ sub _calcualte_dictionary_stats{
     my %ans = ();
     
     # deal with agregate numbers first
+    $ans{source} = $self->{_DICTIONARY_SOURCE}->source();
     $ans{num_words_total} = scalar @{$self->{_CACHE_DICTIONARY_FULL}};
     $ans{num_words_filtered} = scalar @{$self->{_CACHE_DICTIONARY_LIMITED}};
     $ans{percent_words_available} = round(($ans{num_words_filtered}/$ans{num_words_total}) * 100);
@@ -2676,7 +2691,7 @@ sub _update_entropystats_cache{
     }
     
     # do nothing if the dictionary has not been loaded yet (should only happen while the constructor is building an instance)
-    return 1 unless($self->{_DICTIONARY_SOURCE} && $self->{_DICTIONARY_SOURCE}->isa($_DICTIONARY_BASE_CLASS));
+    return 1 unless($self->{_DICTIONARY_SOURCE} && blessed($self->{_DICTIONARY_SOURCE}) && $self->{_DICTIONARY_SOURCE}->isa($_DICTIONARY_BASE_CLASS));
     
     # calculate and store the entropy stats
     my %stats = $self->_calculate_entropy_stats();
@@ -2740,53 +2755,6 @@ sub _render_bigint{
     return $ans;
 }
 
-#####-SUB-######################################################################
-# Type       : CLASS (PRIVATE)
-# Purpose    : To try resolve a code-ref to a function name
-# Returns    : A string as a scalar, or 'CODEREF' if unable to resolve
-# Arguments  : 1. A coderef
-# Throws     : Croaks on invalid invocation or args
-# Notes      : Based on code from: http://stackoverflow.com/a/7419346
-# See Also   :
-sub _coderef_to_subname{
-    my $class = shift;
-    my $coderef = shift;
-    
-    # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
-    unless(defined $coderef && ref $coderef eq 'CODE'){
-        $_CLASS->_error('invalid arguments, must pass a code ref');
-    }
-    
-    # try decode the reference
-    my $cv = svref_2object($coderef);
-    unless($cv && $cv->isa('B::CV')){
-        return 'CODEREF';
-    }
-    my $gv = $cv->GV;
-    unless($gv){
-        return 'CODEREF';
-    }
-    
-    # figure out what the ref is referring to
-    my $name = '';
-    if(my $st = $gv->STASH){ 
-        $name = $st->NAME.'::';
-    }
-    my $n = $gv->NAME;
-    if($n){ 
-        $name .= $n;
-        if($n eq '__ANON__'){ 
-            $name .= ' defined at '.$gv->FILE.':'.$gv->LINE;
-        }
-    }
-    
-    # return the name
-    return $name;
-}
-
 1; # because Perl is just a little bit odd :)
 __END__
 
@@ -2809,41 +2777,61 @@ This documentation refers to C<Crypt::HSXKPasswd> version 3.1.1.
     use Crypt::HSXKPasswd;
 
     #
-    # Functional Interface - for single passwords generated from simple configs
+    # Functional Interface - a shortcut for generating single passwords
     #
     
-    # generate a single password using the default dictionary using the default
-    # configuration
+    # generate a single password using the default word source, configuration,
+    # and random number generator
     my $password = hsxkpasswd();
     
-    # generate a single password using words from the file
-    # sample_dict.txt using the default configuration
-    my $password = hsxkpasswd('sample_dict.txt');
+    # the above call is simply a shortcut for the following
+    my $password = Crypt::HSXKPasswd->new()->password();
     
-    # generate a single password using one of the module's
-    # predefined presets exactly
-    my $password = hsxkpasswd('sample_dict.txt', 'XKCD');
-    
-    # generate a single password using one of the module's
-    # predefined presets as a starting point, but with a
-    # small customisation
-    my $password = hsxkpasswd('sample_dict.txt', 'XKCD', {separator_character => q{ }});
+    # this function passes all arguments on to Crypt::HSXKPasswd->new()
+    # so all the same customisations can be specified, e.g. specifying a
+    # config preset:
+    my $password = hsxkpasswd(preset => 'XKCD');
     
     #
-    # Object Oriented Interface
+    # Object Oriented Interface - recommended for generating multiple passwords
     #
     
-    # create a new instance with the default dictionary and a default config
+    # create a new instance with the default dictionary, config, and random
+    # number generator
     my $hsxkpasswd_instance = Crypt::HSXKPasswd->new();
     
-    # create a new instance with the default config
-    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new('sample_dict.txt');
+    # the construtor takes optional named arguments, these can be used to
+    # customise the word source, config, and random number source.
+    
+    # create an instance that uses the UNIX words file as the word source
+    my $hsxkpasswd_instance = HSXKPasswd->new(
+        dictionary => Crypt::HSXKPasswd::Dictionary::System->new()
+    );
+    
+    # create an instance that uses an array reference as the word source
+    my $hsxkpasswd_instance = HSXKPasswd->new(dictionary_list => $array_ref);
+    
+    # create an instance that uses a dictionary file as the word source
+    my $hsxkpasswd_instance = HSXKPasswd->new(
+        dictionary_file => 'sample_dict.txt'
+    );
+    
+    # the class Crypt::HSXKPasswd::Dictionary::Basic can be used to aggregate
+    # multiple array refs and/or dictionary files into a single word source
+    my $dictionary = Crypt::HSXKPasswd::Dictionary::Basic->new();
+    $dictionary->add_words('dict1.txt');
+    $dictionary->add_words('dict2.txt');
+    $dictionary->add_words($array_ref);
+    my $hsxkpasswd_instance = HSXKPasswd->new(dictionary => $dictionary);
     
     # create an instance from the preset 'XKCD'
-    my $hsxkpasswd_instance = HSXKPasswd->new('sample_dict.txt', 'XKCD');
+    my $hsxkpasswd_instance = HSXKPasswd->new(preset => 'XKCD');
     
     # create an instance based on the preset 'XKCD' with one customisation
-    my $hsxkpasswd_instance = HSXKPasswd->new('sample_dict.txt', 'XKCD', {separator_character => q{ }});
+    my $hsxkpasswd_instance = HSXKPasswd->new(
+        preset => 'XKCD',
+        preset_override => {separator_character => q{ }}
+    );
     
     # create an instance from a config based on a preset
     # but with many alterations
@@ -2854,7 +2842,7 @@ This documentation refers to C<Crypt::HSXKPasswd> version 3.1.1.
     $config->{padding_characters_before} = 1;
     $config->{padding_characters_after} = 1;
     $config->{padding_character} = '*';
-    my $hsxkpasswd_instance = HSXKPasswd->new('sample_dict.txt', $config);
+    my $hsxkpasswd_instance = HSXKPasswd->new(config => $config);
     
     # create an instance from an entirely custom configuration
     my $config = {
@@ -2871,10 +2859,8 @@ This documentation refers to C<Crypt::HSXKPasswd> version 3.1.1.
         padding_characters_before => 2,
         padding_characters_after => 2,
         case_transform => 'CAPITALISE',
-        random_function => \&XKPasswd::basic_random_generator,
-        random_increment => 'AUTO',
     }
-    my $hsxkpasswd_instance = HSXKPasswd->new('sample_dict.txt', $config);
+    my $hsxkpasswd_instance = HSXKPasswd->new(config => $config);
     
     # generate a single password
     my $password = $hsxkpasswd_instance->password();
@@ -3126,16 +3112,16 @@ blind entropy falls below 78bits, or the seen entropy falls below 52 bits.
 
 =head1 SUBROUTINES/METHODS
 
-=head2 WORD SOURCES
+=head2 WORD SOURCES (DICTIONARIES)
 
 The abstract class C<Crypt::HSXKPasswd::Dictionary> acts as a base class for
-sources of words for this module. Word sources should extend the base class
-and implement the function C<word_list()>, which should return an array of
-words.
+sources of words for use by this module. Word sources should extend this base
+class and implement the function C<word_list()>, which should return an array
+of words.
 
-In order to produce secure passwords it's important to use a dictionary file
-that contains a large selection of words with a good mix of different word
-lengths.
+In order to produce secure passwords it's important to use a word source that
+contains a large selection of words with a good mix of different lengths of
+words.
 
 The module ships with a number of pre-defined word sources:
 
@@ -3143,9 +3129,19 @@ The module ships with a number of pre-defined word sources:
 
 A default word list consisting of English words and place names.
 
+=head3 C<Crypt::HSXKPasswd::Dictionary::System>
+
+This class tries to find and use a Unix words file on the system.
+
+The constructor croaks if no system words file can be found.
+
+=head4 Usage
+
+    my $word_source = Crypt::HSXKPasswd::Dictionary::System->new();
+
 =head3 C<Crypt::HSXKPasswd::Dictionary::Basic>
 
-This class can be initialised from a dictionary, or from an array ref
+This class can be initialised from a words file, or from an array ref
 containing words.
 
 =head4 Usage
@@ -3301,23 +3297,6 @@ is specified.
 =back
 
 The default value returned by C<default_config()> is C<FIXED>.
-
-=item *
-
-C<random_function> - a reference to the function to be used use to generate
-random numbers during the password generation process. The function generate
-an array of random decimal numbers between 0 and 1, take one argument, the
-number of random numbers to generate, and it must return an array. By default
-the function C<XKPasswd::basic_random_generator()> is used.
-
-=item *
-
-C<random_increment> - the number of random digits to generate at a time when
-ever the instance's cache of randomness runs low. Must be an integer greater
-than or equal to 1, or the special value C<AUTO>. When the value is set to
-C<AUTO> a call to C<config_stats()> is used to determine the amount of random
-numbers needed to generate a single password, and this value is used as the
-random increment. The default value is c<AUTO>.
 
 =item *
 
@@ -3537,28 +3516,30 @@ When calculating the entropy for worst-case attacks on configurations that
 contain symbol substitutions where the replacement is more than 1 character
 long the possible extra length is ignored.
 
-=head2 RANDOM FUNCTIONS
+=head2 RANDOM NUMBER SOURCES
 
-In order to avoid this module relying on any non-standard modules, the default
-source of randomness is Perl's built-in C<rand()> function. This provides a
-reasonable level of randomness, and should suffice for most users, however,
-some users will prefer to make use of one of the many advanced randomisation
-modules in CPAN, or, reach out to a web service like L<http://random.org> for
-their randomness. To facilitate both of these options, this module uses a
-cache of randomness, and allows a custom randomness function to be specified
-by setting the config variable C<random_function> to a coderef to the function.
+In order to minimise the number of non-standard modules this module requires,
+the default source of randomness is Perl's built-in C<rand()> function. This
+provides a reasonable level of randomness, and should suffice for most users,
+however, some users will prefer to make use of one of the many advanced
+randomisation modules in CPAN, or, reach out to a web service like
+L<http://random.org> for their random numbers. To facilitate both of these
+options, this module uses a cache of randomness, and provides an abstract
+Random Number Generator (RNG) class that can be extended.
 
-Functions specified in this way must take exactly one argument, an integer
-number greater than zero, and then return that many random decimal numbers
-between zero and one.
+The module can use an instance of any class that extends
+C<Crypt::HSXKPasswd::RNG> as it's source of randomness. Custom RNG classes
+must implment the method C<random_numbers()> which will be invoked on an
+instance of the class and passed one argument, the number of random numbers
+required to generate a single password. The function must return an array
+of random numbers between 0 and 1. The number of random numbers returned is
+entirely up to the module to decide. The number required for a single password
+is passed purely as a guide. The function must always return at least one
+random number.
 
-The random function is not called each time a random number is needed, instead
-a number of random numbers are generated at once, and cached until they are
-needed. The amount of random numbers generated at once is controlled by the
-C<random_increment> config variable. The reason the module works in this way
-is to facilitate web-based services which prefer you to generate many numbers
-at once rather than invoking them repeatedly. For example, Random.org ask
-developers to query them for more random numbers less frequently.
+By default the module uses an instance of the class
+C<Crypt::HSXKPasswd::RNG::Basic>, which uses perl's built-in C<rand()>
+function.
 
 =head2 FUNCTIONAL INTERFACE
 
@@ -3571,51 +3552,88 @@ is much less efficient.
 
 There is only a single function exported by the module:
 
-=head3 xkpasswd()
+=head3 hsxkpasswd()
 
-    my $password = xkpasswd('sample_dict.txt');
+    my $password = hsxkpasswd();
     
 This function call is equivalent to the following Object-Oriented code:
 
-    my $xkpasswd = XKPasswd->new('sample_dict.txt');
-    my $password = $xkpasswd->password();
+    my $password =  HSXKPasswd->new()->password();
     
-This function passes its arguments through to the constructor, so all arguments
-that are valid in C<new()> are valid here.
+This function passes all arguments it receives through to the constructor, so all
+arguments that are valid in C<new()> are valid here.
 
 This function Croaks if there is a problem generating the password.
 
 Note that it is inefficient to use this function to generate multiple passwords
-because the dictionary file will be re-loaded, and the entropy
-calculations for ensuring security repeated, each time a password is generated.
-
+because the dictionary will be re-loaded, and the entropy stats re-calcuated
+each time the function is called.
 
 =head2 CONSTRUCTOR
     
-    # create a new instance with the default config
-    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt');
-    
-    # create an instance from the preset 'XKCD'
-    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', 'XKCD');
-    
-    # create an instance based on the preset 'XKCD' with one customisation
-    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', 'XKCD', {separator_character => q{ }});
-    
-    # create an instance from a config hashref
-    my $xkpasswd_instance = XKPasswd->new('sample_dict.txt', $config_hashref);
+    # create a new instance with the default config, default word source, and default RNG
+    my $xkpasswd_instance = XKPasswd->new();
 
-The constructor must be called via the package name, and at least one argument
-must be passed, the path to the dictionary file to be used when generating the
-words.
+The constructor must be called via the package name.
 
-If only one argument is passed the default values are used for all config keys.
-To use a different configuration, a second argument can be passed. If this
-argument is a scalar it will be assumed to be the name of a preset, and if it
-is a hashref it is assumed to be the config to load.
+If called with no arguments the constructor will use an instance of
+C<Crypt::HSXKPasswd::Dictionary::Default> as the word source, the preset
+C<DEFAULT>, and an instance of the class C<Crypt::HSXKPasswd::RNG::Basic> to
+generate random numbers.
 
-If a preset name is passed as a second argument, a hashref with config key
-overrides can be passed as a third argument. If the second argument is a hashref
-the third argument is ignored.
+The function accepts named arguments to allow for custom specification of the
+word source, config, and random number source.
+
+=head3 CUSTOM WORD SOURCES IN CONSTRUCTOR
+
+Three named arguments can be used to specify a word source, but only one should
+be specified at a time. If multiple are specified, the one with the highest
+priority will be used, and the rest ignored. The variables are listd below in
+descending order of priority:
+
+=over 4
+
+=item *
+
+C<dictionary> - an instance of a class that extends
+C<Crypt::HSXKPasswd::Dictionary>.
+
+=item *
+
+C<dictionary_list> - a reference to an array containing words as scalars.
+
+=item *
+
+C<dictionary_file> - the path to a dictionary file.
+
+=back 4
+
+=head3 CUSTOM CONFIGS
+
+Two primary named arguments can be used to specify the config the instance
+should use to generate passwords. Only one should be specified at a time. If
+multiple are specified, the one with the highest priority will be used, and the
+rest ignored. The variables are listd below in descending order of priority:
+
+=over 4
+
+=item *
+
+C<config> - a valid config hashref.
+
+=item *
+
+C<preset> - a valid preset name. If this variable is used, then any desired
+config overrides can be passed as a hashref using the variable
+C<preset_overrides>.
+
+=back 4
+
+=head3 CUSTOM RANDOM NUMBER GENERATORS
+
+A custom RNG can be specified using the named argument C<rng>. The passed value
+must be an instance of a class that extends C<Crypt::HSXKPasswd::RNG> and
+overrides the function C<random_numbers()>.
 
 =head2 CLASS METHODS
 
@@ -3778,12 +3796,22 @@ string. The function must be passed a valid config hashref or it will croak.
 
 =head3 dictionary()
 
-    print $xkpasswd_instance->dictionary();
+    my $dictionary_instance = $xkpasswd_instance->dictionary();
+    $xkpasswd_instance->dictionary($dictionary_instance);
+    $xkpasswd_instance->dictionary($array_ref);
     $xkpasswd_instance->dictionary('sample_dict.txt');
     
-When called with no arguments this function returns the path to the currently
-loaded dictionary file. To load a dictionary file into an instance call this
-function with the path to the dictionary file.
+When called with no arguments this function returns currently loaded dictionary
+which will be an instance of a class that extends
+C<Crypt::HSXKPasswd::Dictionary>.
+
+To load a new dictionary into an instance, call this function with a single
+argument. This argument can either be an instance of a class that extends
+C<Crypt::HSXKPasswd::Dictionary>, or a reference to an array of words, or the
+path to a dictionary file. If either an array reference or a file path are
+passed, they will be used to instantiate an instance of the class
+C<Crypt::HSXKPasswd::Dictionary::Basic>, and that new instance will then be
+loaded into the object.
 
 =head3 password()
 
@@ -3806,6 +3834,19 @@ This function generates a number of passwords and returns them all as an array.
 The function uses C<password()> to genereate the passwords, and hence will
 croak if there is an error generating any of the requested passwords.
 
+=head3 rng()
+
+    my $rng_instance = $xkpasswd_instance->rng();
+    $xkpasswd_instance->rng($rng_instance);
+    
+When called with no arguments this function returns currently loaded Random
+Number Genereatator (RNG) which will be an instance of a class that extends
+C<Crypt::HSXKPasswd::RNG>.
+
+To load a new RNG into an instance, call this function with a single
+argument, an instance of a class that extends
+C<Crypt::HSXKPasswd::RNG>.
+
 =head3 stats()
 
     my %stats = $xkpasswd_instance->stats();
@@ -3823,7 +3864,7 @@ keys C<word_length_min> and C<word_length_max>)
 
 =item *
 
-C<dictionary_path> - the path to the dictionary file loaded into the instance.
+C<dictionary_source> - the source of the word list loaded into the instance.
 
 =item *
 
@@ -3922,8 +3963,8 @@ once to replenish the cache when it's empty.
 
 =item *
 
-C<randomnumbers_generator_function> - the function used by the instance to
-generate random numbers.
+C<randomnumbers_source> - the class used by the instance to generate random
+numbers.
 
 =back
 
@@ -3946,8 +3987,6 @@ sample status string:
     padding_digits_after: '0'
     padding_digits_before: '0'
     padding_type: 'NONE'
-    random_function: XKPasswd::basic_random_generator
-    random_increment: '4'
     separator_character: '-'
     word_length_max: '8'
     word_length_min: '4'

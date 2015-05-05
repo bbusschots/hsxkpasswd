@@ -161,8 +161,12 @@ sub word_list{
     
     return [\@_WORDS];
 }
+
+1; # because Perl is just a little bit odd :)
 END_MOD_END
     
     # print out the generated code
     print $pkg_code;
 }
+
+1; # because Perl is just a little bit odd :)

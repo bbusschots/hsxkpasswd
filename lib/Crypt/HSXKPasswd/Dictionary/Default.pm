@@ -1483,3 +1483,5 @@ sub word_list{
     
     return [@_WORDS];
 }
+
+1; # because Perl is just a little bit odd :)

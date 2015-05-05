@@ -1,4 +1,4 @@
-package Crypt::HSXKPasswd::Dictionary;
+package Crypt::HSXKPasswd::RNG;
 
 # import required modules
 use strict;
@@ -22,7 +22,7 @@ use Crypt::HSXKPasswd; # for the error function
 use version; our $VERSION = qv('1.1_01');
 
 # utility variables
-my $_CLASS = 'Crypt::HSXKPasswd::Dictionary';
+my $_CLASS = 'Crypt::HSXKPasswd::RNG';
 my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 #
@@ -47,55 +47,17 @@ sub new{
 
 #####-SUB-#####################################################################
 # Type       : INSTANCE
-# Purpose    : A place-holder for the function to get the list of words.
-# Returns    : NOTHING - but in subclasses should return an array ref.
-# Arguments  : NONE
+# Purpose    : A place-holder for the function to get n random numbers.
+# Returns    : NOTHING - but in subclasses should return an array of random
+#              numbers between 0 and 1.
+# Arguments  : 1) the number of random numbers needed to generate a single
+#                 password.
 # Throws     : ALWAYS throws an error to say this class must be extended, and
 #              this function must be overridden.
 # Notes      :
 # See Also   :
-sub word_list{
-    $_MAIN_CLASS->_error("$_CLASS must be extended to be used, and the function word_list() must be overridden");
-}
-
-#####-SUB-#####################################################################
-# Type       : INSTANCE
-# Purpose    : A function to return the source of the words as a string
-# Returns    : A scalar string
-# Arguments  : NONE
-# Throws     : Croaks on invalid invocation
-# Notes      :
-# See Also   :
-sub source{
-    my $self = shift;
-    
-    # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error("invalid invocation of instance method");
-    }
-    
-    # return the instances class
-    return blessed($self);
-}
-
-#####-SUB-#####################################################################
-# Type       : INSTANCE
-# Purpose    : A function to print out the words in the dictionary
-# Returns    : VOID
-# Arguments  : NONE
-# Throws     : Croaks on invalid invocation, and throws any errors word_list()
-# Notes      :
-# See Also   :
-sub print_words{
-    my $self = shift;
-    
-    # validat args
-    unless($self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error('invalid invocation of instance method');
-    }
-    
-    print join "\n", @{$self->word_list()};
-    print "\n";
+sub random_numbers{
+    $_MAIN_CLASS->_error("$_CLASS must be extended to be used, and the function random_numbers() must be overridden");
 }
 
 1; # because Perl is just a little bit odd :)
