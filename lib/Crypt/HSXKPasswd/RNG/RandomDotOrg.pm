@@ -9,9 +9,24 @@ use Carp; # for nicer 'exception' handling for users of the module
 use English qw( -no_match_vars ); # for more readable code
 use Params::Validate qw(:all); # for argument validation
 use Crypt::HSXKPasswd; # for the error function
-use Email::Valid; # for email address validation
-use URI; # for assembling the query to the random.org API
-use LWP::UserAgent; # for sending HTTP requests to the random.org API (required Mozilla::CA be installed to work with HTTPS)
+
+# import (or not) modules not listed as required by Crypt::HSXKPasswd
+my $_CAN_EMAIL_VALID = eval{
+    require Email::Valid; # for email address validation
+};
+my $_CAN_URI = eval{
+    require URI; # for assembling the query to the random.org API
+};
+my $_CAN_LWP_UA = eval{
+    require LWP::UserAgent; # for sending HTTP requests to the random.org API (requires Mozilla::CA be installed to work with HTTPS)
+};
+my $_CAN_HTTPS = eval{
+    require Mozilla::CA; # without this module LWP::UserAgent can't do HTTPS
+};
+# if all the 'non-standard' modules (for want of a better term) were not loaded, croak
+unless($_CAN_EMAIL_VALID && $_CAN_URI && $_CAN_LWP_UA && $_CAN_HTTPS){
+    croak('Crypt::HSXKPasswd::RNG::RandomDotORg requires modules not required by any other classes in Crypt::HSXKPasswd, and one or more of them are not installed: Email::Valid, URI, LWP::UserAgent & Mozilla::CA');
+}
 
 # Copyright (c) 2015, Bart Busschots T/A Bartificer Web Solutions All rights
 # reserved.

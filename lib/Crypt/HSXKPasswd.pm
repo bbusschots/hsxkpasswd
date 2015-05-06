@@ -16,6 +16,12 @@ use Crypt::HSXKPasswd::RNG::Basic;
 my $_CAN_STACK_TRACE = eval{
     require Devel::StackTrace; # for better error reporting when debugging
 };
+my $_CAN_JSON = eval{
+    require JSON; # for JSON parsing
+};
+if($_CAN_JSON){
+    import JSON; # exports encode_json, decode_json, to_json and from_json
+}
 eval{
     # the default dicrionary may not have been geneated using the Util module
     require Crypt::HSXKPasswd::Dictionary::Default;
@@ -396,16 +402,19 @@ my $_PRESETS = {
 #              preset_overrides - a hashref of config options to override.
 #                  Ignored unless preset is set, and in use.
 #              config - a config hashref.
+#              config_json - a config as a JSON string (requires that the JSON
+#                  module be installed)
 #              rng - an object that inherits from Crypt::HSXKPasswd::RNG
-# Throws     : Croaks if the function is called in an invalid way, or with an
-#              invalid config
+# Throws     : Croaks if the function is called in an invalid way, called with
+#              invalid args, or called with a JSON string when JSON is not
+#              installed.
 # Notes      : The order of preference for word sources is dictionary, then
 #              dictionary_list, then dictionary_file. If none are specified,
 #              then an instance of Crypt::HSXKPasswd::Dictionary::Default will
 #              be used.
 #              The order of preference for the configuration source is config
-#              then preset. If no configuration source is specified, then the
-#              preset 'DEFAULT' is used.
+#              then config_json, then preset. If no configuration source is
+#              specified, then the preset 'DEFAULT' is used.
 # See Also   : For valid configuarion options see POD documentation below
 sub new{
     my @args = @_;
@@ -416,6 +425,7 @@ sub new{
             dictionary_list => {type => ARRAYREF, optional => 1},
             dictionary_file => {type => SCALAR, optional => 1},
             config => {type => HASHREF, optional => 1},
+            config_json => {type => SCALAR, optional => 1},
             preset => {type => SCALAR, optional => 1},
             preset_overrides => {type => HASHREF, optional => 1},
             rng => {isa => $_RNG_BASE_CLASS, optional => 1},
@@ -451,6 +461,8 @@ sub new{
     my $config = {};
     if($args{config}){
         $config = $args{config};
+    }elsif($args{config_json}){
+        $config = $args{config_json}; # pass the string on, config() will deal with it
     }elsif($args{preset}){
         $config = $_CLASS->preset_config(uc $args{preset}, $args{preset_overrides});
     }else{
@@ -480,7 +492,7 @@ sub new{
     };
     bless $instance, $class;
     
-    # load the config
+    # load the config - will croak on invalid config
     $instance->config($config);
     
     # load the dictionary (can't be done until the config is loaded)
@@ -767,6 +779,46 @@ sub is_valid_config{
     return 1;
 }
 ## use critic
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Convert a config hashref to a JSON String
+# Returns    : A scalar
+# Arguments  : 1. A config hashref
+# Throws     : Croaks on invalid invocation or with invalid args. Carps if there
+#              are problems with the config hashref.
+# Notes      : The function will croak unless the standard Perl JSON module is
+#              installed.
+# See Also   :
+sub config_to_json{
+    my $class = shift;
+    my $config = shift;
+    
+    # validate the args
+    unless(defined $class && $class eq $_CLASS){
+        $_CLASS->_error('invalid invocation of class method');
+    }
+    unless(defined $config && ref $config eq 'HASH'){
+        $_CLASS->_error('invalid arguments');
+    }
+    
+    # make sure JSON parsing is available
+    unless($_CAN_JSON){
+        $_CLASS->_error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) before you can pass the config as a JSON stirng');
+    }
+    
+    # try render the config to a JSON string
+    my $ans = q{};
+    eval{
+        $ans = encode_json($config);
+        1; # ensure a thurthy evaluation on successful execution
+    }or do{
+        $_CLASS->_error("Failed to convert config to JSON stirng with error: $EVAL_ERROR");
+    };
+    
+    # return the string
+    return $ans;
+}
 
 #####-SUB-######################################################################
 # Type       : CLASS
@@ -1140,14 +1192,18 @@ sub dictionary{
 #              new config into the instance.
 # Returns    : A config hashref if called with no arguments, or, the instance
 #              if called with a hashref (to facilitate function chaining)
-# Arguments  : 1. OPTIONAL - a configuartion hashref
+# Arguments  : 1. OPTIONAL - a configuration to load as:
+#                 A config hashref
+#                     -OR-
+#                 A JSON string representing a config hashref
 # Throws     : Croaks if the function is called in an invalid way, with invalid
-#              arguments, or with an invalid config
-# Notes      :
+#              arguments, or with an invalid config.
+# Notes      : Passing a JSON string will cause the function to croak if perl's
+#              JSON module is not installed.
 # See Also   : For valid configuarion options see POD documentation below
 sub config{
     my $self = shift;
-    my $config = shift;
+    my $config_raw = shift;
     
     # validate args
     unless($self && $self->isa($_CLASS)){
@@ -1155,15 +1211,34 @@ sub config{
     }
     
     # decide if we're a 'getter' or a 'setter'
-    if(!(defined $config)){
+    if(!(defined $config_raw)){
         # we are a getter - simply return a clone of our config
         return $self._clone_config();
     }else{
         # we are a setter
         
-        # ensure the config passed is a hashref
-        unless($config && ref $config eq 'HASH'){
-            $_CLASS->_error('invalid arguments - the config passed must be a hashref');
+        # see what kind of argument we were passed, and behave appropriately
+        my $config = {};
+        if(ref $config_raw eq 'HASH'){
+            # we  received a hashref, so just pass it on
+            $config = $config_raw;
+        }elsif(ref $config_raw eq q{}){
+            # we received as string, so treat it as JSON
+            
+            # make sure JSON parsing is available
+            unless($_CAN_JSON){
+                $_CLASS->_error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) before you can pass the config as a JSON stirng');
+            }
+            
+            # try parse the received string as JSON
+            eval{
+                $config = decode_json($config_raw);
+                1; # ensure truthy evaluation on successful execution
+            }or do{
+                $_CLASS->_error("Failed to parse JSON config string with error: $EVAL_ERROR");
+            };
+        }else{
+            $_CLASS->_error('invalid arguments - the config passed must be a hashref or a JSON string');
         }
         
         # validate the passed config hashref
@@ -1188,7 +1263,32 @@ sub config{
     return $self;
 }
 
-#####-SUB-######################################################################
+#####-SUB-#####################################################################
+# Type       : INSTANCE
+# Purpose    : Return the config of the currently running instance as a JSON
+#              string.
+# Returns    : A scalar.
+# Arguments  : NONE
+# Throws     : Croaks if invoked in an invalid way. Carps if it meets a key of a
+#              type not accounted for in the code.
+# Notes      : This function will carp if the JSON module is not available
+# See Also   :
+sub config_json{
+    my $self = shift;
+    
+    # validate args
+    unless($self && $self->isa($_CLASS)){
+        $_CLASS->_error('invalid invocation of instance method');
+    }
+    
+    # assemble the string to return
+    my $ans = $_CLASS->config_to_json($self->{_CONFIG}); # will croak without JSON
+    
+    # return the string
+    return $ans;
+}
+
+#####-SUB-#####################################################################
 # Type       : INSTANCE
 # Purpose    : Return the config of the currently running instance as a string.
 # Returns    : A scalar.
@@ -2856,6 +2956,23 @@ This documentation refers to C<Crypt::HSXKPasswd> version 3.1.1.
     }
     my $hsxkpasswd_instance = HSXKPasswd->new(config => $config);
     
+    # create an instance from an entire custom config passed as a JSON string
+    # a convenient way to use configs generated using the web interface at
+    # https://xkpasswd.net
+    my $config = <<'END_CONF';
+    {
+     "num_words": 4,
+     "word_length_min": 4,
+     "word_length_max": 8,
+     "case_transform": "RANDOM",
+     "separator_character": " ",
+     "padding_digits_before": 0,
+     "padding_digits_after": 0,
+     "padding_type": "NONE",
+    }
+    END_CONF
+    my $hsxkpasswd_instance = HSXKPasswd->new(config_json => $config);
+    
     # create an instance which uses Random.Org as the random number generator
     # NOTE - this should be used sparingly, and only by the paranoid. If you
     # abuse this RNG your IP will get blacklisted on Random.Org. You must pass
@@ -3593,6 +3710,30 @@ to Random.Org. This argument takes precedence over C<num_passwords>.
 C<num_passwords> and C<num_absolute> should not be used together, but if they
 are, C<num_absolute> use used, and C<num_passwords> is ignored.
 
+This class  requires a number of modules not used by any other classes under
+C<Crypt::HSXKPasswd>, and not listed in that module's requirements. If all of
+the following modules are not installed, the constructor will croak:
+
+=over 4
+
+=item *
+
+C<Email::Valid>
+
+=item *
+
+C<LWP::UserAgent>
+
+=item *
+
+C<Mozilla::CA>
+
+=item *
+
+C<URI>
+
+=back 4
+
 =head2 FUNCTIONAL INTERFACE
 
 Although the package was primarily designed to be used in an object-oriented
@@ -3623,8 +3764,99 @@ each time the function is called.
 
 =head2 CONSTRUCTOR
     
-    # create a new instance with the default config, default word source, and default RNG
-    my $xkpasswd_instance = XKPasswd->new();
+    # create a new instance with the default dictionary, config, and random
+    # number generator
+    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new();
+    
+    # the construtor takes optional named arguments, these can be used to
+    # customise the word source, config, and random number source.
+    
+    # create an instance that uses the UNIX words file as the word source
+    my $hsxkpasswd_instance = HSXKPasswd->new(
+        dictionary => Crypt::HSXKPasswd::Dictionary::System->new()
+    );
+    
+    # create an instance that uses an array reference as the word source
+    my $hsxkpasswd_instance = HSXKPasswd->new(dictionary_list => $array_ref);
+    
+    # create an instance that uses a dictionary file as the word source
+    my $hsxkpasswd_instance = HSXKPasswd->new(
+        dictionary_file => 'sample_dict.txt'
+    );
+    
+    # the class Crypt::HSXKPasswd::Dictionary::Basic can be used to aggregate
+    # multiple array refs and/or dictionary files into a single word source
+    my $dictionary = Crypt::HSXKPasswd::Dictionary::Basic->new();
+    $dictionary->add_words('dict1.txt');
+    $dictionary->add_words('dict2.txt');
+    $dictionary->add_words($array_ref);
+    my $hsxkpasswd_instance = HSXKPasswd->new(dictionary => $dictionary);
+    
+    # create an instance from the preset 'XKCD'
+    my $hsxkpasswd_instance = HSXKPasswd->new(preset => 'XKCD');
+    
+    # create an instance based on the preset 'XKCD' with one customisation
+    my $hsxkpasswd_instance = HSXKPasswd->new(
+        preset => 'XKCD',
+        preset_override => {separator_character => q{ }}
+    );
+    
+    # create an instance from a config based on a preset
+    # but with many alterations
+    my $config = HSXKPasswd->preset_config('XKCD');
+    $config->{separator_character} = q{ };
+    $config->{case_transform} = 'INVERT';
+    $config->{padding_type} = "FIXED";
+    $config->{padding_characters_before} = 1;
+    $config->{padding_characters_after} = 1;
+    $config->{padding_character} = '*';
+    my $hsxkpasswd_instance = HSXKPasswd->new(config => $config);
+    
+    # create an instance from an entirely custom configuration
+    my $config = {
+        padding_alphabet => [qw{! @ $ % ^ & * + = : ~ ?}],
+        separator_alphabet => [qw{- + = . _ | ~}],
+        word_length_min => 6,
+        word_length_max => 6,
+        num_words => 3,
+        separator_character => 'RANDOM',
+        padding_digits_before => 2,
+        padding_digits_after => 2,
+        padding_type => 'FIXED',
+        padding_character => 'RANDOM',
+        padding_characters_before => 2,
+        padding_characters_after => 2,
+        case_transform => 'CAPITALISE',
+    }
+    my $hsxkpasswd_instance = HSXKPasswd->new(config => $config);
+    
+    # create an instance from an entire custom config passed as a JSON string
+    # a convenient way to use configs generated using the web interface at
+    # https://xkpasswd.net
+    my $config = <<'END_CONF';
+    {
+     "num_words": 4,
+     "word_length_min": 4,
+     "word_length_max": 8,
+     "case_transform": "RANDOM",
+     "separator_character": " ",
+     "padding_digits_before": 0,
+     "padding_digits_after": 0,
+     "padding_type": "NONE",
+    }
+    END_CONF
+    my $hsxkpasswd_instance = HSXKPasswd->new(config_json => $config);
+    
+    # create an instance which uses Random.Org as the random number generator
+    # NOTE - this should be used sparingly, and only by the paranoid. If you
+    # abuse this RNG your IP will get blacklisted on Random.Org. You must pass
+    # a valid email address to the constructor for
+    # Crypt::HSXKPasswd::RNG::RandomDorOrg because Random.Org's usage
+    # guidelines request that all invocations to their API contain a contact
+    # email in the useragent header, and this module honours that request.
+    my $hsxkpasswd_instance = HSXKPasswd->new(
+        rng => Crypt::HSXKPasswd::RNG::RandomDorOrg->new('your.email@addre.ss');
+    );
 
 The constructor must be called via the package name.
 
@@ -3675,6 +3907,17 @@ C<config> - a valid config hashref.
 
 =item *
 
+C<config_json> - a JSON string representing a valid config hashref. If you use
+this named argument on a sytem where the standard Perl JSON library
+L<http://search.cpan.org/perldoc?JSON> is not installed, the constructor will
+croak.
+
+This named argument provides a convenient way to use configs generated using
+the web interface at L<https://xkpasswd.net/>. The Save/Load tab in that
+interface saves and loads configs in JSON format.
+
+=item *
+
 C<preset> - a valid preset name. If this variable is used, then any desired
 config overrides can be passed as a hashref using the variable
 C<preset_overrides>.
@@ -3694,14 +3937,14 @@ croak.
 
 =head3 clone_config()
 
-    my $clone = XKPasswd->clone_config($config);
+    my $clone = Crypt::HSXKPasswd->clone_config($config);
     
 This function must be passed a valid config hashref as the first argument or it
 will croak. The function returns a hashref.
 
 =head3 config_stats()
 
-    my %stats = XKPasswd->config_stats($config);
+    my %stats = Crypt::HSXKPasswd->config_stats($config);
     
 This function requires one argument, a valid config hashref. It returns a hash
 of statistics about a given configuration. The hash is indexed by the
@@ -3735,23 +3978,34 @@ be introduced depending on how many, if any, of the long substitutions get
 triggered by the randomly chosen words. If this happens the function will also
 carp with a warning.
 
+=head3 config_to_json()
+
+    my $config_json_string = Crypt::HSXKPasswd->config_to_json($config);
+    
+This function returns a JSON representation of the passed config hashref as a
+scalar string.
+
+The function must be passed a valid config hashref or it will
+croak. This function will also croak if called without the standard JSON Perl
+module (L<http://search.cpan.org/perldoc?JSON>) installed.
+
 =head3 config_to_string()
 
-    my $config_string = XKPasswd->config_to_string($config);
+    my $config_string = Crypt::HSXKPasswd->config_to_string($config);
     
 This function returns the content of the passed config hashref as a scalar
 string. The function must be passed a valid config hashref or it will croak.
 
 =head3 default_config()
 
-    my $config = XKPasswd->default_config();
+    my $config = Crypt::HSXKPasswd->default_config();
 
 This function returns a hashref containing a config with default values.
 
 This function can optionally be called with a single argument, a hashref
 containing keys with values to override the defaults with.
 
-    my $config = XKPasswd->default_config({num_words => 3});
+    my $config = Crypt::HSXKPasswd->default_config({num_words => 3});
     
 When overrides are present, the function will carp if an invalid key or value
 is passed, and croak if the resulting merged config is invalid.
@@ -3759,18 +4013,18 @@ is passed, and croak if the resulting merged config is invalid.
 This function is a shortcut for C<preset_config()>, and the two examples above
 are equivalent to the following:
 
-    my $config = XKPasswd->preset_config('DEFAULT');
-    my $config = XKPasswd->preset_config('DEFAULT', {num_words => 3});
+    my $config = Crypt::HSXKPasswd->preset_config('DEFAULT');
+    my $config = Crypt::HSXKPasswd->preset_config('DEFAULT', {num_words => 3});
 
 =head3 defined_presets()
 
-    my @preset_names = XKPasswd->defined_presets();
+    my @preset_names = Crypt::HSXKPasswd->defined_presets();
     
 This function returns the list of defined preset names as an array of scalars.
 
 =head3 is_valid_config()
 
-    my $is_ok = XKPasswd->is_valid_config($config);
+    my $is_ok = Crypt::HSXKPasswd->is_valid_config($config);
     
 This function must be passed a hashref to test as the first argument or it will
 croak. The function returns 1 if the passed config is valid, and 0 otherwise.
@@ -3780,14 +4034,14 @@ that the function should croak on invalid configs rather than returning 0;
 
     use English qw( -no_match_vars );
     eval{
-        XKPasswd->is_valid_config($config, 'do_croak');
+        Crypt::HSXKPasswd->is_valid_config($config, 'do_croak');
     }or do{
         print "ERROR - config is invalid because: $EVAL_ERROR\n";
     }
 
 =head3 preset_config()
 
-    my $config = XKPasswd->preset_config('XKCD');
+    my $config = Crypt::HSXKPasswd->preset_config('XKCD');
     
 This function returns the config hashref for a given preset. See above for the
 list of available presets.
@@ -3799,14 +4053,14 @@ passed the preset C<DEFAULT> is assumed.
 This function can optionally accept a second argument, a hashref
 containing keys with values to override the defaults with.
 
-    my $config = XKPasswd->preset_config('XKCD', {case_transform => 'INVERT'});
+    my $config = Crypt::HSXKPasswd->preset_config('XKCD', {case_transform => 'INVERT'});
     
 When overrides are present, the function will carp if an invalid key or value is
 passed, and croak if the resulting merged config is invalid.
 
 =head3 preset_description()
 
-    my $description = XKPasswd->preset_description('XKCD');
+    my $description = Crypt::HSXKPasswd->preset_description('XKCD');
     
 This function returns the description for a given preset. See above for the
 list of available presets.
@@ -3817,7 +4071,7 @@ passed the preset C<DEFAULT> is assumed.
 
 =head3 presets_to_string()
 
-    print XKPasswd->presets_to_string();
+    print Crypt::HSXKPasswd->presets_to_string();
     
 This function returns a string containing a description of each defined preset
 and the configs associated with the presets.
@@ -3828,30 +4082,48 @@ B<NOTE> - all methods must be invoked on an XKPasswd object or they will croak.
 
 =head3 config()
 
-    my $config = $xkpasswd_instance->config(); # getter
-    $xkpasswd_instance->config($config); # setter
+    my $config = $hsxkpasswd_instance->config(); # getter
+    $hsxkpasswd_instance->config($config_hashref); # setter
+    $hsxkpasswd_instance->config($config_json_string); # setter
 
 When called with no arguments the function returns a clone of the instance's
 config hashref.
 
 When called with a single argument the function sets the config of the instance
-to a clone of the passed hashref. If present, the argument must be a hashref,
-and must contain valid config keys and values. The function will croak if an
-invalid config is passed.
+to a clone of the passed config. If present, the argument must be either a
+hashref containing valid config keys and values, or a JSON string representing
+a hashref containing calid config keys and values.
+
+The function will croak if an invalid config is passed, or, if a string is
+passed while the standard JSON Perl module
+(L<http://search.cpan.org/perldoc?JSON>) is not installed.
+
+=head3 config_json()
+
+    my $config_json_string = $hsxkpasswd_instance->config_json();
+    
+This function returns the content of the instance's loaded config hashref as a
+JSON string.
+
+The output from this function can be loaded into the web interface at
+L<https://xkpasswd.net> (using the load/save tab).
+
+The function will croak if the standard JSON Perl module
+(L<http://search.cpan.org/perldoc?JSON>) is not installed.
 
 =head3 config_string()
 
-    my $config_string = $xkpasswd_instance->config_string();
+    my $config_string = $hsxkpasswd_instance->config_string();
     
-This function returns the content of the passed config hashref as a scalar
-string. The function must be passed a valid config hashref or it will croak.
+This function returns the content of the instance's loaded config hashref as a
+scalar string.
 
 =head3 dictionary()
 
-    my $dictionary_instance = $xkpasswd_instance->dictionary();
-    $xkpasswd_instance->dictionary($dictionary_instance);
-    $xkpasswd_instance->dictionary($array_ref);
-    $xkpasswd_instance->dictionary('sample_dict.txt');
+    my $dictionary_instance = $hsxkpasswd_instance->dictionary();
+    $hsxkpasswd_instance->dictionary($dictionary_instance);
+    $hsxkpasswd_instance->dictionary($array_ref);
+    $hsxkpasswd_instance->dictionary('sample_dict.txt');
     
 When called with no arguments this function returns currently loaded dictionary
 which will be an instance of a class that extends
@@ -3867,7 +4139,7 @@ loaded into the object.
 
 =head3 password()
 
-    my $password = $xkpasswd_instance->password();
+    my $password = $hsxkpasswd_instance->password();
     
 This function generates a random password based on the instance's loaded config
 and returns it as a scalar. The function takes no arguments.
@@ -3879,7 +4151,7 @@ library.
 
 =head3 passwords()
 
-    my @passwords = $xkpasswd_instance->passwords(10);
+    my @passwords = $hsxkpasswd_instance->passwords(10);
     
 This function generates a number of passwords and returns them all as an array.
 
@@ -3888,8 +4160,8 @@ croak if there is an error generating any of the requested passwords.
 
 =head3 rng()
 
-    my $rng_instance = $xkpasswd_instance->rng();
-    $xkpasswd_instance->rng($rng_instance);
+    my $rng_instance = $hsxkpasswd_instance->rng();
+    $hsxkpasswd_instance->rng($rng_instance);
     
 When called with no arguments this function returns currently loaded Random
 Number Genereatator (RNG) which will be an instance of a class that extends
@@ -3901,7 +4173,7 @@ C<Crypt::HSXKPasswd::RNG>.
 
 =head3 stats()
 
-    my %stats = $xkpasswd_instance->stats();
+    my %stats = $hsxkpasswd_instance->stats();
     
 This function generates a hash containing stats about the instance indexed by
 the following keys:
@@ -4022,41 +4294,47 @@ numbers.
 
 =head3 status()
 
-    print $xkpasswd_instance->status();
+    print $hsxkpasswd_instance->status();
     
 Generates a string detailing the internal status of the instance. Below is a
 sample status string:
 
     *DICTIONARY*
-    File path: /usr/share/dict/words
-    # words: 234252
-    # words of valid length: 87066
-
+    Source: Crypt::HSXKPasswd::Dictionary::Default
+    # words: 1425
+    # words of valid length: 1194 (84%)
+    
     *CONFIG*
-    case_transform: 'CAPITALISE'
-    character_substitutions: {}
-    num_words: '4'
-    padding_digits_after: '0'
-    padding_digits_before: '0'
-    padding_type: 'NONE'
-    separator_character: '-'
+    case_transform: 'ALTERNATE'
+    num_words: '3'
+    padding_character: 'RANDOM'
+    padding_characters_after: '2'
+    padding_characters_before: '2'
+    padding_digits_after: '2'
+    padding_digits_before: '2'
+    padding_type: 'FIXED'
+    separator_alphabet: ['!', '$', '%', '&', '*', '+', '-', '.', '/', ':', ';', '=', '?', '@', '^', '_', '|', '~']
+    separator_character: 'RANDOM'
+    symbol_alphabet: ['!', '$', '%', '&', '*', '+', '-', '.', '/', ':', ';', '=', '?', '@', '^', '_', '|', '~']
     word_length_max: '8'
     word_length_min: '4'
-
+    
     *RANDOM NUMBER CACHE*
+    Random Number Generator: Crypt::HSXKPasswd::RNG::Basic
     # in cache: 0
-
+    
     *PASSWORD STATISTICS*
-    Password length: between 19 & 35
-    Brute-Force permutations: between 2.29x10^33 & 2.85x10^61 (average 2.56x10^47)
-    Permutations (given dictionary & config): 5.74x10^19
-    Brute-Force Entropy (in bits): between 110 and 204 (average 157)
-    Entropy (given dictionary & config): 65bits
+    Password length: between 24 & 36
+    Permutations (brute-force): between 2.91x10^47 & 1.57x10^71 (average 2.14x10^59)
+    Permutations (given dictionary & config): 5.51x10^15
+    Entropy (Brute-Force): between 157bits and 236bits (average 197bits)
+    Entropy (given dictionary & config): 52bits
+    # Random Numbers needed per-password: 9
     Passwords Generated: 0
 
 =head3 update_config()
 
-    $xkpasswd_instance->update_config({separator_character => '+'});
+    $hsxkpasswd_instance->update_config({separator_character => '+'});
     
 The function updates the config within an XKPasswd instance. A hashref with the
 config options to be changed must be passed. The function returns a reference to
@@ -4069,13 +4347,14 @@ config will not have been altered in any way.
 By default this module does all of it's error notification via the functions
 C<carp()>, C<croak()>, and C<confess()> from the C<Carp> module. Optionally,
 all error messages can also be printed. To enable the printing of messages,
-set C<$XKPasswd::LOG_ERRORS> to a truthy value. All error messages will then be
-printed to the stream at C<$XKPasswd::LOG_STREAM>, which is set to C<STDERR> by
-default.
+set C<$Crypt::HSXKPasswd::LOG_ERRORS> to a truthy value. All error messages
+will then be printed to the stream at C<$Crypt::HSXKPasswd::LOG_STREAM>, which
+is set to C<STDERR> by default.
 
 Ordinarily this module produces very little output, to enable more verbose
-output C<$XKPasswd::DEBUG> can be set to a truthy value. If this is set, all
-debug messages will be printed to the stream C<$XKPasswd::LOG_STREAM>.
+output C<$Crypt::HSXKPasswd::DEBUG> can be set to a truthy value. If this is
+set, all debug messages will be printed to the stream
+C<$Crypt::HSXKPasswd::LOG_STREAM>.
 
 This module produces output at three severity levels:
 
@@ -4083,23 +4362,25 @@ This module produces output at three severity levels:
 
 =item *
 
-C<DEBUG> - this output is completely suppressed unless C<$XKPasswd::DEBUG> is
-set to a truthy value. If not suppressed debug messages are always printed to
-C<$XKPasswd::LOG_STREAM> (regardless of the value of C<$XKPasswd::LOG_ERRORS>).
+C<DEBUG> - this output is completely suppressed unless
+C<$Crypt::HSXKPasswd::DEBUG> is set to a truthy value. If not suppressed debug
+messages are always printed to C<$Crypt::HSXKPasswd::LOG_STREAM> (regardless of
+the value of C<$Crypt::HSXKPasswd::LOG_ERRORS>).
 
 =item *
 
 C<WARNING> - warning messages are always thrown with C<carp()>, and also
-printed to C<$XKPasswd::LOG_STREAM> if C<$XKPasswd::LOG_ERRORS> evaluates to
-true.
+printed to C<$Crypt::HSXKPasswd::LOG_STREAM> if
+C<$Crypt::HSXKPasswd::LOG_ERRORS> evaluates to true.
 
 =item *
 
 C<ERROR> - error messages are usually thrown with C<croak()>, but will be
-thrown with C<confess()> if C<$XKPasswd::DEBUG> evaluates to true. If
-C<$XKPasswd::LOG_ERRORS> evaluates to true errors are also printed to
-C<$XKPasswd::LOG_STREAM>, including a stack trace if C<$XKPasswd::DEBUG>
-evaluates to true and the module C<Devel::StackTrace> is installed.
+thrown with C<confess()> if C<$Crypt::HSXKPasswd::DEBUG> evaluates to true. If
+C<$Crypt::HSXKPasswd::LOG_ERRORS> evaluates to true errors are also printed to
+C<$Crypt::HSXKPasswd::LOG_STREAM>, including a stack trace if
+C<$Crypt::HSXKPasswd::DEBUG> evaluates to true and the module
+C<Devel::StackTrace> is installed.
 
 
 =back
@@ -4111,17 +4392,10 @@ currently interact with the environment. It may do so in future versions.
 
 =head1 DEPENDENCIES
 
-This module uses the following standard Perl modules:
+This module requires the following Perl modules:
 
 =over 4
 
-=item *
-
-C<strict> - L<http://search.cpan.org/perldoc?strict>
-
-=item *
-
-C<warnings> - L<http://search.cpan.org/perldoc?warnings>
 =item *
 
 C<Carp> - L<http://search.cpan.org/perldoc?Carp>
@@ -4132,7 +4406,11 @@ C<English> - L<http://search.cpan.org/perldoc?English>
 
 =item *
 
-C<B> - L<http://search.cpan.org/perldoc?B>
+C<List::MoreUtils> - L<http://search.cpan.org/perldoc?List%3A%3AMoreUtils>
+
+=item *
+
+C<Math::BigInt> - L<http://search.cpan.org/perldoc?Math%3A%3ABigInt>
 
 =item *
 
@@ -4140,11 +4418,23 @@ C<Math::Round> - L<http://search.cpan.org/perldoc?Math%3A%3ARound>
 
 =item *
 
-C<Math::BigInt> - L<http://search.cpan.org/perldoc?Math%3A%3ABigInt>
+C<Params::Validate> - L<http://search.cpan.org/perldoc?Params%3A%3AValidate>
+
+=item *
+
+C<Scalar::Util> - L<http://search.cpan.org/perldoc?Scalar%3A%3AUtil>
+
+=item *
+
+C<strict> - L<http://search.cpan.org/perldoc?strict>
+
+=item *
+
+C<warnings> - L<http://search.cpan.org/perldoc?warnings>
 
 =back
 
-The module can also optionally use the following non-standard Perl modules:
+The module can also optionally use the following Perl modules:
 
 =over 4
 
@@ -4155,6 +4445,41 @@ C<Devel::StackTrace> - L<http://search.cpan.org/perldoc?Devel%3A%3AStackTrace>
 Used for printing stack traces with error messages if
 C<$XKPasswd::DEBUG> and C<$XKPasswd::LOG_ERRORS> both evaluate to true. If the
 module is not installed the stack traces will be omitted from the log messages.
+
+=item *
+
+C<JSON> - L<http://search.cpan.org/perldoc?JSON>
+
+Used for loading and exporting config hashrefs as JSON strings. Needed if the
+named parameter C<config_json> is passed to the constructor or C<hsxkpasswd()>,
+if a string is passed to C<config()>, or if any function contianing the word
+C<json> in the function name is called.
+
+=item *
+
+C<Email::Valid> - L<http://search.cpan.org/perldoc?Email%3A%3AValid>
+
+Used by the Random.Org RNG class C<Crypt::HSXKPasswd::RNG::RandomDotOrg>.
+
+=item *
+
+C<LWP::UserAgent> - L<http://search.cpan.org/perldoc?LWP%3A%3AUserAgent>
+
+Used by the Random.Org RNG class C<Crypt::HSXKPasswd::RNG::RandomDotOrg>.
+
+=item *
+
+C<Mozilla::CA> - L<http://search.cpan.org/perldoc?Mozilla%3A%3ACA>
+
+Indirectly required by the Random.Org RNG class
+C<Crypt::HSXKPasswd::RNG::RandomDotOrg> because without it C<LWP::UserAgent>
+can't use HTTPS, and the Random.Org API uses HTTPS.
+
+=item *
+
+C<URI> - L<http://search.cpan.org/perldoc?URI>
+
+Used by the Random.Org RNG class C<Crypt::HSXKPasswd::RNG::RandomDotOrg>.
 
 =back
 
