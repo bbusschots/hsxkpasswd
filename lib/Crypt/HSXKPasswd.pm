@@ -4,7 +4,7 @@ package Crypt::HSXKPasswd;
 use strict;
 use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
-use Params::Validate qw(:all); # for varliable validation
+use Params::Validate qw(:all); # for argument validation
 use English qw(-no_match_vars); # for more readable code
 use Scalar::Util qw(blessed); # for checking if a reference is blessed
 use Math::Round; # for round()
@@ -1610,6 +1610,7 @@ sub status{
     
     # the random number cache
     $status .= "\n*RANDOM NUMBER CACHE*\n";
+    $status .= "Random Number Generator: $stats{randomnumbers_source}\n";
     $status .= "# in cache: $stats{randomnumbers_cached}\n";
     
     # password statistics
@@ -2855,6 +2856,17 @@ This documentation refers to C<Crypt::HSXKPasswd> version 3.1.1.
     }
     my $hsxkpasswd_instance = HSXKPasswd->new(config => $config);
     
+    # create an instance which uses Random.Org as the random number generator
+    # NOTE - this should be used sparingly, and only by the paranoid. If you
+    # abuse this RNG your IP will get blacklisted on Random.Org. You must pass
+    # a valid email address to the constructor for
+    # Crypt::HSXKPasswd::RNG::RandomDorOrg because Random.Org's usage
+    # guidelines request that all invocations to their API contain a contact
+    # email in the useragent header, and this module honours that request.
+    my $hsxkpasswd_instance = HSXKPasswd->new(
+        rng => Crypt::HSXKPasswd::RNG::RandomDorOrg->new('your.email@addre.ss');
+    );
+    
     # generate a single password
     my $password = $hsxkpasswd_instance->password();
     
@@ -3533,6 +3545,53 @@ random number.
 By default the module uses an instance of the class
 C<Crypt::HSXKPasswd::RNG::Basic>, which uses perl's built-in C<rand()>
 function.
+
+=head3 Crypt::HSXKPasswd::RNG::RandomDotOrg
+
+    my $rng = Crypt::HSXKPasswd::RNG::RandomDotOrg->new('my.address@my.dom');
+    my $rng = Crypt::HSXKPasswd::RNG::RandomDotOrg->new('my.address@my.dom',
+        timeout => 180,
+        num_passwords => 3,
+    );
+
+A usable example of an RNG that queries a web service is bunled with this
+module as the class C<Crypt::HSXKPasswd::RNG::RandomDotOrg>. As its name
+suggests, this class uses L<http://Random.Org/>'s HTTP API to generate random
+numbers.
+
+In order to comply with Random.Org's client guidelines
+(L<https://www.random.org/clients/>), this module requires that a valid email
+address be passed as the first argument.
+
+The client guidelines also request that clients use long timeouts, and batch
+their requests. They prefer to be asked for more number less frequently than
+less numbers more frequently. For this reason the class's default behaviour is
+to use a timeout of 180 seconds, and to request enough random numbers to
+generate three passwords at a time.
+
+These defaults can be overridden by passing named arguments to the contructor
+after the email address. The following named arguments are supported:
+
+=over 4
+
+=item *
+
+C<timeout> - the timeout to use when making HTTP requests to Random.Org in
+seconds (the default is 180).
+
+=item *
+
+C<num_passwords> - the number of password generations to fetch random numbers
+for per request from Random.org. This value is in effect a multiplier for the
+value passed to the C<random_numbers()> function by C<Crypt::HSXKPasswd>.
+
+C<num_absolute> - the absolute number of random numbers to fetch per request
+to Random.Org. This argument takes precedence over C<num_passwords>.
+
+=back 4
+
+C<num_passwords> and C<num_absolute> should not be used together, but if they
+are, C<num_absolute> use used, and C<num_passwords> is ignored.
 
 =head2 FUNCTIONAL INTERFACE
 

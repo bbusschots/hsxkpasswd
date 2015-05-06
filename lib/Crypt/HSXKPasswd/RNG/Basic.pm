@@ -74,7 +74,7 @@ sub random_numbers{
         $_MAIN_CLASS->_error('invalid invocation of an instance method');
     }
     unless(defined $num && $num =~ m/^\d+$/sx && $num >= 1){
-        $_CLASS->_error('invalid args - must request at least 1 password');
+        $_MAIN_CLASS->_error('invalid args - the number of random numbers needed per password must be a positive integer');
     }
     
     # generate the random numbers
