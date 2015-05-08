@@ -4,6 +4,7 @@ package Crypt::HSXKPasswd;
 use strict;
 use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
+use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use Params::Validate qw(:all); # for argument validation
 use English qw(-no_match_vars); # for more readable code
 use Scalar::Util qw(blessed); # for checking if a reference is blessed
@@ -11,6 +12,12 @@ use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
 use Crypt::HSXKPasswd::Dictionary::Basic;
 use Crypt::HSXKPasswd::RNG::Basic;
+
+# set things up for using UTF-8
+use Encode qw(encode decode);
+use feature 'unicode_strings';
+use utf8;
+binmode STDOUT, ':encoding(UTF-8)';
 
 # import (or not) optional modules
 my $_CAN_STACK_TRACE = eval{
@@ -4399,6 +4406,10 @@ This module requires the following Perl modules:
 =item *
 
 C<Carp> - L<http://search.cpan.org/perldoc?Carp>
+
+=item *
+
+C<DateTime> - L<http://search.cpan.org/perldoc?DateTime>
 
 =item *
 

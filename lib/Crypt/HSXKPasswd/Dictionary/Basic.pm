@@ -6,9 +6,16 @@ use parent Crypt::HSXKPasswd::Dictionary;
 use strict;
 use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
+use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw(-no_match_vars); # for more readable code
 use List::MoreUtils qw(uniq); # for array deduplication
 use Crypt::HSXKPasswd; # for the error function
+
+# set things up for using UTF-8
+use Encode qw(encode decode);
+use feature 'unicode_strings';
+use utf8;
+binmode STDOUT, ':encoding(UTF-8)';
 
 # Copyright (c) 2015, Bart Busschots T/A Bartificer Web Solutions All rights
 # reserved.
@@ -164,7 +171,7 @@ sub empty{
 #                 a reference to an array of words
 # Throws     : Croaks on invalid invocation or invalid args. Carps on invalid
 #              invalid word.
-# Notes      :
+# Notes      : The Input file must be UTF-8 encoded
 # See Also   :
 sub add_words{
     my $self = shift;
@@ -196,7 +203,7 @@ sub add_words{
         }
         
         # try load and parse the contents of the file
-        open my $WORD_FILE_FH, '<', $dict_source or $_MAIN_CLASS->_error("Failed to open $dict_source with error: $OS_ERROR");
+        open my $WORD_FILE_FH, '<:encoding(UTF-8)', $dict_source or $_MAIN_CLASS->_error("Failed to open $dict_source with error: $OS_ERROR");
         my $word_file_contents = do{local $/ = undef; <$WORD_FILE_FH>};
         close $WORD_FILE_FH;
         LINE:

@@ -6,9 +6,16 @@ use parent Crypt::HSXKPasswd::Dictionary;
 use strict;
 use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
+use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw( -no_match_vars ); # for more readable code
 use Crypt::HSXKPasswd; # for the error function
 use Crypt::HSXKPasswd::Dictionary::Basic; # used to process the dictionary file
+
+# set things up for using UTF-8
+use Encode qw(encode decode);
+use feature 'unicode_strings';
+use utf8;
+binmode STDOUT, ':encoding(UTF-8)';
 
 # Copyright (c) 2015, Bart Busschots T/A Bartificer Web Solutions All rights
 # reserved.
