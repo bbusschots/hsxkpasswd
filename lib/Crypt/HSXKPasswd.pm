@@ -421,7 +421,9 @@ my $_PRESETS = {
 #              dictionary - an object that inherits from
 #                  Crypt::HSXKPasswd::Dictionary
 #              dictionary_list - an array ref of words to use as a dictionary.
-#              dictionary_file - the path to a dictionary file
+#              dictionary_file - the path to a dictionary file.
+#              dictionary_file_encoding - the encoding to use when loading the
+#                  dictionary file, defaults to UTF-8.
 #              preset - the preset to use
 #              preset_overrides - a hashref of config options to override.
 #                  Ignored unless preset is set, and in use.
@@ -448,6 +450,7 @@ sub new{
             dictionary => {isa => $_DICTIONARY_BASE_CLASS, optional => 1},
             dictionary_list => {type => ARRAYREF, optional => 1},
             dictionary_file => {type => SCALAR, optional => 1},
+            dictionary_file_encoding => {type => SCALAR, optional => 1, default => 'UTF-8'},
             config => {type => HASHREF, optional => 1},
             config_json => {type => SCALAR, optional => 1},
             preset => {type => SCALAR, optional => 1},
@@ -476,7 +479,7 @@ sub new{
     }elsif($args{dictionary_list}){
         $dictionary = Crypt::HSXKPasswd::Dictionary::Basic->new($args{dictionary_list});
     }elsif($args{dictionary_file}){
-        $dictionary = Crypt::HSXKPasswd::Dictionary::Basic->new($args{dictionary_file});
+        $dictionary = Crypt::HSXKPasswd::Dictionary::Basic->new($args{dictionary_file}, $args{dictionary_file_encoding});
     }else{
         $dictionary = Crypt::HSXKPasswd::Dictionary::Default->new();
     }
@@ -1155,6 +1158,8 @@ sub config_stats{
 #                 A reference to an array of words
 #                     -OR-
 #                 An instance of a sub-class of Crypt::HSXKPasswd::Dictionary
+#              2. OPTIONAL - the encoding to import the file with. The default
+#                 is UTF-8 (ignored if the first argument is not a file path).
 # Throws     : Croaks on invalid invocation, or, if there is a problem loading
 #              a dictionary file
 # Notes      :
@@ -1163,10 +1168,14 @@ sub config_stats{
 sub dictionary{
     my $self = shift;
     my $dictionary_source = shift;
+    my $encoding = shift;
     
     # validate args
     unless($self && $self->isa($_CLASS)){
         $_CLASS->_error('invalid invocation of instance method');
+    }
+    unless($encoding){
+        $encoding = 'UTF-8';
     }
     
     # decide if we're a 'getter' or a 'setter'
@@ -1185,8 +1194,8 @@ sub dictionary{
         my $new_dict;
         if($dictionary_source->isa($_DICTIONARY_BASE_CLASS)){
             $new_dict = $dictionary_source;
-        }elsif(ref $dictionary_source eq q{} && ref $dictionary_source eq 'ARRAY'){
-            $new_dict = Crypt::HSXKPasswd::Dictionary::Basic->new($dictionary_source); # could throw an error
+        }elsif(ref $dictionary_source eq q{} || ref $dictionary_source eq 'ARRAY'){
+            $new_dict = Crypt::HSXKPasswd::Dictionary::Basic->new($dictionary_source, $encoding); # could throw an error
         }else{
             $_CLASS->_error('invalid args - must pass a valid dictinary, hashref, or file path');
         }
@@ -3273,13 +3282,15 @@ containing words.
 =head4 Usage
 
     my $word_source = Crypt::HSXKPasswd::Dictionary::Basic->new('file_path');
+    my $word_source = Crypt::HSXKPasswd::Dictionary::Basic->new('file_path', 'Latin1');
     my $word_source = Crypt::HSXKPasswd::Dictionary::Basic->new($array_ref);
 
 
 The rules for the formatting of dictionary files are simple. Dictionary
 files must contain one word per line. Words shorter than four letters will be
-ignored, as will all lines starting with the # symbol. Files must be UTF-8
-encoded.
+ignored, as will all lines starting with the # symbol. Files are assumed to be
+UTF-8 encoded, but an optional second argument can be passed specifying a
+different file encoding.
 
 This format is the same as that of the standard Unix Words file, usually found
 at C</usr/share/dict/words> on Unix and Linux operating systems (including OS
@@ -3894,8 +3905,9 @@ C<dictionary_list> - a reference to an array containing words as scalars.
 =item *
 
 C<dictionary_file> - the path to a dictionary file. Dictionary files should
-contain one word per line and be encoded in UTF-8. Lines starting with a #
-symbol will be ignored.
+contain one word per. Lines starting with a # symbol will be ignored. It is
+assumed files will be UTF-8 encoded. If not, a second named argument,
+C<dictionary_file_encoding>, can be used to specify another encoding.
 
 =back 4
 
@@ -4131,18 +4143,21 @@ scalar string.
     $hsxkpasswd_instance->dictionary($dictionary_instance);
     $hsxkpasswd_instance->dictionary($array_ref);
     $hsxkpasswd_instance->dictionary('sample_dict.txt');
+    $hsxkpasswd_instance->dictionary('sample_dict.txt', 'Latin1');
     
-When called with no arguments this function returns currently loaded dictionary
-which will be an instance of a class that extends
+When called with no arguments this function returns the currently loaded
+dictionary which will be an instance of a class that extends
 C<Crypt::HSXKPasswd::Dictionary>.
 
-To load a new dictionary into an instance, call this function with a single
-argument. This argument can either be an instance of a class that extends
-C<Crypt::HSXKPasswd::Dictionary>, or a reference to an array of words, or the
+To load a new dictionary into an instance, call this function with arguments.
+The first argument argument can be an instance of a class that extends
+C<Crypt::HSXKPasswd::Dictionary>, a reference to an array of words, or the
 path to a dictionary file. If either an array reference or a file path are
 passed, they will be used to instantiate an instance of the class
 C<Crypt::HSXKPasswd::Dictionary::Basic>, and that new instance will then be
-loaded into the object.
+loaded into the object. If a file path is passed, it will be assumed to be
+UTF-8 encoded. If not, an optional second argument can be passed to specify the
+file's encoding.
 
 =head3 password()
 

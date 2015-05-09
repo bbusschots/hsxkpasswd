@@ -44,12 +44,15 @@ my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 # Arguments  : 1) a string representing a file path to a dictionary file
 #                   -- OR --
 #                 an array ref containing a list of words
+#               2) OPTIONAL - the encoding to import the file with. The default
+#                  is UTF-8 (ignored if the first argument is not a file path).
 # Throws     : Croaks on invalid invocation and invalid args.
 # Notes      : 
 # See Also   : 
 sub new{
     my $class = shift;
     my $dict_source = shift;
+    my $encoding = shift;
     
     # validate the args
     unless(defined $class && $class eq $_CLASS){
@@ -57,6 +60,9 @@ sub new{
     }
     unless(defined $dict_source && (ref $dict_source eq q{} || ref $dict_source eq 'ARRAY')){
         $_MAIN_CLASS->_error('invalid args - first argument must be a path to a dictionary file or an array ref');
+    }
+    unless($encoding){
+        $encoding = 'UTF-8';
     }
     
     # start with a blank object
@@ -70,7 +76,7 @@ sub new{
     bless $instance, $class;
     
     # try instantiate the word list as appropriate
-    $instance->add_words($dict_source);
+    $instance->add_words($dict_source, $encoding);
     
     # return the object
     return $instance;
@@ -169,13 +175,16 @@ sub empty{
 # Arguments  : 1) the path to the file to load words from
 #                    --OR--
 #                 a reference to an array of words
+#               2) OPTIONAL - the encoding to import the file with. The default
+#                  is UTF-8 (ignored if the first argument is not a file path).
 # Throws     : Croaks on invalid invocation or invalid args. Carps on invalid
 #              invalid word.
-# Notes      : The Input file must be UTF-8 encoded
+# Notes      : 
 # See Also   :
 sub add_words{
     my $self = shift;
     my $dict_source = shift;
+    my $encoding = shift;
     
     # validate args
     unless(defined $self && $self->isa($_CLASS)){
@@ -183,6 +192,9 @@ sub add_words{
     }
     unless(defined $dict_source && (ref $dict_source eq q{} || ref $dict_source eq 'ARRAY')){
         $_MAIN_CLASS->_error('invalid args - first argument must be a path to a dictionary file or an array ref');
+    }
+    unless($encoding){
+        $encoding = 'UTF-8';
     }
     
     # try load the words from the relevant source
@@ -203,7 +215,7 @@ sub add_words{
         }
         
         # try load and parse the contents of the file
-        open my $WORD_FILE_FH, '<:encoding(UTF-8)', $dict_source or $_MAIN_CLASS->_error("Failed to open $dict_source with error: $OS_ERROR");
+        open my $WORD_FILE_FH, "<:encoding($encoding)", $dict_source or $_MAIN_CLASS->_error("Failed to open $dict_source with error: $OS_ERROR");
         my $word_file_contents = do{local $/ = undef; <$WORD_FILE_FH>};
         close $WORD_FILE_FH;
         LINE:
