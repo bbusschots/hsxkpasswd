@@ -75,6 +75,15 @@ my $_RNG_BASE_CLASS = 'Crypt::HSXKPasswd::RNG';
 
 # config key definitions
 my $_KEYS = {
+    allow_accents => {
+        req => 0,
+        ref => q{}, # SCALAR
+        validate => sub {
+            # let everything through - just interested in truthiness
+            return 1;
+        },
+        desc => 'Any truthy or falsy scalar value',
+    },
     symbol_alphabet => {
         req => 0,
         ref => 'ARRAY', # ARRAY REF
@@ -268,6 +277,7 @@ my $_PRESETS = {
             padding_characters_before => 2,
             padding_characters_after => 2,
             case_transform => 'ALTERNATE',
+            allow_accents => 0,
         },
     },
     WEB32 => {
@@ -286,6 +296,7 @@ my $_PRESETS = {
             padding_characters_before => 1,
             padding_characters_after => 1,
             case_transform => 'ALTERNATE',
+            allow_accents => 0,
         },
     },
     WEB16 => {
@@ -304,6 +315,7 @@ my $_PRESETS = {
             padding_characters_before => 1,
             padding_characters_after => 1,
             case_transform => 'RANDOM',
+            allow_accents => 0,
         },
     },
     WIFI => {
@@ -321,6 +333,7 @@ my $_PRESETS = {
             padding_character => 'RANDOM',
             pad_to_length => 63,
             case_transform => 'RANDOM',
+            allow_accents => 0,
         },
     },
     APPLEID => {
@@ -339,6 +352,7 @@ my $_PRESETS = {
             padding_characters_before => 1,
             padding_characters_after => 1,
             case_transform => 'RANDOM',
+            allow_accents => 0,
         },
     },
     NTLM => {
@@ -357,6 +371,7 @@ my $_PRESETS = {
             padding_characters_before => 0,
             padding_characters_after => 1,
             case_transform => 'INVERT',
+            allow_accents => 0,
         },
     },
     SECURITYQ => {
@@ -374,6 +389,7 @@ my $_PRESETS = {
             padding_characters_before => 0,
             padding_characters_after => 1,
             case_transform => 'NONE',
+            allow_accents => 0,
         },
     },
     XKCD => {
@@ -387,6 +403,7 @@ my $_PRESETS = {
             padding_digits_after => 0,
             padding_type => 'NONE',
             case_transform => 'RANDOM',
+            allow_accents => 0,
         },
     },
 };
@@ -1178,7 +1195,7 @@ sub dictionary{
         my @cache_full = @{$new_dict->word_list()};
     
         # generate the valid word cache - croaks if too few words left after filtering
-        my @cache_limited = $_CLASS->_filter_word_list(\@cache_full, $self->{_CONFIG}->{word_length_min}, $self->{_CONFIG}->{word_length_max});
+        my @cache_limited = $_CLASS->_filter_word_list(\@cache_full, $self->{_CONFIG}->{word_length_min}, $self->{_CONFIG}->{word_length_max}, $self->{_CONFIG}->{allow_accents});
     
         # if we got here all is well, so save the new path and caches into the object
         $self->{_DICTIONARY_SOURCE} = $new_dict;
@@ -1371,7 +1388,7 @@ sub update_config{
     my @cache_limited = @{$self->{_CACHE_DICTIONARY_LIMITED}};
     if($new_config->{word_length_min} ne $self->{_CONFIG}->{word_length_min} || $new_config->{word_length_max} ne $self->{_CONFIG}->{word_length_max}){
         # re-build the cache of valid words - throws an error if too few words are returned
-        @cache_limited = $_CLASS->_filter_word_list(\@cache_all, $new_config->{word_length_min}, $new_config->{word_length_max});
+        @cache_limited = $_CLASS->_filter_word_list(\@cache_all, $new_config->{word_length_min}, $new_config->{word_length_max}, $new_config->{allow_accents});
     }
     
     # if we got here, all is well with the new config, so add it and the caches to the instance
@@ -1781,36 +1798,6 @@ sub hsxkpasswd{
     return $hsxkpasswd->password();
 }
 
-#####-SUB-######################################################################
-# Type       : SUBROUTINE
-# Purpose    : The default random generator function.
-# Returns    : An array of random decimal numbers between 0 and 1 as scalars.
-# Arguments  : 1. the number of random numbers to generate (must be at least 1)
-#              2. OPTIONAL - a truthy value to enable debugging
-# Throws     : Croaks on invalid args
-# Notes      :
-# See Also   :
-sub basic_random_generator{
-    my $num = shift;
-    my $debug = shift;
-    
-    # validate args
-    unless(defined $num && $num =~ m/^\d+$/sx && $num >= 1){
-        $_CLASS->_error('invalid args - must request at least 1 password');
-    }
-    
-    # generate the random numbers
-    my @ans = ();
-    my $num_to_generate = $num;
-    while($num_to_generate > 0){
-        push @ans, rand;
-        $num_to_generate--;
-    }
-    
-    # return the random numbers
-    return @ans;
-}
-
 #
 # 'Private' functions ---------------------------------------------------------
 #
@@ -2096,14 +2083,19 @@ sub _validate_key{
 # Purpose    : Filter a word list based on word length
 # Returns    : An array of words as scalars.
 # Arguments  : 1. a reference to the array of words to filter.
+#              2. the minimum allowed word length
+#              3. the maximum allowed word length
+#              4. OPTIONAL - a truthy value to allow accented characters through
 # Throws     : Croaks on invalid invocation, or if too few matching words found.
-# Notes      :
+# Notes      : Unless the fourth argument is a truthy value, accents will be
+#              stripped from the words.
 # See Also   :
 sub _filter_word_list{
     my $class = shift;
     my $word_list_ref = shift;
     my $min_len = shift;
     my $max_len = shift;
+    my $allow_accents = shift;
     
     # validate the args
     unless($class && $class eq $_CLASS){
@@ -2128,6 +2120,11 @@ sub _filter_word_list{
         
         # skip words longer than the maximum
         next WORD if length $word > $max_len;
+        
+        # strip accents unless they are explicitly allowed by the config
+        unless($allow_accents){
+            $word = unidecode($word);
+        }
         
         # store the word in the filtered list
         push @ans, $word;
@@ -2598,7 +2595,7 @@ sub _calculate_entropy_stats{
     if($self->{_CONFIG}->{padding_digits_before} > 0 || $self->{_CONFIG}->{padding_digits_after} > 0){
         $alphabet_count += 10; # these configs guarantee digits in the mix
     }
-    if($self->_passwords_will_contain_symbol()){
+    if($self->_passwords_will_contain_symbol() || $self->{_CONFIG}->{allow_accents}){
         $alphabet_count += 33; # the config almost certainly includes a symbol, so add 33 to the alphabet (like password haystacks does)
     }
     my $b_alphabet_count = Math::BigInt->new($alphabet_count);
@@ -3281,7 +3278,8 @@ containing words.
 
 The rules for the formatting of dictionary files are simple. Dictionary
 files must contain one word per line. Words shorter than four letters will be
-ignored, as will all lines starting with the # symbol.
+ignored, as will all lines starting with the # symbol. Files must be UTF-8
+encoded.
 
 This format is the same as that of the standard Unix Words file, usually found
 at C</usr/share/dict/words> on Unix and Linux operating systems (including OS
@@ -3895,7 +3893,9 @@ C<dictionary_list> - a reference to an array containing words as scalars.
 
 =item *
 
-C<dictionary_file> - the path to a dictionary file.
+C<dictionary_file> - the path to a dictionary file. Dictionary files should
+contain one word per line and be encoded in UTF-8. Lines starting with a #
+symbol will be ignored.
 
 =back 4
 
