@@ -3434,6 +3434,14 @@ words.
 
 The module ships with a number of pre-defined word sources:
 
+=head3 C<Crypt::HSXKPasswd::Dictionary::DE>
+
+A German word list based on the GPL-licensed German dictionary for WinEdit by
+Juergen Vierheilig.
+
+B<Note:> This module is licensed under the GPL, not the BSD license used for the 
+majority of this project.
+
 =head3 C<Crypt::HSXKPasswd::Dictionary::EN_Default>
 
 A default word list consisting of English words and place names.
@@ -4794,6 +4802,14 @@ The following components of this package are covered by the more restrictive
 GPL V2 license L<https://www.gnu.org/licenses/gpl-2.0.html>:
 
 =over 4
+
+=item *
+
+The C<sample_dict_DE.txt> text file.
+
+=item *
+
+The C<Crypt::HSXKPasswd::Dictionary::DE> Perl module.
 
 =item *
 
