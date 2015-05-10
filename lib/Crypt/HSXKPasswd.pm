@@ -10,6 +10,7 @@ use English qw(-no_match_vars); # for more readable code
 use Scalar::Util qw(blessed); # for checking if a reference is blessed
 use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
+use Text::Unidecode; # for dealing with accented characters
 use Crypt::HSXKPasswd::Dictionary::Basic;
 use Crypt::HSXKPasswd::RNG::Basic;
 
@@ -513,6 +514,7 @@ sub new{
         _RNG => {}, # the random number generator
         _CACHE_DICTIONARY_FULL => [], # a cache of all words found in the dictionary file
         _CACHE_DICTIONARY_LIMITED => [], # a cache of all the words found in the dictionary file that meet the length criteria
+        _CACHE_CONTAINS_ACCENTS => 0, # a cache of whether or not the filtered word list contains words with accented letters
         _CACHE_ENTROPYSTATS => {}, # a cache of the entropy stats for the current combination of dictionary and config
         _CACHE_RANDOM => [], # a cache of random numbers (as floating points between 0 and 1)
         _PASSWORD_COUNTER => 0, # the number of passwords this instance has generated
@@ -1150,8 +1152,8 @@ sub config_stats{
 # Type       : INSTANCE
 # Purpose    : Get the currently loaded dictionary object, or, load a new
 #              dictionary
-# Returns    : An instance to the loaded dictionary object, or, a reference to
-#              the instance (to enable function chaining) if called as a setter
+# Returns    : An clone of the loaded dictionary object, or, a reference to the
+#              instance (to enable function chaining) if called as a setter
 # Arguments  : 1. OPTIONAL - the source for the dictionary, can be:
 #                 The path to a dictionary file
 #                     -OR-
@@ -1181,7 +1183,7 @@ sub dictionary{
     # decide if we're a 'getter' or a 'setter'
     if(!(defined $dictionary_source)){
         # we are a getter, so just return
-        return $self->{_DICTIONARY_SOURCE};
+        return $self->{_DICTIONARY_SOURCE}->clone();
     }else{
         # we are a setter, so try load the dictionary
         
@@ -1210,6 +1212,11 @@ sub dictionary{
         $self->{_DICTIONARY_SOURCE} = $new_dict;
         $self->{_CACHE_DICTIONARY_FULL} = [@cache_full];
         $self->{_CACHE_DICTIONARY_LIMITED} = [@cache_limited];
+        if($self->{_CONFIG}->{allow_accents}){
+            $self->{_CACHE_CONTAINS_ACCENTS} = $_CLASS->_contains_accented_letters(\@cache_limited);
+        }else{
+            $self->{_CACHE_CONTAINS_ACCENTS} = 0;
+        }
         
         # update the instance's entropy cache
         $self->_update_entropystats_cache();
@@ -1616,6 +1623,8 @@ sub passwords{
 #                permitted by the filter
 #              * 'dictionary_filter_length_max' - the maximum length world
 #                permitted by the filter
+#              * 'dictionary_contains_accents' - whether or not the filtered
+#                list contains accented letters
 #              * 'password_entropy_blind_min' - the entropy of the shortest
 #                password this config can generate from the point of view of a
 #                brute-force attacker in bits
@@ -1688,6 +1697,7 @@ sub stats{
     $stats{dictionary_words_percent_avaialable} = $dict_stats{percent_words_available};
     $stats{dictionary_filter_length_min} = $dict_stats{filter_length_min};
     $stats{dictionary_filter_length_max} = $dict_stats{filter_length_max};
+    $stats{dictionary_contains_accents} = $dict_stats{contains_accents};
     
     # deal with the entropy stats
     $stats{password_entropy_blind_min} = $self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min};
@@ -1736,6 +1746,7 @@ sub status{
     $status .= "Source: $stats{dictionary_source}\n";
     $status .= "# words: $stats{dictionary_words_total}\n";
     $status .= "# words of valid length: $stats{dictionary_words_filtered} ($stats{dictionary_words_percent_avaialable}%)\n";
+    $status .= 'Contains Accented Characters: '.($stats{dictionary_contains_accents} ? 'YES' : 'NO')."\n";
     
     # the config
     $status .= "\n*CONFIG*\n";
@@ -2141,6 +2152,43 @@ sub _filter_word_list{
     
     # return the list
     return @ans;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
+# Purpose    : Determine whether a word list contains accented characters
+# Returns    : 1 if the word list does contain accented characters, and 0 if it
+#              does not.
+# Arguments  : 1. A reference to an array of words to test
+# Throws     : NOTHING
+# Notes      :
+# See Also   :
+sub _contains_accented_letters{
+    my $class = shift;
+    my $word_list_ref = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        $_CLASS->_error('invalid invocation of class method');
+    }
+    unless(defined $word_list_ref && ref $word_list_ref eq q{ARRAY}){
+        $_CLASS->_error('invoked with invalid word list');
+    }
+    
+    # assume no accented characters, test until 1 is found
+    my $accent_found = 0;
+    WORD:
+    foreach my $word (@{$word_list_ref}){
+        # check for accents by stripping accents and comparing to original
+        my $word_accents_stripped = unidecode($word);
+        unless($word eq $word_accents_stripped){
+            $accent_found = 1;
+            last WORD;
+        }
+    }
+    
+    # return the list
+    return $accent_found;
 }
 
 #####-SUB-######################################################################
@@ -2604,7 +2652,7 @@ sub _calculate_entropy_stats{
     if($self->{_CONFIG}->{padding_digits_before} > 0 || $self->{_CONFIG}->{padding_digits_after} > 0){
         $alphabet_count += 10; # these configs guarantee digits in the mix
     }
-    if($self->_passwords_will_contain_symbol() || $self->{_CONFIG}->{allow_accents}){
+    if($self->_passwords_will_contain_symbol() || $self->{_CACHE_CONTAINS_ACCENTS}){
         $alphabet_count += 33; # the config almost certainly includes a symbol, so add 33 to the alphabet (like password haystacks does)
     }
     my $b_alphabet_count = Math::BigInt->new($alphabet_count);
@@ -2679,6 +2727,8 @@ sub _calculate_entropy_stats{
 #                size limitations
 #              * 'percent_words_available' - the percentage of the un-filtered
 #                words remaining in the filtered words list
+#              * 'contains_accents' - whether or not the filtered word list
+#                contains accented letter
 # Arguments  : NONE
 # Throws     : Croaks on invalid invocation
 # Notes      :
@@ -2701,6 +2751,7 @@ sub _calcualte_dictionary_stats{
     $ans{percent_words_available} = round(($ans{num_words_filtered}/$ans{num_words_total}) * 100);
     $ans{filter_length_min} = $self->{_CONFIG}->{word_length_min};
     $ans{filter_length_max} = $self->{_CONFIG}->{word_length_max};
+    $ans{contains_accents} = $self->{_CACHE_CONTAINS_ACCENTS};
     
     # return the stats
     return %ans;
@@ -3303,6 +3354,13 @@ following are the valid keys for that hashref, what they mean, and what values
 are valid for each.
 
 =over 4
+
+=item *
+
+C<allow_accents> - a truthy value to signify that any accented characters in
+the dictionary should be preserved when filtering to the sub-set of valid words.
+If not specified, or if a falsy value is passed, accented letters will have
+their accents stripped off, e.g. C<E<eacute>> becomes C<e>.
 
 =item *
 
@@ -4139,14 +4197,14 @@ scalar string.
 
 =head3 dictionary()
 
-    my $dictionary_instance = $hsxkpasswd_instance->dictionary();
+    my $dictionary_clone = $hsxkpasswd_instance->dictionary();
     $hsxkpasswd_instance->dictionary($dictionary_instance);
     $hsxkpasswd_instance->dictionary($array_ref);
     $hsxkpasswd_instance->dictionary('sample_dict.txt');
     $hsxkpasswd_instance->dictionary('sample_dict.txt', 'Latin1');
     
-When called with no arguments this function returns the currently loaded
-dictionary which will be an instance of a class that extends
+When called with no arguments this function returns a clone of the currently 
+loaded dictionary which will be an instance of a class that extends
 C<Crypt::HSXKPasswd::Dictionary>.
 
 To load a new dictionary into an instance, call this function with arguments.
@@ -4201,6 +4259,11 @@ This function generates a hash containing stats about the instance indexed by
 the following keys:
 
 =over 4
+
+=item *
+
+C<dictionary_contains_accents> - 1 if the filtered word list contains accented
+letters, 0 otherwise.
 
 =item *
 
@@ -4453,6 +4516,10 @@ C<Scalar::Util> - L<http://search.cpan.org/perldoc?Scalar%3A%3AUtil>
 =item *
 
 C<strict> - L<http://search.cpan.org/perldoc?strict>
+
+=item *
+
+C<Text::Unidecode> - L<http://search.cpan.org/perldoc?Text%3A%3AUnidecode>
 
 =item *
 

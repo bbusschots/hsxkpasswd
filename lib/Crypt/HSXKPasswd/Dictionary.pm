@@ -54,6 +54,21 @@ sub new{
 # --- Public Instance functions -----------------------------------------------
 #
 
+#####-SUB-######################################################################
+# Type       : INSTANCE
+# Purpose    : A place-holder for the function to clone self.
+# Returns    : NOTHING - but in subclasses should return a clone of self
+# Arguments  : NONE
+# Throws     : ALWAYS throws an error to say this class must be extended, and
+#              this function must be overridden.
+# Notes      :
+# See Also   :
+## no critic (Subroutines::RequireFinalReturn);
+sub clone{
+    $_MAIN_CLASS->_error("$_CLASS must be extended to be used, and the function clone() must be overridden");
+}
+## use critic
+
 #####-SUB-#####################################################################
 # Type       : INSTANCE
 # Purpose    : A place-holder for the function to get the list of words.

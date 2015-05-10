@@ -3,7 +3,7 @@ package Crypt::HSXKPasswd::Dictionary::Default;
 use parent Crypt::HSXKPasswd::Dictionary;
 
 # NOTE
-# The module was Auto-generated at 2015-05-08T21:37:36Z by
+# The module was Auto-generated at 2015-05-10T01:20:40Z by
 # Crypt::HSXKPasswd::Util->dictionary_from_text_file()
 
 # import required modules
@@ -1482,6 +1482,22 @@ sub new{
 #
 # --- Public Instance functions -----------------------------------------------
 #
+
+#####-SUB-######################################################################
+# Type       : INSTANCE
+# Purpose    : Override clone() from the parent class and return a clone of
+#              self.
+# Returns    : An object of type Crypt::HSXKPasswd::Dictionary::Default
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation
+# Notes      :
+# See Also   :
+sub clone{
+    my $self = shift;
+    my $clone = {};
+    bless $clone, $_CLASS;
+    return $clone;
+}
 
 #####-SUB-#####################################################################
 # Type       : INSTANCE

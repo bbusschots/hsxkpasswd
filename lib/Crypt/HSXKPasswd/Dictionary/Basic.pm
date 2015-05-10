@@ -86,6 +86,48 @@ sub new{
 # --- Public Instance functions -----------------------------------------------
 #
 
+#####-SUB-######################################################################
+# Type       : INSTANCE
+# Purpose    : Override clone() from the parent class and return a clone of
+#              self.
+# Returns    : An object of type Crypt::HSXKPasswd::Dictionary::Basic
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation
+# Notes      :
+# See Also   :
+sub clone{
+    my $self = shift;
+    
+    # validate the args
+    unless(defined $self && $self->isa($_CLASS)){
+        $_MAIN_CLASS->_error('invalid invocation of an instance method');
+    }
+    
+    # create an empty object
+    my $clone = {
+        words => [],
+        sources => {
+            files => [],
+            num_arrays => 0,
+        },
+    };
+    
+    # fill in the values
+    foreach my $word (@{$self->{words}}){
+        push @{$clone->{words}}, $word;
+    }
+    foreach my $file (@{$self->{sources}->{files}}){
+        push @{$clone->{sources}->{files}}, $file;
+    }
+    $clone->{sources}->{num_arrays} = $self->{sources}->{num_arrays};
+    
+    # bless the clone
+    bless $clone, $_CLASS;
+    
+    # return the clone
+    return $clone;
+}
+
 #####-SUB-#####################################################################
 # Type       : INSTANCE
 # Purpose    : Override word_list() from the parent class and return the word

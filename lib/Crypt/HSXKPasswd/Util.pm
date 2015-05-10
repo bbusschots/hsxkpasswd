@@ -174,6 +174,22 @@ sub new{
 # --- Public Instance functions -----------------------------------------------
 #
 
+#####-SUB-######################################################################
+# Type       : INSTANCE
+# Purpose    : Override clone() from the parent class and return a clone of
+#              self.
+# Returns    : An object of type ${_MAIN_CLASS}::Dictionary::$name
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation
+# Notes      :
+# See Also   :
+sub clone{
+    my \$self = shift;
+    my \$clone = {};
+    bless \$clone, \$_CLASS;
+    return \$clone;
+}
+
 #####-SUB-#####################################################################
 # Type       : INSTANCE
 # Purpose    : Return the word list.
