@@ -3465,6 +3465,15 @@ A Dutch/Flemish word list based on the GPL-licensed Dutch dictionary for WinEdit
 B<Note:> This module is licensed under GPL V2, not the BSD license used for the 
 majority of this project.
 
+=head3 C<Crypt::HSXKPasswd::Dictionary::PT>
+
+A Portuguese word list based on the GPL-licensed Portuguese dictionary for
+WinEdit compiled by Bernhard Enders (building on work by Raimundo Santos Moura &
+Ricardo Ueda Karpischek).
+
+B<Note:> This module is licensed under GPL V2.1, not the BSD license used for
+the majority of this project.
+
 =head3 C<Crypt::HSXKPasswd::Dictionary::System>
 
 This class tries to find and use a Unix words file on the system.
@@ -4831,6 +4840,14 @@ The C<sample_dict_NL.txt> text file.
 =item *
 
 The C<Crypt::HSXKPasswd::Dictionary::NL> Perl module.
+
+=item *
+
+The C<sample_dict_PT.txt> text file.
+
+=item *
+
+The C<Crypt::HSXKPasswd::Dictionary::PT> Perl module.
 
 =back 4
 
