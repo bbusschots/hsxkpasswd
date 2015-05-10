@@ -3446,6 +3446,11 @@ majority of this project.
 
 A default word list consisting of English words and place names.
 
+=head3 C<Crypt::HSXKPasswd::Dictionary::ES>
+
+A Spanish word list based on the BSD-licensed Spanish dictionary for WinEdit by
+Juan L. Varona from the Universidad de La Rioja.
+
 =head3 C<Crypt::HSXKPasswd::Dictionary::FR>
 
 A French word list based on the GPL-licensed French dictionary for WinEdit.
