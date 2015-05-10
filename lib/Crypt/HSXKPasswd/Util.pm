@@ -120,6 +120,72 @@ sub print_preset_samples{
     return 1;
 }
 
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Sanitise a dictionary file, stripping out invalid words and
+#              sorting it alphabetically. The sanitised dictionary is printed to
+#              STDOUT in UTF-8.
+# Returns    : 1 (to keep perlcritic happy)
+# Arguments  : 1. a file path
+#              2. OPTIONAL - the encoding to use when reading the file
+# Throws     : Croaks on invalid invocation, invalid args and IO error
+# Notes      : This function can be called as a perl one-liner, e.g.
+#              perl -C -Ilib -MCrypt::HSXKPasswd::Util -e 'Crypt::HSXKPasswd::Util->sanitise_dictionary_file("sample_dict_EN.txt")'
+# See Also   :
+sub sanitise_dictionary_file{
+    my $class = shift;
+    my $file_path = shift;
+    my $encoding = shift;
+    
+    # validate args
+    unless($class && $class eq $_CLASS){
+        $_MAIN_CLASS->_error('invalid invocation of class method');
+    }
+    unless($file_path && -f $file_path){
+        $_MAIN_CLASS->error('invalid file path');
+    }
+    unless($encoding){
+        $encoding = 'UTF-8';
+    }
+    
+    # try load the words from the file
+    my @words = ();
+    eval{
+        # slurp the file
+        open my $WORDS_FH, "<:encoding($encoding)", $file_path or croak("Failed to open $file_path with error: $OS_ERROR");
+        my $words_file_contents = do{local $/ = undef; <$WORDS_FH>};
+        close $WORDS_FH;
+        
+        # process the content
+        my @lines = split /\n/sx, $words_file_contents;
+        WORD_FILE_LINE:
+        foreach my $line (@lines){
+            # skip comment lines
+            next if $line =~ m/^[#]/sx;
+            
+            # skip non-word lines
+            next unless $line =~ m/^[[:alpha:]]+$/sx;
+            
+            # save word
+            push @words, $line;
+        }
+        
+        # ensure there are at least some words
+        unless(scalar @words){
+            croak("no valid words found in the file $file_path");
+        }
+        
+        1; # ensure truthy evaluation on successful execution
+    }or do{
+        $_MAIN_CLASS->_error("failed to load words with error: $EVAL_ERROR");
+    };
+    
+    # sort and print the words
+    foreach my $word (sort @words){
+        print "$word\n";
+    }
+}
+
 #####-SUB-#####################################################################
 # Type       : CLASS
 # Purpose    : Generate a Dictionary module from a text file. The function
@@ -129,6 +195,7 @@ sub print_preset_samples{
 # Arguments  : 1) the name of the module to generate (not including the
 #                 HSXKPasswd::Dictionary part)
 #              2) the path to the dictionary file
+#              3) OPTIONAL - the encoding of the text file - defaults to UTF-8
 # Throws     : Croaks on invalid args or file IO error
 # Notes      : This function can be called as a perl one-liner, e.g.
 #              perl -C -Ilib -MCrypt::HSXKPasswd::Util -e 'Crypt::HSXKPasswd::Util->dictionary_from_text_file("EN_Default", "sample_dict_EN.txt")' > lib/Crypt/HSXKPasswd/Dictionary/EN_Default.pm
@@ -137,6 +204,7 @@ sub dictionary_from_text_file{
     my $class = shift;
     my $name = shift;
     my $file_path = shift;
+    my $encoding = shift;
     
     # validate args
     unless($class && $class eq $_CLASS){
@@ -150,12 +218,15 @@ sub dictionary_from_text_file{
     unless($file_path && -f $file_path){
         $_MAIN_CLASS->error('invalid file path');
     }
+    unless($encoding){
+        $encoding = 'UTF-8';
+    }
     
     # try load the words from the file
     my @words = ();
     eval{
         # slurp the file
-        open my $WORDS_FH, '<', $file_path or croak("Failed to open $file_path with error: $OS_ERROR");
+        open my $WORDS_FH, "<:encoding($encoding)", $file_path or croak("Failed to open $file_path with error: $OS_ERROR");
         my $words_file_contents = do{local $/ = undef; <$WORDS_FH>};
         close $WORDS_FH;
         

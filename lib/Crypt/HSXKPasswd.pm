@@ -3438,6 +3438,13 @@ The module ships with a number of pre-defined word sources:
 
 A default word list consisting of English words and place names.
 
+=head3 C<Crypt::HSXKPasswd::Dictionary::FR>
+
+A French word list based on the GPL-licensed French dictionary for WinEdit.
+
+B<Note:> This module is licensed under GPL V2, not the BSD license used for the 
+majority of this project.
+
 =head3 C<Crypt::HSXKPasswd::Dictionary::System>
 
 This class tries to find and use a Unix words file on the system.
@@ -4776,6 +4783,20 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+The following components of this package are covered by the more restrictive
+GPL V2 license L<https://www.gnu.org/licenses/gpl-2.0.html>:
+
+=over 4
+
+=item *
+
+The C<sample_dict_FR.txt> text file.
+
+=item *
+
+The C<Crypt::HSXKPasswd::Dictionary::FR> Perl module.
+
+=back 4
 
 =head1 AUTHOR
 

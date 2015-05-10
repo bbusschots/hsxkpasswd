@@ -1,5 +1,5 @@
 #
-# Sample dictionary for use with the xkpasswd.pm Perl Module compiled by Bart Busschots
+# Sample dictionary for use with the Crypt::HSXKPasswd Perl Module compiled by Bart Busschots
 #
 # Copyright 2011 Bart Busschots T/A Bartificer Web Solutions. All rights reserved.
 #
