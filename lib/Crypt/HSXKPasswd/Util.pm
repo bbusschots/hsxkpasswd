@@ -7,6 +7,7 @@ use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw( -no_match_vars ); # for more readable code
 use DateTime; # for generating timestamps
+use Scalar::Util qw(blessed); # for checking if a reference is blessed
 use Crypt::HSXKPasswd;
 
 # set things up for using UTF-8
@@ -36,6 +37,89 @@ my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 # --- Static Class Functions --------------------------------------------------
 #
 
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Test all presets defined in the Crypt::HSXKPasswd module for 
+#              avalidity and for sufficient enthropy against a given dictionary
+# Returns    : Always returns 1 (to keep perlcritic happy)
+# Arguments  : 1. An instance of a class that extends
+#                 Crypt::HSXKPasswd::Dictionary
+# Throws     : Croaks on invalid invocation or args, or if there is a problem
+#              testing the configs
+# Notes      :
+# See Also   :
+sub test_presets{
+    my $class = shift;
+    my $dictionary = shift;
+    
+    # validate the args
+    unless(defined $class && $class eq $_CLASS){
+        $_MAIN_CLASS->_error('invalid invocation of class method');
+    }
+    unless(defined $dictionary && blessed($dictionary) && $dictionary->isa('Crypt::HSXKPasswd::Dictionary')){
+        $_MAIN_CLASS->_error('invalid args, must pass a dictionary');
+    }
+    
+    # get the list of config names from the parent
+    my @preset_names = $_MAIN_CLASS->defined_presets();
+    print 'INFO - found '.(scalar @preset_names).' presets ('.(join q{, }, @preset_names).")\n";
+    
+    # first test the validity of all preset configs
+    print "\nINFO - testing preset config validity\n";
+    $_MAIN_CLASS->_check_presets();
+    print "INFO - Done testing config validity\n";
+    
+    # then test each config for sufficient entropy by instantiating an instance with each one
+    print "\nINFO - testing preset config + dictionary entropy\n";
+    foreach my $preset (@preset_names){
+        print "Testing '$preset'\n";
+        my $hsxkpasswd = $_MAIN_CLASS->new(preset => $preset, dictionary => $dictionary);
+        my %stats = $hsxkpasswd->stats();
+        print "$preset: TOTAL WORDS=$stats{dictionary_words_total}, AVAILABLE WORDS=$stats{dictionary_words_filtered} ($stats{dictionary_words_percent_avaialable}%)";
+        print 'RESTRICTIONS: ';
+        if($stats{dictionary_filter_length_min} == $stats{dictionary_filter_length_max}){
+            print "length=$stats{dictionary_filter_length_min}\n";
+        }else{
+            print "$stats{dictionary_filter_length_min}>=length<=$stats{dictionary_filter_length_max}\n";
+        }
+        print "$preset: BLIND=$stats{password_entropy_blind_min} (need ${Crypt::HSXKPasswd::ENTROPY_MIN_BLIND}), SEEN=$stats{password_entropy_seen} (need ${Crypt::HSXKPasswd::ENTROPY_MIN_SEEN})\n";
+    }
+    print "INFO - Done testing entropy\n";
+    
+    # to keep perlcritic happy
+    return 1;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Generate a sample password with each preset with a given
+#              dictionary file
+# Returns    : Always returns 1 to keep perlcritic happy
+# Arguments  : 1) An instance of a class that extends
+#                 Crypt::HSXKPasswd::Dictionary
+# Throws     : Croaks on invalid invocation
+# Notes      :
+# See Also   :
+sub print_preset_samples{
+    my $class = shift;
+    my $dictionary = shift;
+    
+    # validate the args
+    unless(defined $class && $class eq $_CLASS){
+        $_MAIN_CLASS->_error('invalid invocation of class method');
+    }
+    unless(defined $dictionary && blessed($dictionary) && $dictionary->isa('Crypt::HSXKPasswd::Dictionary')){
+        $_MAIN_CLASS->_error('invalid args, must pass a dictionary');
+    }
+    
+    foreach my $preset ($_MAIN_CLASS->defined_presets()){
+        print "$preset: ".hsxkpasswd(preset => $preset, dictionary => $dictionary)."\n";
+    }
+    
+    # to keep perlcritic happy
+    return 1;
+}
+
 #####-SUB-#####################################################################
 # Type       : CLASS
 # Purpose    : Generate a Dictionary module from a text file. The function
@@ -47,7 +131,7 @@ my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 #              2) the path to the dictionary file
 # Throws     : Croaks on invalid args or file IO error
 # Notes      : This function can be called as a perl one-liner, e.g.
-#              perl -C -Ilib -MCrypt::HSXKPasswd::Util -e 'Crypt::HSXKPasswd::Util->dictionary_from_text_file("Default", "sample_dict.txt")' > lib/Crypt/HSXKPasswd/Dictionary/Default.pm
+#              perl -C -Ilib -MCrypt::HSXKPasswd::Util -e 'Crypt::HSXKPasswd::Util->dictionary_from_text_file("EN_Default", "sample_dict_EN.txt")' > lib/Crypt/HSXKPasswd/Dictionary/EN_Default.pm
 # See Also   :
 sub dictionary_from_text_file{
     my $class = shift;

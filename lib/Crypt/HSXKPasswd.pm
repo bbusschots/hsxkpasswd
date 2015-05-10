@@ -32,9 +32,9 @@ if($_CAN_JSON){
 }
 eval{
     # the default dicrionary may not have been geneated using the Util module
-    require Crypt::HSXKPasswd::Dictionary::Default;
+    require Crypt::HSXKPasswd::Dictionary::EN_Default;
 }or do{
-    carp('WARNING - failed to load Crypt::HSXKPasswd::Dictionary::Default');
+    carp('WARNING - failed to load Crypt::HSXKPasswd::Dictionary::EN_Default');
 };
 
 ## no critic (ProhibitAutomaticExportation);
@@ -437,8 +437,8 @@ my $_PRESETS = {
 #              installed.
 # Notes      : The order of preference for word sources is dictionary, then
 #              dictionary_list, then dictionary_file. If none are specified,
-#              then an instance of Crypt::HSXKPasswd::Dictionary::Default will
-#              be used.
+#              then an instance of Crypt::HSXKPasswd::Dictionary::EN_Default
+#              will be used.
 #              The order of preference for the configuration source is config
 #              then config_json, then preset. If no configuration source is
 #              specified, then the preset 'DEFAULT' is used.
@@ -482,7 +482,7 @@ sub new{
     }elsif($args{dictionary_file}){
         $dictionary = Crypt::HSXKPasswd::Dictionary::Basic->new($args{dictionary_file}, $args{dictionary_file_encoding});
     }else{
-        $dictionary = Crypt::HSXKPasswd::Dictionary::Default->new();
+        $dictionary = Crypt::HSXKPasswd::Dictionary::EN_Default->new();
     }
     
     # process the config source
@@ -636,6 +636,62 @@ sub preset_config{
     
     # return the config
     return $config;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Resturn the presets defined in the Crypt::HSXKPasswd module as a
+#              JSON string
+# Returns    : A JSON String as a scalar. The JSON string represets a hashref
+#              with three keys  - 'defined_keys' contains an array of preset
+#              identifiers, 'presets' contains the preset configs indexed by
+#              preset identifier, and 'preset_descriptions' contains the a 
+#              hashref of descriptions indexed by preset identifiers
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation, if the JSON module is not
+#              available, or if there is a problem converting the objects to
+#              JSON
+# Notes      :
+# See Also   :
+sub presets_json{
+    my $class = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        $_CLASS->_error('invalid invocation of class method');
+    }
+    
+    # make sure JSON parsing is available
+    unless($_CAN_JSON){
+        $_CLASS->_error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) to use this function');
+    }
+    
+    # assemble an object cotaining the presets with any keys that can't be
+    #  converted to JSON removed
+    my @defined_presets = $_CLASS->defined_presets();
+    my $sanitised_presets = {};
+    my $preset_descriptions = {};
+    foreach my $preset_name (@defined_presets){
+        $sanitised_presets->{$preset_name} = $_CLASS->preset_config($preset_name);
+        $preset_descriptions->{$preset_name} = $_CLASS->preset_description($preset_name);
+    }
+    my $return_object = {
+        defined_presets => [@defined_presets],
+        presets => $sanitised_presets,
+        preset_descriptions => $preset_descriptions,
+    };
+    
+    # try convert the object to a JSON string
+    my $json_string = q{};
+    eval{
+        $json_string = JSON->new()->encode($return_object);
+        1; # ensure truthy evaluation on succesful execution
+    }or do{
+        $_CLASS->_error("failed to render presets as JSON string with error: $EVAL_ERROR");
+    };
+    
+    # return the JSON string
+    return $json_string;
 }
 
 #####-SUB-######################################################################
@@ -1604,6 +1660,73 @@ sub passwords{
     
     # return the passwords
     return @passwords;
+}
+
+#####-SUB-######################################################################
+# Type       : INSTANCE
+# Purpose    : Generate n passwords and return them, and the entropy stats as a
+#              JSON string.
+# Returns    : A JSON string as a scalar representing a hashref contianing an
+#              array of passwords indexed by 'passwords', and a hashref of
+#              entropy stats indexed by 'stats'. The stats hashref itself is
+#              indexed by: 'password_entropy_blind',
+#              'password_permutations_blind', 'password_entropy_blind_min',
+#              'password_entropy_blind_max', 'password_permutations_blind_max',
+#              'password_entropy_seen' & 'password_permutations_seen'
+# Arguments  : 1. the number of passwords to generate
+# Throws     : Croaks on invalid invocation, invalid args, if there is a
+#              problem generating the passwords, statistics, or converting the
+#              results to a JSON string, or if the JSON module is not
+#              available.
+# Notes      : 
+# See Also   :
+sub passwords_json{
+    my $self = shift;
+    my $num_pws = shift;
+    
+    # validate args
+    unless(defined $self && $self->isa($_CLASS)){
+        $_CLASS->_error('invalid invocation of instance method');
+    }
+    unless(defined $num_pws && ref $num_pws eq q{} && $num_pws =~ m/^\d+$/sx && $num_pws > 0){
+        $_CLASS->_error('invalid args - must specify the number of passwords to generate as a positive integer');
+    }
+    
+    # make sure JSON parsing is available
+    unless($_CAN_JSON){
+        $_CLASS->_error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) to use this function');
+    }
+    
+    # try generate the passwords and stats - could croak
+    my @passwords = $self->passwords($num_pws);
+    my %stats = $self->stats();
+    
+    # generate the hashref containing the results
+    my $response_obj = {
+        passwords => [@passwords],
+        stats => {
+            password_entropy_blind => $stats{password_entropy_blind},
+            password_permutations_blind => $_CLASS->_render_bigint($stats{password_permutations_blind}),
+            password_entropy_blind_min => $stats{password_entropy_blind_min},
+            password_permutations_blind_min => $_CLASS->_render_bigint($stats{password_permutations_blind_min}),
+            password_entropy_blind_max => $stats{password_entropy_blind_max},
+            password_permutations_blind_max => $_CLASS->_render_bigint($stats{password_permutations_blind_max}),
+            password_entropy_seen => $stats{password_entropy_seen},
+            password_permutations_seen => $_CLASS->_render_bigint($stats{password_permutations_seen}),
+        },
+    };
+    
+    # try generate the JSON string to return
+    my $json_string = q{};
+    eval{
+        $json_string = JSON->new()->encode($response_obj);
+        1; # ensure truthy evaluation on succesful execution
+    }or do{
+        $_CLASS->_error("Failed to render hashref as JSON string with error: $EVAL_ERROR");
+    };
+    
+    # return the JSON string
+    return $json_string;
 }
 
 #####-SUB-######################################################################
@@ -2971,7 +3094,7 @@ This documentation refers to C<Crypt::HSXKPasswd> version 3.1.1.
     
     # create an instance that uses a dictionary file as the word source
     my $hsxkpasswd_instance = HSXKPasswd->new(
-        dictionary_file => 'sample_dict.txt'
+        dictionary_file => 'sample_dict_EN.txt'
     );
     
     # the class Crypt::HSXKPasswd::Dictionary::Basic can be used to aggregate
@@ -3311,7 +3434,7 @@ words.
 
 The module ships with a number of pre-defined word sources:
 
-=head3 C<Crypt::HSXKPasswd::Dictionary::Default>
+=head3 C<Crypt::HSXKPasswd::Dictionary::EN_Default>
 
 A default word list consisting of English words and place names.
 
@@ -3540,18 +3663,18 @@ creating your own config hashref, as demonstrated by the following example:
 
     my $config = XKPasswd->preset_config('XKCD');
     $config->{separator_character} = q{ }; # change the separator to a space
-    my $xkpasswd = XKPasswd->new('sample_dict.txt', $config);
+    my $xkpasswd = XKPasswd->new('sample_dict_EN.txt', $config);
     
 If you only wish to alter a small number of config settings, the following
 two shortcuts might be of interest (both produce the same result as the
 example above):
 
     my $config = XKPasswd->preset_config('XKCD', {separator_character => q{ }});
-    my $xkpasswd = XKPasswd->new('sample_dict.txt', $config);
+    my $xkpasswd = XKPasswd->new('sample_dict_EN.txt', $config);
     
 or
 
-    my $xkpasswd = XKPasswd->new('sample_dict.txt', 'XKCD', {separator_character => q{ }});
+    my $xkpasswd = XKPasswd->new('sample_dict_EN.txt', 'XKCD', {separator_character => q{ }});
 
 For more see the definitions for the class functions C<defined_presets()>,
 C<presets_to_string()>, C<preset_description()>, and C<preset_config()>.
@@ -3855,7 +3978,7 @@ each time the function is called.
     
     # create an instance that uses a dictionary file as the word source
     my $hsxkpasswd_instance = HSXKPasswd->new(
-        dictionary_file => 'sample_dict.txt'
+        dictionary_file => 'sample_dict_EN.txt'
     );
     
     # the class Crypt::HSXKPasswd::Dictionary::Basic can be used to aggregate
@@ -3935,7 +4058,7 @@ each time the function is called.
 The constructor must be called via the package name.
 
 If called with no arguments the constructor will use an instance of
-C<Crypt::HSXKPasswd::Dictionary::Default> as the word source, the preset
+C<Crypt::HSXKPasswd::Dictionary::EN_Default> as the word source, the preset
 C<DEFAULT>, and an instance of the class C<Crypt::HSXKPasswd::RNG::Basic> to
 generate random numbers.
 
@@ -4135,6 +4258,21 @@ containing keys with values to override the defaults with.
 When overrides are present, the function will carp if an invalid key or value is
 passed, and croak if the resulting merged config is invalid.
 
+=head3 presets_json()
+
+    my $json_string = Crypt::HSXKPasswd->presets_json();
+    
+This function returns a JSON string representing all the defined configs,
+including their descriptions.
+
+The returned JSON string represents a hashref indexed by three keys:
+C<defined_keys> contains an array of preset identifiers, C<presets> contains the
+preset configs indexed by reset identifier, and C<preset_descriptions> contains
+a hashref of descriptions indexed by preset identifiers.
+
+This function requires that the standard Perl JSON module be installed, if not,
+it will croak.
+
 =head3 preset_description()
 
     my $description = Crypt::HSXKPasswd->preset_description('XKCD');
@@ -4200,8 +4338,8 @@ scalar string.
     my $dictionary_clone = $hsxkpasswd_instance->dictionary();
     $hsxkpasswd_instance->dictionary($dictionary_instance);
     $hsxkpasswd_instance->dictionary($array_ref);
-    $hsxkpasswd_instance->dictionary('sample_dict.txt');
-    $hsxkpasswd_instance->dictionary('sample_dict.txt', 'Latin1');
+    $hsxkpasswd_instance->dictionary('sample_dict_EN.txt');
+    $hsxkpasswd_instance->dictionary('sample_dict_EN.txt', 'Latin1');
     
 When called with no arguments this function returns a clone of the currently 
 loaded dictionary which will be an instance of a class that extends
@@ -4237,6 +4375,24 @@ This function generates a number of passwords and returns them all as an array.
 
 The function uses C<password()> to genereate the passwords, and hence will
 croak if there is an error generating any of the requested passwords.
+
+=head3 passwords_json()
+
+    my $json_string = $hsxkpasswd_instance->passwords_json(10);
+    
+This function generates a number of passwords and returns them and the
+instance's entropy stats as a JSON string representing a hashref contianing an
+array of passwords indexed by C<passwords>, and a hashref of entropy stats
+indexed by C<stats>. The stats hashref itself is indexed by:
+C<password_entropy_blind>, C<password_permutations_blind>,
+C<password_entropy_blind_min>, C<password_entropy_blind_max>,
+C<password_permutations_blind_max>, C<password_entropy_seen> &
+C<password_permutations_seen>.
+
+The function uses C<passwords()> to genereate the passwords, and hence will
+croak if there is an error generating any of the requested passwords. This
+function requires that the standard Perl JSON package be installed, if not, it
+will croak.
 
 =head3 rng()
 
@@ -4385,7 +4541,7 @@ Generates a string detailing the internal status of the instance. Below is a
 sample status string:
 
     *DICTIONARY*
-    Source: Crypt::HSXKPasswd::Dictionary::Default
+    Source: Crypt::HSXKPasswd::Dictionary::EN_Default
     # words: 1425
     # words of valid length: 1194 (84%)
     

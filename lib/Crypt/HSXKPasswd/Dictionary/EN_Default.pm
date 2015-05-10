@@ -1,9 +1,9 @@
-package Crypt::HSXKPasswd::Dictionary::Default;
+package Crypt::HSXKPasswd::Dictionary::EN_Default;
 
 use parent Crypt::HSXKPasswd::Dictionary;
 
 # NOTE
-# The module was Auto-generated at 2015-05-10T01:20:40Z by
+# The module was Auto-generated at 2015-05-10T15:07:16Z by
 # Crypt::HSXKPasswd::Util->dictionary_from_text_file()
 
 # import required modules
@@ -27,7 +27,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 use version; our $VERSION = qv('1.1_01');
 
 # utility variables
-my $_CLASS = 'Crypt::HSXKPasswd::Dictionary::Default';
+my $_CLASS = 'Crypt::HSXKPasswd::Dictionary::EN_Default';
 
 # the word list
 ## no critic (CodeLayout::ProhibitQuotedWordLists);
@@ -1466,8 +1466,8 @@ my @_WORDS = (
 
 #####-SUB-#####################################################################
 # Type       : CONSTRUCTOR (CLASS)
-# Purpose    : Create a new instance of class Crypt::HSXKPasswd::Dictionary::Default
-# Returns    : An object of class Crypt::HSXKPasswd::Dictionary::Default
+# Purpose    : Create a new instance of class Crypt::HSXKPasswd::Dictionary::EN_Default
+# Returns    : An object of class Crypt::HSXKPasswd::Dictionary::EN_Default
 # Arguments  : NONE
 # Throws     : NOTHING
 # Notes      :
@@ -1487,7 +1487,7 @@ sub new{
 # Type       : INSTANCE
 # Purpose    : Override clone() from the parent class and return a clone of
 #              self.
-# Returns    : An object of type Crypt::HSXKPasswd::Dictionary::Default
+# Returns    : An object of type Crypt::HSXKPasswd::Dictionary::EN_Default
 # Arguments  : NONE
 # Throws     : Croaks on invalid invocation
 # Notes      :
