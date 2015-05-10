@@ -3458,6 +3458,14 @@ A French word list based on the GPL-licensed French dictionary for WinEdit.
 B<Note:> This module is licensed under GPL V2, not the BSD license used for the 
 majority of this project.
 
+=head3 C<Crypt::HSXKPasswd::Dictionary::IT>
+
+An Italian word list based on the free-for-non-commerical-use Italian dictionary
+for WinEdit by Karl Koeller.
+
+B<Note:> This module is licensed under GPL V2, not the BSD license used for the 
+majority of this project.
+
 =head3 C<Crypt::HSXKPasswd::Dictionary::NL>
 
 A Dutch/Flemish word list based on the GPL-licensed Dutch dictionary for WinEdit.
@@ -4832,6 +4840,14 @@ The C<sample_dict_FR.txt> text file.
 =item *
 
 The C<Crypt::HSXKPasswd::Dictionary::FR> Perl module.
+
+=item *
+
+The C<sample_dict_IT.txt> text file.
+
+=item *
+
+The C<Crypt::HSXKPasswd::Dictionary::IT> Perl module.
 
 =item *
 
