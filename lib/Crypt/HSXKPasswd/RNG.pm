@@ -10,8 +10,8 @@ use Scalar::Util qw(blessed); # for checking if a reference is blessed
 use Crypt::HSXKPasswd; # for the error function
 
 # set things up for using UTF-8
+use 5.016; # min Perl for good UTF-8 support, implies feature 'unicode_strings'
 use Encode qw(encode decode);
-use feature 'unicode_strings';
 use utf8;
 binmode STDOUT, ':encoding(UTF-8)';
 

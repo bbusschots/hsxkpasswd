@@ -5,18 +5,18 @@ use strict;
 use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
-use Params::Validate qw(:all); # for argument validation
-use English qw(-no_match_vars); # for more readable code
-use Scalar::Util qw(blessed); # for checking if a reference is blessed
+use Params::Validate qw( :all ); # for argument validation
+use English qw( -no_match_vars ); # for more readable code
+use Scalar::Util qw( blessed ); # for checking if a reference is blessed
 use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
-use Text::Unidecode; # for dealing with accented characters
 use Crypt::HSXKPasswd::Dictionary::Basic;
 use Crypt::HSXKPasswd::RNG::Basic;
 
 # set things up for using UTF-8
-use Encode qw(encode decode);
-use feature 'unicode_strings';
+use 5.016; # min Perl for good UTF-8 support, implies feature 'unicode_strings'
+use Encode qw( encode decode );
+use Text::Unidecode; # for stripping accents from accented characters
 use utf8;
 binmode STDOUT, ':encoding(UTF-8)';
 
@@ -38,8 +38,8 @@ eval{
 };
 
 ## no critic (ProhibitAutomaticExportation);
-use base qw(Exporter);
-our @EXPORT = qw(hsxkpasswd);
+use base qw( Exporter );
+our @EXPORT = qw( hsxkpasswd );
 ## use critic
 
 # Copyright (c) 2015, Bart Busschots T/A Bartificer Web Solutions All rights
@@ -2258,11 +2258,14 @@ sub _filter_word_list{
     my @ans = ();
     WORD:
     foreach my $word (@{$word_list_ref}){
+        # calcualte the grapheme length
+        my $grapheme_length = $_CLASS->_grapheme_length($word);
+        
         # skip words shorter than the minimum
-        next WORD if length $word < $min_len;
+        next WORD if $grapheme_length < $min_len;
         
         # skip words longer than the maximum
-        next WORD if length $word > $max_len;
+        next WORD if $grapheme_length > $max_len;
         
         # strip accents unless they are explicitly allowed by the config
         unless($allow_accents){
@@ -3034,6 +3037,42 @@ sub _render_bigint{
     
     # return the result
     return $ans;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
+# Purpose    : Get the so-called 'grapheme length' of a unicode string, that is
+#              to say, the length of a word where a letter with an accent counts
+#              as a single letter.
+# Returns    : An integer
+# Arguments  : 1) the string to get the length of
+# Throws     : Croaks on invalid invocation and invalid args
+# Notes      : Perl, by default, will consider accented letters as having a
+#              length of two. This function uses a very common algorythm
+#              recommended all over the internet, including in the Perl Unicode
+#              cookbook: http://search.cpan.org/~shay/perl-5.20.2/pod/perlunicook.pod
+#              Before resorting to this technique, I tried to use the
+#              grapheme_length function from Unicode::Util, but it proved
+#              unacceptably slow.
+# See Also   :
+sub _grapheme_length{
+    my $class = shift;
+    my $string = shift;
+    
+    # validate args
+    unless(defined $class && $class eq $_CLASS){
+        $_CLASS->_error('invalid invocation of class method');
+    }
+    unless(defined $string && ref $string eq q{}){
+        $_CLASS->_error('invalid args, must pass a scalar');
+    }
+    
+    # do the calculation
+    my $grapheme_length = 0;
+    while($string =~ /\X/gsx){$grapheme_length++};
+    
+    # return the result
+    return $grapheme_length;
 }
 
 1; # because Perl is just a little bit odd :)

@@ -11,8 +11,8 @@ use Scalar::Util qw(blessed); # for checking if a reference is blessed
 use Crypt::HSXKPasswd;
 
 # set things up for using UTF-8
+use 5.016; # min Perl for good UTF-8 support, implies feature 'unicode_strings'
 use Encode qw(encode decode);
-use feature 'unicode_strings';
 use utf8;
 binmode STDOUT, ':encoding(UTF-8)';
 
@@ -166,6 +166,9 @@ sub sanitise_dictionary_file{
             # skip non-word lines
             next unless $line =~ m/^[[:alpha:]]+$/sx;
             
+            # skip words shorter than 4 characters
+            next unless $_MAIN_CLASS->_grapheme_length($line) >= 4;
+            
             # save word
             push @words, $line;
         }
@@ -199,6 +202,7 @@ sub sanitise_dictionary_file{
 # Throws     : Croaks on invalid args or file IO error
 # Notes      : This function can be called as a perl one-liner, e.g.
 #              perl -C -Ilib -MCrypt::HSXKPasswd::Util -e 'Crypt::HSXKPasswd::Util->dictionary_from_text_file("EN_Default", "sample_dict_EN.txt")' > lib/Crypt/HSXKPasswd/Dictionary/EN_Default.pm
+#              Also note that words shorter than 4 letters are skipped.
 # See Also   :
 sub dictionary_from_text_file{
     my $class = shift;
@@ -240,6 +244,9 @@ sub dictionary_from_text_file{
             # skip non-word lines
             next unless $line =~ m/^[[:alpha:]]+$/sx;
             
+            # skip words shorter than 4 characters
+            next unless $_MAIN_CLASS->_grapheme_length($line) >= 4;
+            
             # save work
             push @words, $line;
         }
@@ -275,8 +282,8 @@ use Fatal qw( :void open close binmode ); # make builtins throw exceptions on fa
 use English qw( -no_match_vars ); # for more readable code
 
 # set things up for using UTF-8
+use 5.016; # min Perl for good UTF-8 support, implies feature 'unicode_strings'
 use Encode qw(encode decode);
-use feature 'unicode_strings';
 use utf8;
 binmode STDOUT, ':encoding(UTF-8)';
 
