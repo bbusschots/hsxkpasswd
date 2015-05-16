@@ -11,6 +11,9 @@ use Scalar::Util qw( blessed ); # for checking if a reference is blessed
 use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
 use Crypt::HSXKPasswd::Dictionary::Basic;
+use Crypt::HSXKPasswd::RNG::Math_Random_Secure;
+use Crypt::HSXKPasswd::RNG::Data_Entropy;
+use Crypt::HSXKPasswd::RNG::DevUrandom;
 use Crypt::HSXKPasswd::RNG::Basic;
 
 # set things up for using UTF-8
@@ -442,6 +445,9 @@ my $_PRESETS = {
 #              The order of preference for the configuration source is config
 #              then config_json, then preset. If no configuration source is
 #              specified, then the preset 'DEFAULT' is used.
+#              If no RNG is passed, _best_available_rng() will be used to
+#              instantiate and instance of the most secure RNG usable on the
+#              system.
 # See Also   : For valid configuarion options see POD documentation below
 sub new{
     my @args = @_;
@@ -502,7 +508,7 @@ sub new{
     if($args{rng}){
         $rng = $args{rng};
     }else{
-        $rng = Crypt::HSXKPasswd::RNG::Basic->new();
+        $rng = $_CLASS->_best_available_rng();
     }
     
     # initialise the object
@@ -2724,6 +2730,63 @@ sub _check_presets{
 }
 
 #####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
+# Purpose    : Create an RNG object that is as secure as possible.
+# Returns    : An instance of a class that extends Crypt::HSXKPasswd::RNG.
+# Arguments  : NONE
+# Throws     : This function issues a warning if it has to fall back to
+#              Crypt::HSXKPasswd::RNG::Basic.
+# Notes      : This function works its way through the constructurs for the
+#              following RNG classes in the following order, returing the first
+#              successfully instantiate object:
+#              1) Crypt::HSXKPasswd::RNG::Math_Random_Secure (using
+#                 Math::Random::Secure)
+#              2) Crypt::HSXKPasswd::RNG::Data_Entropy (using
+#                 Data::Entropy::Algorithms)
+#              3) Crypt::HSXKPasswd::RNG::DevUrandom (reads from /dev/urandom)
+#              4) Crypt::HSXKPasswd::RNG::Basic (using Perl's built-in rand())
+#              This ordering is based on security and speed - all but Basic are
+#              good from a secutrity point of view, but Math::Random::Secure is
+#              over six times faster than Data::Entropy::Algorithms, so it is
+#              reduced to second place. Speed tested wth the commands:
+#              time perl -MMath::Random::Secure -e "foreach my \$n (0..1000000){Math::Random::Secure::rand();}"
+#              time perl -MData::Entropy::Algorithms -e "foreach my \$n (0..1000000){Data::Entropy::Algorithms::rand();}"
+# See Also   :
+sub _best_available_rng{
+    my $class = shift;
+    
+    # validate the args
+    unless($class && $class eq $_CLASS){
+        $_CLASS->_error('invalid invocation of class method');
+    }
+    
+    # try the good entropy sources in order
+    my $rng;
+    eval{
+        $rng = Crypt::HSXKPasswd::RNG::Math_Random_Secure->new(); # will return a truthy value on success
+    }or do{
+        $_CLASS->_debug("Failed to instantiate a Crypt::HSXKPasswd::RNG::Math_Random_Secure object with error: $EVAL_ERROR");
+    };
+    return $rng if $rng;
+    eval{
+        $rng = Crypt::HSXKPasswd::RNG::Data_Entropy->new(); # will return a truthy value on success
+    }or do{
+        $_CLASS->_debug("Failed to instantiate a Crypt::HSXKPasswd::RNG::Data_Entropy object with error: $EVAL_ERROR");
+    };
+    return $rng if $rng;
+    eval{
+        $rng = Crypt::HSXKPasswd::RNG::DevUrandom->new(); # will return a truthy value on success
+    }or do{
+        $_CLASS->_debug("Failed to instantiate a Crypt::HSXKPasswd::RNG::DevUrandom object with error: $EVAL_ERROR");
+    };
+    return $rng if $rng;
+    
+    # if we got here, no secure RNGs were avaialable, so warn, then return an instance of the basic RNG
+    $_CLASS->_warn(q{using Perl's built-in rand() function for radom number generation. This is secure for most uses, but you can get more secure random numbers by installing Math::Random::Secure or Data::Entropy::Algorithms});
+    return Crypt::HSXKPasswd::RNG::Basic->new();
+}
+
+#####-SUB-######################################################################
 # Type       : INSTANCE (PRIVATE)
 # Purpose    : Gather entropy stats for the combination of the loaded config
 #              and dictionary.
@@ -3931,7 +3994,7 @@ Random Number Generator (RNG) class that can be extended.
 
 The module can use an instance of any class that extends
 C<Crypt::HSXKPasswd::RNG> as it's source of randomness. Custom RNG classes
-must implment the method C<random_numbers()> which will be invoked on an
+must implement the method C<random_numbers()> which will be invoked on an
 instance of the class and passed one argument, the number of random numbers
 required to generate a single password. The function must return an array
 of random numbers between 0 and 1. The number of random numbers returned is
@@ -3939,9 +4002,88 @@ entirely up to the module to decide. The number required for a single password
 is passed purely as a guide. The function must always return at least one
 random number.
 
-By default the module uses an instance of the class
-C<Crypt::HSXKPasswd::RNG::Basic>, which uses perl's built-in C<rand()>
-function.
+The module ships with five standard RNGs (described below).
+
+By default, the module will try to use one of the following four RNGs, listed
+from most to least preferred, depending on what is available on the system:
+
+=over 4
+
+=item 1
+
+C<Crypt::HSXKPasswd::RNG::Math_Random_Secure> (only available if
+C<Math::Random::Secure> is installed on the system).
+
+=item 1
+
+C<Crypt::HSXKPasswd::RNG::Data_Entropy> (only available if
+C<Data::Entropy::Algorithms> is installed on the system).
+
+=item 1
+
+C<Crypt::HSXKPasswd::RNG::DevUrandom> (only available on Linux/Unix systems
+with a C</dev/urandom>).
+
+=item 1
+
+C<Crypt::HSXKPasswd::RNG::Basic> (available on all systems because it uses
+Perl's built-in C<rand()> function).
+
+=back 4
+
+If the constructor is called without specifying an RNG, and if the only
+available RNG is C<Crypt::HSXKPasswd::RNG::Basic>, a warning will be thrown
+suggesting installing C<Math::Random::Secure> or C<Data::Entropy::Algorithms>.
+
+The module also ships with a fifth RNG, C<Crypt::HSXKPasswd::RNG::RandomDotOrg>,
+but this one must be explicitly used, the constructor will never used it by
+default. As its name suggests, this class uses L<http://Random.Org/>'s HTTP API
+to generate random numbers.
+
+To explicitly use any particular RNG, create an instance of it, and either pass
+that instance to the constructor with the named argument C<rng>, or, set the RNG
+after instantiating the object using the C<rng()> function.
+
+=head3 Crypt::HSXKPasswd::RNG::Math_Random_Secure
+
+    my $rng = Crypt::HSXKPasswd::RNG::Math_Random_Secure->new();
+
+This is the preferred RNG because it is both fast and secure, but, it requires
+the non-standard module C<Math::Random::Secure>
+(L<http://search.cpan.org/perldoc?Math%3A%3ARandom%3A%3ASecure>) be installed.
+
+=head3 Crypt::HSXKPasswd::RNG::Data_Entropy
+
+    my $rng = Crypt::HSXKPasswd::RNG::Data_Entropy->new();
+
+This RNG is secure, but it is quite slow (about six times slower than
+C<Crypt::HSXKPasswd::RNG::Math_Random_Secure>), and it requires
+the non-standard module C<Data::Entropy::Algorithms>
+(L<http://search.cpan.org/perldoc?Data%3A%3AEntropy%3A%3AAlgorithms>) be
+installed.
+
+=head3 Crypt::HSXKPasswd::RNG::DevUrandom
+
+    my $rng = Crypt::HSXKPasswd::RNG::DevUrandom->new();
+    
+This RNG is secure and relatively fast (faster than
+C<Crypt::HSXKPasswd::RNG::Data_Entropy> but slower than
+C<Crypt::HSXKPasswd::RNG::Math_Random_Secure>), but is only available on
+Linux/Unix systems with a C</dev/urandom> special file.
+
+=head3 Crypt::HSXKPasswd::RNG::Basic
+
+    my $rng = Crypt::HSXKPasswd::RNG::Basic->new();
+    
+This RNG uses Perl's built-in C<rand()> function as its source of randomness,
+and this is sub-optimal. The Perl docs warn that C<rand()> is not a particularly
+good source of random numbers, and advisies against its use for cryptography.
+
+This RNG provides a base-line, and should only be used if none of the better
+RNGs are available. While it is sub-optimal, it will still generate passwords
+with sufficient entropy in most situations. Ultimately, even using this
+imperfect RNG, this module will still produce passwords that are much better
+than those produced by the human imagination!
 
 =head3 Crypt::HSXKPasswd::RNG::RandomDotOrg
 
@@ -3951,10 +4093,9 @@ function.
         num_passwords => 3,
     );
 
-A usable example of an RNG that queries a web service is bunled with this
-module as the class C<Crypt::HSXKPasswd::RNG::RandomDotOrg>. As its name
-suggests, this class uses L<http://Random.Org/>'s HTTP API to generate random
-numbers.
+This RNG serves as a usable example of an RNG that queries a web service. As its
+name suggests, this class uses L<http://Random.Org/>'s HTTP API to generate
+random numbers.
 
 In order to comply with Random.Org's client guidelines
 (L<https://www.random.org/clients/>), this module requires that a valid email
@@ -4772,11 +4913,23 @@ The module can also optionally use the following Perl modules:
 
 =item *
 
+C<Data::Entropy::Algorithms> - L<http://search.cpan.org/perldoc?Data%3A%3AEntropy%3A%3AAlgorithms>
+
+Used by the RNG class C<Crypt::HSXKPasswd::RNG::Data_Entropy>.
+
+=item *
+
 C<Devel::StackTrace> - L<http://search.cpan.org/perldoc?Devel%3A%3AStackTrace>
 
 Used for printing stack traces with error messages if
 C<$XKPasswd::DEBUG> and C<$XKPasswd::LOG_ERRORS> both evaluate to true. If the
 module is not installed the stack traces will be omitted from the log messages.
+
+=item *
+
+C<Email::Valid> - L<http://search.cpan.org/perldoc?Email%3A%3AValid>
+
+Used by the Random.Org RNG class C<Crypt::HSXKPasswd::RNG::RandomDotOrg>.
 
 =item *
 
@@ -4789,15 +4942,15 @@ C<json> in the function name is called.
 
 =item *
 
-C<Email::Valid> - L<http://search.cpan.org/perldoc?Email%3A%3AValid>
+C<LWP::UserAgent> - L<http://search.cpan.org/perldoc?LWP%3A%3AUserAgent>
 
 Used by the Random.Org RNG class C<Crypt::HSXKPasswd::RNG::RandomDotOrg>.
 
 =item *
 
-C<LWP::UserAgent> - L<http://search.cpan.org/perldoc?LWP%3A%3AUserAgent>
+C<Math::Random::Secure> - L<http://search.cpan.org/perldoc?Math%3A%3ARandom%3A%3ASecure>
 
-Used by the Random.Org RNG class C<Crypt::HSXKPasswd::RNG::RandomDotOrg>.
+Used by the RNG class C<Crypt::HSXKPasswd::RNG::Math_Random_Secure>.
 
 =item *
 

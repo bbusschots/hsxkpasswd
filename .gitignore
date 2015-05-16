@@ -31,3 +31,6 @@ README
 *.tmp
 
 pod.html
+
+temp/
+test2.pl
