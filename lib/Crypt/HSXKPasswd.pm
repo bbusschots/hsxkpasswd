@@ -1745,7 +1745,7 @@ sub passwords_json{
 #              * 'dictionary_words_filtered' - the number of words loaded from
 #                the dictionary file that meet the lenght criteria set in the
 #                loaded config
-#              * 'dictionary_words_percent_avaialable' - the percentage of the
+#              * 'dictionary_words_percent_available' - the percentage of the
 #                total dictionary that is avialable for use with the loaded
 #                config
 #              * 'dictionary_filter_length_min' - the minimum length world
@@ -1823,7 +1823,7 @@ sub stats{
     $stats{dictionary_source} = $dict_stats{source};
     $stats{dictionary_words_total} = $dict_stats{num_words_total};
     $stats{dictionary_words_filtered} = $dict_stats{num_words_filtered};
-    $stats{dictionary_words_percent_avaialable} = $dict_stats{percent_words_available};
+    $stats{dictionary_words_percent_available} = $dict_stats{percent_words_available};
     $stats{dictionary_filter_length_min} = $dict_stats{filter_length_min};
     $stats{dictionary_filter_length_max} = $dict_stats{filter_length_max};
     $stats{dictionary_contains_accents} = $dict_stats{contains_accents};
@@ -1874,7 +1874,7 @@ sub status{
     $status .= "*DICTIONARY*\n";
     $status .= "Source: $stats{dictionary_source}\n";
     $status .= "# words: $stats{dictionary_words_total}\n";
-    $status .= "# words of valid length: $stats{dictionary_words_filtered} ($stats{dictionary_words_percent_avaialable}%)\n";
+    $status .= "# words of valid length: $stats{dictionary_words_filtered} ($stats{dictionary_words_percent_available}%)\n";
     $status .= 'Contains Accented Characters: '.($stats{dictionary_contains_accents} ? 'YES' : 'NO')."\n";
     
     # the config
@@ -3183,7 +3183,7 @@ This documentation refers to C<Crypt::HSXKPasswd> version 3.1.1.
     # number generator
     my $hsxkpasswd_instance = Crypt::HSXKPasswd->new();
     
-    # the construtor takes optional named arguments, these can be used to
+    # the constructor takes optional named arguments, these can be used to
     # customise the word source, config, and random number source.
     
     # create an instance that uses the UNIX words file as the word source
@@ -3412,7 +3412,7 @@ There are two approaches to increasing the number of permutations, and hence
 the entropy, you can choose more characters, or, you can make the alphabet you
 are choosing from bigger.
 
-=head3 The Entropy of XKPasswd Passwords
+=head3 The Entropy of HSXKPasswd Passwords
 
 Exactly how much entropy does a password need? That's the subject of much
 debate, and the answer ultimately depends on the value of the assets being
@@ -3506,7 +3506,7 @@ The total number of permutations is the product of all these permutations:
 
     Pseen = 3,797,883,801,856 * 9 * 13 * 10,000 = 2.77x10^17
     
-Finally, we convery this to entropy by taking the base 2 log:
+Finally, we convert this to entropy by taking the base 2 log:
 
     Eseen = Log(2)2.77x10^17 = ~57bits
     
@@ -3518,7 +3518,7 @@ it is still significantly more secure than 8 randomly chosen characters.
 
 Because the exact strength of the passwords produced by this module depend on
 the configuration and dictionary file used, the constructor does the above
-math when creating an XKPasswd object, and throws a warning if either the
+math when creating an HSXKPasswd object, and throws a warning if either the
 blind entropy falls below 78bits, or the seen entropy falls below 52 bits.
 
 =head1 SUBROUTINES/METHODS
@@ -3800,27 +3800,29 @@ The default values returned by C<default_config()> is are 4 & 8.
 
 =head2 PRESETS
 
-For ease of use, this module comes with a set of pre-defined presets. Preset
-names can be used in place of config hashrefs when instantiating an XKPasswd
-object, or, when using the functional interface to XKPasswd.
+For ease of use, this module comes with a set of pre-defined presets which can
+be passed by name to the functional interface, and the constructor.
 
 Presets can be used as-is, or, they can be used as a starting point for
 creating your own config hashref, as demonstrated by the following example:
 
-    my $config = XKPasswd->preset_config('XKCD');
+    my $config = Crypt::HSXKPasswd->preset_config('XKCD');
     $config->{separator_character} = q{ }; # change the separator to a space
-    my $xkpasswd = XKPasswd->new('sample_dict_EN.txt', $config);
+    my $hsxkpasswd = Crypt::HSXKPasswd->new(config => $config);
     
 If you only wish to alter a small number of config settings, the following
 two shortcuts might be of interest (both produce the same result as the
 example above):
 
-    my $config = XKPasswd->preset_config('XKCD', {separator_character => q{ }});
-    my $xkpasswd = XKPasswd->new('sample_dict_EN.txt', $config);
+    my $config = Crypt::HSXKPasswd->preset_config('XKCD', {separator_character => q{ }});
+    my $hsxkpasswd = Crypt::HSXKPasswd->new(config => $config);
     
 or
 
-    my $xkpasswd = XKPasswd->new('sample_dict_EN.txt', 'XKCD', {separator_character => q{ }});
+    my $hsxkpasswd = Crypt::HSXKPasswd->new(
+        preset => 'XKCD',
+        preset_overrides => {separator_character => q{ }}
+    );
 
 For more see the definitions for the class functions C<defined_presets()>,
 C<presets_to_string()>, C<preset_description()>, and C<preset_config()>.
@@ -3923,22 +3925,23 @@ Entropy checking is controlled via three package variables:
 
 =item *
 
-C<$XKPasswd::ENTROPY_MIN_BLIND> - the minimum acceptable entropy (in bits) for
-a brute-force attack. The default value for this variable is 78 (equivalent to
-a 12 character password consisting of mixed-case letters, digits, and symbols).
+C<$Crypt::HSXKPasswd::ENTROPY_MIN_BLIND> - the minimum acceptable entropy (in
+bits) for a brute-force attack. The default value for this variable is 78
+(equivalent to a 12 character password consisting of mixed-case letters, digits,
+and symbols).
 
 =item *
 
-C<$XKPasswd::ENTROPY_MIN_SEEN> - the minimum acceptable entropy (in bits) for a
-worst-case attack (where the dictionary and configuration are known). The default
-value for this variable is 52 (equivalent to an 8 character password consisting
-of mixed-case letters, digits, and symbols).
+C<$Crypt::HSXKPasswd::ENTROPY_MIN_SEEN> - the minimum acceptable entropy (in
+bits) for a worst-case attack (where the dictionary and configuration are
+known). The default value for this variable is 52 (equivalent to an 8 character
+password consisting of mixed-case letters, digits, and symbols).
 
 =item *
 
-C<$XKPasswd::SUPRESS_ENTROPY_WARNINGS> - this variable can be used to suppress
-one or both of the entropy warnings. The following values are valid (invalid
-values are treated as being C<NONE>):
+C<$Crypt::HSXKPasswd::SUPRESS_ENTROPY_WARNINGS> - this variable can be used to
+suppress one or both of the entropy warnings. The following values are valid
+(invalid values are treated as being C<NONE>):
 
 =over 4
 
@@ -3956,7 +3959,7 @@ C<BLIND> - only warnings for the best-case scenario are suppressed.
 
 =item -
 
-C<ALL> - all entryopy warnings are suppressed.
+C<ALL> - all entropy warnings are suppressed.
 
 =back
 
@@ -4014,22 +4017,22 @@ from most to least preferred, depending on what is available on the system:
 C<Crypt::HSXKPasswd::RNG::Math_Random_Secure> (only available if
 C<Math::Random::Secure> is installed on the system).
 
-=item 1
+=item 2
 
 C<Crypt::HSXKPasswd::RNG::Data_Entropy> (only available if
 C<Data::Entropy::Algorithms> is installed on the system).
 
-=item 1
+=item 3
 
 C<Crypt::HSXKPasswd::RNG::DevUrandom> (only available on Linux/Unix systems
 with a C</dev/urandom>).
 
-=item 1
+=item 4
 
 C<Crypt::HSXKPasswd::RNG::Basic> (available on all systems because it uses
 Perl's built-in C<rand()> function).
 
-=back 4
+=back
 
 If the constructor is called without specifying an RNG, and if the only
 available RNG is C<Crypt::HSXKPasswd::RNG::Basic>, a warning will be thrown
@@ -4077,7 +4080,7 @@ Linux/Unix systems with a C</dev/urandom> special file.
     
 This RNG uses Perl's built-in C<rand()> function as its source of randomness,
 and this is sub-optimal. The Perl docs warn that C<rand()> is not a particularly
-good source of random numbers, and advisies against its use for cryptography.
+good source of random numbers, and advises against its use for cryptography.
 
 This RNG provides a base-line, and should only be used if none of the better
 RNGs are available. While it is sub-optimal, it will still generate passwords
@@ -4107,7 +4110,7 @@ less numbers more frequently. For this reason the class's default behaviour is
 to use a timeout of 180 seconds, and to request enough random numbers to
 generate three passwords at a time.
 
-These defaults can be overridden by passing named arguments to the contructor
+These defaults can be overridden by passing named arguments to the constructor
 after the email address. The following named arguments are supported:
 
 =over 4
@@ -4126,7 +4129,7 @@ value passed to the C<random_numbers()> function by C<Crypt::HSXKPasswd>.
 C<num_absolute> - the absolute number of random numbers to fetch per request
 to Random.Org. This argument takes precedence over C<num_passwords>.
 
-=back 4
+=back
 
 C<num_passwords> and C<num_absolute> should not be used together, but if they
 are, C<num_absolute> use used, and C<num_passwords> is ignored.
@@ -4153,7 +4156,7 @@ C<Mozilla::CA>
 
 C<URI>
 
-=back 4
+=back
 
 =head2 FUNCTIONAL INTERFACE
 
@@ -4180,7 +4183,7 @@ arguments that are valid in C<new()> are valid here.
 This function Croaks if there is a problem generating the password.
 
 Note that it is inefficient to use this function to generate multiple passwords
-because the dictionary will be re-loaded, and the entropy stats re-calcuated
+because the dictionary will be re-loaded, and the entropy stats re-calculated
 each time the function is called.
 
 =head2 CONSTRUCTOR
@@ -4189,7 +4192,7 @@ each time the function is called.
     # number generator
     my $hsxkpasswd_instance = Crypt::HSXKPasswd->new();
     
-    # the construtor takes optional named arguments, these can be used to
+    # the constructor takes optional named arguments, these can be used to
     # customise the word source, config, and random number source.
     
     # create an instance that uses the UNIX words file as the word source
@@ -4314,7 +4317,7 @@ contain one word per. Lines starting with a # symbol will be ignored. It is
 assumed files will be UTF-8 encoded. If not, a second named argument,
 C<dictionary_file_encoding>, can be used to specify another encoding.
 
-=back 4
+=back
 
 =head3 CUSTOM CONFIGS
 
@@ -4332,7 +4335,7 @@ C<config> - a valid config hashref.
 =item *
 
 C<config_json> - a JSON string representing a valid config hashref. If you use
-this named argument on a sytem where the standard Perl JSON library
+this named argument on a system where the standard Perl JSON library
 L<http://search.cpan.org/perldoc?JSON> is not installed, the constructor will
 croak.
 
@@ -4346,7 +4349,7 @@ C<preset> - a valid preset name. If this variable is used, then any desired
 config overrides can be passed as a hashref using the variable
 C<preset_overrides>.
 
-=back 4
+=back
 
 =head3 CUSTOM RANDOM NUMBER GENERATORS
 
@@ -4470,7 +4473,7 @@ that the function should croak on invalid configs rather than returning 0;
 This function returns the config hashref for a given preset. See above for the
 list of available presets.
 
-The first argument this function accpets is the name of the desired preset as a
+The first argument this function accepts is the name of the desired preset as a
 scalar. If an invalid name is passed, the function will carp. If no preset is
 passed the preset C<DEFAULT> is assumed.
 
@@ -4504,7 +4507,7 @@ it will croak.
 This function returns the description for a given preset. See above for the
 list of available presets.
 
-The first argument this function accpets is the name of the desired preset as a
+The first argument this function accepts is the name of the desired preset as a
 scalar. If an invalid name is passed, the function will carp. If no preset is
 passed the preset C<DEFAULT> is assumed.
 
@@ -4531,7 +4534,7 @@ config hashref.
 When called with a single argument the function sets the config of the instance
 to a clone of the passed config. If present, the argument must be either a
 hashref containing valid config keys and values, or a JSON string representing
-a hashref containing calid config keys and values.
+a hashref containing valid config keys and values.
 
 The function will croak if an invalid config is passed, or, if a string is
 passed while the standard JSON Perl module
@@ -4597,7 +4600,7 @@ library.
     
 This function generates a number of passwords and returns them all as an array.
 
-The function uses C<password()> to genereate the passwords, and hence will
+The function uses C<password()> to generate the passwords, and hence will
 croak if there is an error generating any of the requested passwords.
 
 =head3 passwords_json()
@@ -4605,7 +4608,7 @@ croak if there is an error generating any of the requested passwords.
     my $json_string = $hsxkpasswd_instance->passwords_json(10);
     
 This function generates a number of passwords and returns them and the
-instance's entropy stats as a JSON string representing a hashref contianing an
+instance's entropy stats as a JSON string representing a hashref containing an
 array of passwords indexed by C<passwords>, and a hashref of entropy stats
 indexed by C<stats>. The stats hashref itself is indexed by:
 C<password_entropy_blind>, C<password_permutations_blind>,
@@ -4613,7 +4616,7 @@ C<password_entropy_blind_min>, C<password_entropy_blind_max>,
 C<password_permutations_blind_max>, C<password_entropy_seen> &
 C<password_permutations_seen>.
 
-The function uses C<passwords()> to genereate the passwords, and hence will
+The function uses C<passwords()> to generate the passwords, and hence will
 croak if there is an error generating any of the requested passwords. This
 function requires that the standard Perl JSON package be installed, if not, it
 will croak.
@@ -4662,7 +4665,7 @@ file that meet the criteria defined by the loaded config.
 
 =item *
 
-C<dictionary_words_percent_avaialable> - the percentage of the words in the
+C<dictionary_words_percent_available> - the percentage of the words in the
 dictionary file that are available for use with the loaded config.
 
 =item *
@@ -4801,7 +4804,7 @@ sample status string:
 
     $hsxkpasswd_instance->update_config({separator_character => '+'});
     
-The function updates the config within an XKPasswd instance. A hashref with the
+The function updates the config within an HSXKPasswd instance. A hashref with the
 config options to be changed must be passed. The function returns a reference to
 the instance to enable function chaining. The function will croak if the updated
 config would be invalid in some way. Note that if this happens the running
@@ -4976,11 +4979,12 @@ This module has no known incompatibilities.
 
 There are no known bugs in this module.
 
-Please report problems to Bart Busschots (L<mailto:bart@bartificer.net>) Patches are welcome.
+Please report any bugs you may find on the module's GitHub page:
+L<https://github.com/bbusschots/xkpasswd.pm>.
 
 =head1 LICENCE AND COPYRIGHT
 
-Copyright (c) 2014, Bart Busschots T/A Bartificer Web Solutions
+Copyright (c) 2014-15, Bart Busschots T/A Bartificer Web Solutions
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -5019,7 +5023,7 @@ GPL V2 license L<https://www.gnu.org/licenses/gpl-2.0.html>:
 
 =item *
 
-The C<sample_dict_DE.txt> text file.
+The C<share/sample_dict_DE.txt> text file.
 
 =item *
 
@@ -5027,7 +5031,7 @@ The C<Crypt::HSXKPasswd::Dictionary::DE> Perl module.
 
 =item *
 
-The C<sample_dict_FR.txt> text file.
+The C<share/sample_dict_FR.txt> text file.
 
 =item *
 
@@ -5035,7 +5039,7 @@ The C<Crypt::HSXKPasswd::Dictionary::FR> Perl module.
 
 =item *
 
-The C<sample_dict_IT.txt> text file.
+The C<share/sample_dict_IT.txt> text file.
 
 =item *
 
@@ -5043,7 +5047,7 @@ The C<Crypt::HSXKPasswd::Dictionary::IT> Perl module.
 
 =item *
 
-The C<sample_dict_NL.txt> text file.
+The C<share/sample_dict_NL.txt> text file.
 
 =item *
 
@@ -5051,13 +5055,13 @@ The C<Crypt::HSXKPasswd::Dictionary::NL> Perl module.
 
 =item *
 
-The C<sample_dict_PT.txt> text file.
+The C<share/sample_dict_PT.txt> text file.
 
 =item *
 
 The C<Crypt::HSXKPasswd::Dictionary::PT> Perl module.
 
-=back 4
+=back
 
 =head1 AUTHOR
 

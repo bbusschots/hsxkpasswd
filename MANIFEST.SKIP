@@ -1,0 +1,23 @@
+# OS stuff
+[.]DS_Store$
+
+# dev stuff
+^[.]git/
+^[.]gitignore$
+[.]komodoproject$
+^test\d*[.]pl$
+^temp/
+^MYMETA\.yml$
+^MYMETA\.json$
+^_build/
+^blib/
+^Build$
+^Makefile[.]PL$
+^MANIFEST[.]bak$
+^Crypt-HSXKPasswd-.*[.]tar[.]gz$
+^README[.]bak$
+
+# stuff that's for GitHub, but not CPAN
+^[.]perlcriticrc$
+^README[.]md$
+^MANIFEST.SKIP$
