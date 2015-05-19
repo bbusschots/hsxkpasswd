@@ -5,7 +5,8 @@ use Module::Build;
 
 my $builder = Module::Build->new(
     module_name         => 'Crypt::HSXKPasswd',
-    license             => 'BSD',
+    license             => 'bsd',
+    dist_abstract       => q{A secure memorable password generator inspired by Steve Gibson's Passord Haystacks (https://www.grc.com/haystack.htm), and the famous XKCD password cartoon (https://xkcd.com/936/).},
     dist_author         => q{Bart Busschots <bart@bartificer.net>},
     dist_version_from   => 'lib/Crypt/HSXKPasswd.pm',
     release_status      => 'testing',
@@ -38,6 +39,7 @@ my $builder = Module::Build->new(
     },
     add_to_cleanup     => [ 'Crypt-HSXKPasswd-*' ],
     create_makefile_pl => 'traditional',
+    create_readme => 1,
 );
 
 $builder->create_build_script();

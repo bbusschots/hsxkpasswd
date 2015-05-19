@@ -33,3 +33,4 @@ share/sample_dict_PT.txt	A sample dictionary file for use with Crypt::HSXKPasswd
 t/00-load.t
 t/manifest.t
 t/pod.t
+Makefile.PL

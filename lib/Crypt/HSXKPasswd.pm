@@ -2782,7 +2782,7 @@ sub _best_available_rng{
     return $rng if $rng;
     
     # if we got here, no secure RNGs were avaialable, so warn, then return an instance of the basic RNG
-    $_CLASS->_warn(q{using Perl's built-in rand() function for radom number generation. This is secure for most uses, but you can get more secure random numbers by installing Math::Random::Secure or Data::Entropy::Algorithms});
+    $_CLASS->_warn(q{using Perl's built-in rand() function for random number generation. This is secure enough for most users, but you can get more secure random numbers by installing Math::Random::Secure or Data::Entropy::Algorithms});
     return Crypt::HSXKPasswd::RNG::Basic->new();
 }
 
@@ -3182,96 +3182,6 @@ This documentation refers to C<Crypt::HSXKPasswd> version 3.1.1.
     # create a new instance with the default dictionary, config, and random
     # number generator
     my $hsxkpasswd_instance = Crypt::HSXKPasswd->new();
-    
-    # the constructor takes optional named arguments, these can be used to
-    # customise the word source, config, and random number source.
-    
-    # create an instance that uses the UNIX words file as the word source
-    my $hsxkpasswd_instance = HSXKPasswd->new(
-        dictionary => Crypt::HSXKPasswd::Dictionary::System->new()
-    );
-    
-    # create an instance that uses an array reference as the word source
-    my $hsxkpasswd_instance = HSXKPasswd->new(dictionary_list => $array_ref);
-    
-    # create an instance that uses a dictionary file as the word source
-    my $hsxkpasswd_instance = HSXKPasswd->new(
-        dictionary_file => 'sample_dict_EN.txt'
-    );
-    
-    # the class Crypt::HSXKPasswd::Dictionary::Basic can be used to aggregate
-    # multiple array refs and/or dictionary files into a single word source
-    my $dictionary = Crypt::HSXKPasswd::Dictionary::Basic->new();
-    $dictionary->add_words('dict1.txt');
-    $dictionary->add_words('dict2.txt');
-    $dictionary->add_words($array_ref);
-    my $hsxkpasswd_instance = HSXKPasswd->new(dictionary => $dictionary);
-    
-    # create an instance from the preset 'XKCD'
-    my $hsxkpasswd_instance = HSXKPasswd->new(preset => 'XKCD');
-    
-    # create an instance based on the preset 'XKCD' with one customisation
-    my $hsxkpasswd_instance = HSXKPasswd->new(
-        preset => 'XKCD',
-        preset_override => {separator_character => q{ }}
-    );
-    
-    # create an instance from a config based on a preset
-    # but with many alterations
-    my $config = HSXKPasswd->preset_config('XKCD');
-    $config->{separator_character} = q{ };
-    $config->{case_transform} = 'INVERT';
-    $config->{padding_type} = "FIXED";
-    $config->{padding_characters_before} = 1;
-    $config->{padding_characters_after} = 1;
-    $config->{padding_character} = '*';
-    my $hsxkpasswd_instance = HSXKPasswd->new(config => $config);
-    
-    # create an instance from an entirely custom configuration
-    my $config = {
-        padding_alphabet => [qw{! @ $ % ^ & * + = : ~ ?}],
-        separator_alphabet => [qw{- + = . _ | ~}],
-        word_length_min => 6,
-        word_length_max => 6,
-        num_words => 3,
-        separator_character => 'RANDOM',
-        padding_digits_before => 2,
-        padding_digits_after => 2,
-        padding_type => 'FIXED',
-        padding_character => 'RANDOM',
-        padding_characters_before => 2,
-        padding_characters_after => 2,
-        case_transform => 'CAPITALISE',
-    }
-    my $hsxkpasswd_instance = HSXKPasswd->new(config => $config);
-    
-    # create an instance from an entire custom config passed as a JSON string
-    # a convenient way to use configs generated using the web interface at
-    # https://xkpasswd.net
-    my $config = <<'END_CONF';
-    {
-     "num_words": 4,
-     "word_length_min": 4,
-     "word_length_max": 8,
-     "case_transform": "RANDOM",
-     "separator_character": " ",
-     "padding_digits_before": 0,
-     "padding_digits_after": 0,
-     "padding_type": "NONE",
-    }
-    END_CONF
-    my $hsxkpasswd_instance = HSXKPasswd->new(config_json => $config);
-    
-    # create an instance which uses Random.Org as the random number generator
-    # NOTE - this should be used sparingly, and only by the paranoid. If you
-    # abuse this RNG your IP will get blacklisted on Random.Org. You must pass
-    # a valid email address to the constructor for
-    # Crypt::HSXKPasswd::RNG::RandomDorOrg because Random.Org's usage
-    # guidelines request that all invocations to their API contain a contact
-    # email in the useragent header, and this module honours that request.
-    my $hsxkpasswd_instance = HSXKPasswd->new(
-        rng => Crypt::HSXKPasswd::RNG::RandomDorOrg->new('your.email@addre.ss');
-    );
     
     # generate a single password
     my $password = $hsxkpasswd_instance->password();
@@ -4270,6 +4180,12 @@ each time the function is called.
     }
     END_CONF
     my $hsxkpasswd_instance = HSXKPasswd->new(config_json => $config);
+    
+    # create an instance which uses /dev/urandom as the RNG
+    # (only possible on Linux/Unix only systems)
+    my $hsxkpasswd_instance = HSXKPasswd->new(
+        rng => Crypt::HSXKPasswd::RNG::DevUrandom->new();
+    );
     
     # create an instance which uses Random.Org as the random number generator
     # NOTE - this should be used sparingly, and only by the paranoid. If you
