@@ -49,7 +49,7 @@ unless($_CAN_EMAIL_VALID && $_CAN_URI && $_CAN_LWP_UA && $_CAN_HTTPS){
 use version; our $VERSION = qv('1.1_01');
 
 # utility variables
-my $_CLASS = 'Crypt::HSXKPasswd::RNG::RandomDotOrg';
+my $_CLASS = __PACKAGE__;
 my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 # Random.org settings
@@ -85,9 +85,7 @@ sub new{
     my $email = shift @args;
     
     # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_MAIN_CLASS->_error('invalid invocation of constructor');
-    }
+    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
     unless($email && Email::Valid->address($email)){
         $_MAIN_CLASS->_error('invalid arguments - must supply a valid email address as the first argument');
     }
@@ -135,9 +133,7 @@ sub random_numbers{
     my $num_per_password = shift;
     
     # validate the args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error('invalid invocation of an instance method');
-    }
+    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
     unless(defined $num_per_password && $num_per_password =~ m/^\d+$/sx && $num_per_password >= 1){
         $_MAIN_CLASS->_error('invalid args - the number of random numbers needed per password must be a positive integer');
     }

@@ -6,7 +6,6 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw( -no_match_vars ); # for more readable code
-use Scalar::Util qw(blessed); # for checking if a reference is blessed
 use Crypt::HSXKPasswd; # for the error function
 
 # set things up for using UTF-8
@@ -29,7 +28,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 use version; our $VERSION = qv('1.1_01');
 
 # utility variables
-my $_CLASS = 'Crypt::HSXKPasswd::RNG';
+my $_CLASS = __PACKAGE__;
 my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 #

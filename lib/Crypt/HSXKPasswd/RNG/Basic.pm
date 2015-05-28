@@ -30,7 +30,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 use version; our $VERSION = qv('1.1_01');
 
 # utility variables
-my $_CLASS = 'Crypt::HSXKPasswd::RNG::Basic';
+my $_CLASS = __PACKAGE__;
 my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 #
@@ -48,9 +48,7 @@ sub new{
     my $class = shift;
     
     # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_MAIN_CLASS->_error('invalid invocation of constructor');
-    }
+    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
     
     # bless and return an empty object
     my $instance = {};
@@ -77,9 +75,7 @@ sub random_numbers{
     my $num = shift;
     
     # validate the args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error('invalid invocation of an instance method');
-    }
+    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
     unless(defined $num && $num =~ m/^\d+$/sx && $num >= 1){
         $_MAIN_CLASS->_error('invalid args - the number of random numbers needed per password must be a positive integer');
     }

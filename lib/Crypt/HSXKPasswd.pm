@@ -60,7 +60,7 @@ our @EXPORT = qw( hsxkpasswd );
 #
 
 # version info
-use version; our $VERSION = qv('3.1_01');
+use version; our $VERSION = qv('3.1_02');
 
 # acceptable entropy levels
 our $ENTROPY_MIN_BLIND = 78; # 78 bits - equivalent to 12 alpha numeric characters with mixed case and symbols
@@ -73,7 +73,7 @@ our $LOG_ERRORS = 0; # default to not logging errors
 our $DEBUG = 0; # default to not having debugging enabled
 
 # utility variables
-my $_CLASS = 'Crypt::HSXKPasswd';
+my $_CLASS = __PACKAGE__;
 my $_DICTIONARY_BASE_CLASS = 'Crypt::HSXKPasswd::Dictionary';
 my $_RNG_BASE_CLASS = 'Crypt::HSXKPasswd::RNG';
 
@@ -470,9 +470,7 @@ sub new{
     my $preset_override = shift;
     
     # validate args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of constructor');
-    }
+    _force_class($class);
     
     # before going any further, check the presets if debugging (doing later may cause an error before we test)
     if($DEBUG){
@@ -563,9 +561,7 @@ sub default_config{
     my $overrides = shift;
     
     # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
 
     # build and return a default config
     return $_CLASS->preset_config('DEFAULT', $overrides);
@@ -597,9 +593,7 @@ sub preset_config{
     $preset = uc $preset;
     
     # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     unless(ref $preset eq q{}){
         $_CLASS->_error('invalid args - if present, the first argument must be a scalar');
     }
@@ -663,9 +657,7 @@ sub presets_json{
     my $class = shift;
     
     # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     
     # make sure JSON parsing is available
     unless($_CAN_JSON){
@@ -714,9 +706,7 @@ sub clone_config{
     my $config = shift;
     
     # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     unless(defined $config && $_CLASS->is_valid_config($config)){
         $_CLASS->_error('invalid args - a valid config hashref must be passed');
     }
@@ -783,9 +773,7 @@ sub is_valid_config{
     my $croak = shift;
     
     # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     unless($config && ref $config eq 'HASH'){
         $_CLASS->_error('invalid arguments');
     }
@@ -886,9 +874,7 @@ sub config_to_json{
     my $config = shift;
     
     # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     unless(defined $config && ref $config eq 'HASH'){
         $_CLASS->_error('invalid arguments');
     }
@@ -925,9 +911,7 @@ sub config_to_string{
     my $config = shift;
     
     # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     unless(defined $config && ref $config eq 'HASH'){
         $_CLASS->_error('invalid arguments');
     }
@@ -995,9 +979,7 @@ sub preset_description{
     $preset = uc $preset;
     
     # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     unless(ref $preset eq q{}){
         $_CLASS->_error('invalid args - if present, the first argument must be a scalar');
     }
@@ -1022,9 +1004,7 @@ sub defined_presets{
     my $class = shift;
     
     # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     
     # return the preset names
     my @preset_names = sort keys %{$_PRESETS};
@@ -1043,9 +1023,7 @@ sub presets_to_string{
     my $class = shift;
     
     # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     
     # loop through each preset and assemble the result
     my $ans = q{};
@@ -1087,9 +1065,7 @@ sub config_random_numbers_required{
     my $skip_validation = shift;
     
     # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     unless(defined $config && ($skip_validation || $_CLASS->is_valid_config($config))){
         $_CLASS->_error('invalid args - a valid config hashref must be passed');
     }
@@ -1141,9 +1117,7 @@ sub config_stats{
     my $suppres_warnings = shift;
     
     # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     unless(defined $config && $_CLASS->is_valid_config($config)){
         $_CLASS->_error('invalid args - a valid config hashref must be passed');
     }
@@ -1235,9 +1209,7 @@ sub dictionary{
     my $encoding = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     unless($encoding){
         $encoding = 'UTF-8';
     }
@@ -1308,9 +1280,7 @@ sub config{
     my $config_raw = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     # decide if we're a 'getter' or a 'setter'
     if(!(defined $config_raw)){
@@ -1379,9 +1349,7 @@ sub config_json{
     my $self = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     # assemble the string to return
     my $ans = $_CLASS->config_to_json($self->{_CONFIG}); # will croak without JSON
@@ -1403,9 +1371,7 @@ sub config_string{
     my $self = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     # assemble the string to return
     my $ans = $_CLASS->config_to_string($self->{_CONFIG});
@@ -1428,9 +1394,7 @@ sub update_config{
     my $new_keys = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     unless(defined $new_keys && ref $new_keys eq 'HASH'){
         $_CLASS->_error('invalid arguments - the new config keys must be passed as a hashref');
     }
@@ -1494,9 +1458,7 @@ sub rng{
     my $rng = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     # decide if we're a 'getter' or a 'setter'
     if(!(defined $rng)){
@@ -1533,9 +1495,7 @@ sub caches_state{
     my $self = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
 
     # generate the string
     my $ans = q{};
@@ -1547,6 +1507,7 @@ sub caches_state{
 }
 
 #####-SUB-######################################################################
+# Type       : INSTANCE
 # Purpose    : Generaete a random password based on the object's loaded config
 # Returns    : a passowrd as a scalar
 # Arguments  : NONE
@@ -1557,9 +1518,7 @@ sub password{
     my $self = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     #
     # Generate the password
@@ -1649,9 +1608,7 @@ sub passwords{
     my $num_pws = shift;
     
     # validate args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     unless(defined $num_pws && ref $num_pws eq q{} && $num_pws =~ m/^\d+$/sx && $num_pws > 0){
         $_CLASS->_error('invalid args - must specify the number of passwords to generate as a positive integer');
     }
@@ -1691,9 +1648,7 @@ sub passwords_json{
     my $num_pws = shift;
     
     # validate args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     unless(defined $num_pws && ref $num_pws eq q{} && $num_pws =~ m/^\d+$/sx && $num_pws > 0){
         $_CLASS->_error('invalid args - must specify the number of passwords to generate as a positive integer');
     }
@@ -1805,9 +1760,7 @@ sub stats{
     my $self = shift;
     
     # validate args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     # create a hash to assemble all the stats into
     my %stats = ();
@@ -1862,9 +1815,7 @@ sub status{
     my $self = shift;
     
     # validate args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     # assemble the response
     my %stats = $self->stats();
@@ -1952,6 +1903,54 @@ sub hsxkpasswd{
 #
 
 #####-SUB-######################################################################
+# Type       : SUBROUTINE (PRIVATE)
+# Purpose    : Test the $class in a class function to make sure it was actually
+#              invoked on the correct class.
+# Returns    : Always returns 1 (to keep perlcritic happy)
+# Arguments  : 1) the $class variable to test
+#              2) OPTIONAL - the class to compare against - defaults to $_CLASS.
+#                 This option makes it possible for other classes in the package
+#                 to use this function.
+# Throws     : Croaks if $class is not valid
+# Notes      :
+# See Also   :
+sub _force_class{
+    my $test_class = shift;
+    my $required_class = shift;
+    $required_class = $_CLASS unless $required_class;
+    
+    unless(defined $test_class && ref $test_class eq q{} && $test_class eq $required_class){
+        $_CLASS->_error("invalid invocation - must be invoked on the package $required_class", 1);
+    }
+    
+    return 1;
+}
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE (PRIVATE)
+# Purpose    : Test the $self in an instance function to make sure it was
+#              actually invoked as an instance function.
+# Returns    : Always  returns 1 (to keep PerlCritic happy)
+# Arguments  : 1) the $self variable to test
+#              2) OPTIONAL - the class to test against - defaults to $_CLASS.
+#                 This option makes it possible for other classes in the package
+#                 to use this function.
+# Throws     : Croaks if the $self variable is not an instance of this class.
+# Notes      :
+# See Also   :
+sub _force_instance{
+    my $test_self = shift;
+    my $package = shift;
+    $package = $_CLASS unless $package;
+    
+    unless(defined $test_self && blessed($test_self) && $test_self->isa($package)){
+        $_CLASS->_error("invalid invocation - must be invoked on an instance of $package", 1);
+    }
+    
+    return 1;
+}
+
+#####-SUB-######################################################################
 # Type       : CLASS (PRIVATE)
 # Purpose    : Function to log output from the module - SHOULD NEVER BE CALLED
 #              DIRECTLY
@@ -1959,6 +1958,9 @@ sub hsxkpasswd{
 # Arguments  : 1. the severity of the message (one of 'DEBUG', 'WARNING', or
 #                 'ERROR')
 #              2. the message to log
+#              3. OPTIONAL - an increment to add to the argument to caller - to
+#                 allow functions like _force_instance to invisibly invoke
+#                 _debug(), _warn() & _error().
 # Throws     : Croaks on invalid invocation
 # Notes      : THIS FUNCTION SHOULD NEVER BE CALLED DIRECTLY, but always called
 #              via _debug(), _warn(), or _error().
@@ -1979,6 +1981,7 @@ sub _log{
     my $class = shift;
     my $severity = uc shift;
     my $message = shift;
+    my $stack_increment = shift;
     
     # validate the args
     unless($class && $class eq $_CLASS){
@@ -1998,9 +2001,17 @@ sub _log{
         }
         confess($output);
     }
+    if(defined $stack_increment){
+        unless(ref $stack_increment eq q{} && $stack_increment =~ m/^\d+$/sx){
+            carp((caller 0)[3].'(): passed invalid stack increment - ignoring');
+            $stack_increment = 0;
+        }
+    }else{
+        $stack_increment = 0;
+    }
     
     # figure out the correct index for the function that is really responsible
-    my $caller_index = 2;
+    my $caller_index = 2 + $stack_increment;
     my $calling_func = (caller 1)[3];
     unless($calling_func =~ m/^$_CLASS[:]{2}((_debug)|(_warn)|(_error))$/sx){
         print {$LOG_STREAM} 'WARNING - '.(caller 0)[3].q{(): invoked directly rather than via _debug(), _warn() or _error() - DO NOT DO THIS!};
@@ -2086,6 +2097,8 @@ sub _log{
 # Purpose    : Function for printing a debug message
 # Returns    : Always return 1 (to keep perlcritic happpy)
 # Arguments  : 1. the debug message to log
+#              2. OPTIONAL - a number of function calls to hide from users in
+#                 the output.
 # Throws     : Croaks on invalid invocation
 # Notes      : a wrapper for _log() which invokes that function with a severity
 #              of 'DEBUG'
@@ -2093,14 +2106,13 @@ sub _log{
 sub _debug{
     my $class = shift;
     my $message = shift;
+    my $stack_increment = shift;
     
     # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     
     #pass the call on to _log
-    return $_CLASS->_log('DEBUG', $message);
+    return $_CLASS->_log('DEBUG', $message, $stack_increment);
 }
 
 #####-SUB-######################################################################
@@ -2108,6 +2120,8 @@ sub _debug{
 # Purpose    : Function for issuing a warning
 # Returns    : Always returns 1 to keep perlcritic happy
 # Arguments  : 1. the warning message to log
+#              2. OPTIONAL - a number of function calls to hide from users in
+#                 the output.
 # Throws     : Croaks on invalid invocation
 # Notes      : a wrapper for _log() which invokes that function with a severity
 #              of 'WARNING'
@@ -2115,14 +2129,13 @@ sub _debug{
 sub _warn{
     my $class = shift;
     my $message = shift;
+    my $stack_increment = shift;
     
     # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     
     #pass the call on to _log
-    return $_CLASS->_log('WARNING', $message);
+    return $_CLASS->_log('WARNING', $message, $stack_increment);
 }
 
 #####-SUB-######################################################################
@@ -2130,6 +2143,8 @@ sub _warn{
 # Purpose    : Function for throwing an error
 # Returns    : Always returns 1 to keep perlcritic happy
 # Arguments  : 1. the error message to log
+#              2. OPTIONAL - a number of function calls to hide from users in
+#                 the output.
 # Throws     : Croaks on invalid invocation
 # Notes      : a wrapper for _log() which invokes that function with a severity
 #              of 'ERROR'
@@ -2137,14 +2152,13 @@ sub _warn{
 sub _error{
     my $class = shift;
     my $message = shift;
+    my $stack_increment = shift;
     
     # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     
     #pass the call on to _log
-    return $_CLASS->_log('ERROR', $message);
+    return $_CLASS->_log('ERROR', $message, $stack_increment);
 }
 
 #####-SUB-######################################################################
@@ -2159,9 +2173,7 @@ sub _clone_config{
     my $self = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     # build the clone
     my $clone = $_CLASS->clone_config($self->{_CONFIG});
@@ -2198,9 +2210,7 @@ sub _validate_key{
     my $croak = shift;
     
     # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     unless(defined $key && ref $key eq q{} && defined $val){
         $_CLASS->_error('invoked with invalid args');
     }
@@ -2247,9 +2257,7 @@ sub _filter_word_list{
     my $allow_accents = shift;
     
     # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     unless(defined $word_list_ref && ref $word_list_ref eq q{ARRAY}){
         $_CLASS->_error('invoked with invalid word list');
     }
@@ -2300,9 +2308,7 @@ sub _contains_accented_letters{
     my $word_list_ref = shift;
     
     # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     unless(defined $word_list_ref && ref $word_list_ref eq q{ARRAY}){
         $_CLASS->_error('invoked with invalid word list');
     }
@@ -2340,9 +2346,7 @@ sub _random_int{
     my $max = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     unless(defined $max && $max =~ m/^\d+$/sx && $max > 0){
         $_CLASS->_error('invoked with invalid random limit');
     }
@@ -2369,9 +2373,7 @@ sub _random_digits{
     my $num = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     unless(defined $num && $num =~ m/^\d+$/sx && $num > 0){
         $_CLASS->_error('invoked with invalid number of digits');
     }
@@ -2400,9 +2402,7 @@ sub _rand{
     my $self = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     # get the next random number from the cache
     my $num = shift @{$self->{_CACHE_RANDOM}};
@@ -2438,9 +2438,7 @@ sub _increment_random_cache{
     my $self = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     # genereate the random numbers
     my @random_numbers = $self->{_RNG}->random_numbers($_CLASS->config_random_numbers_required($self->{_CONFIG}, 'skip valiation'));
@@ -2479,9 +2477,7 @@ sub _random_words{
     my $self = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     # get the random words
     my @ans = ();
@@ -2511,9 +2507,7 @@ sub _separator{
     my $self = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     # figure out the separator character
     my $sep = $self->{_CONFIG}->{separator_character};
@@ -2547,9 +2541,7 @@ sub _padding_char{
     my $sep = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     unless(defined $sep){
         $_CLASS->_error('no separator character passed');
     }
@@ -2592,9 +2584,7 @@ sub _transform_case{
     my $words_ref = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     unless(defined $words_ref && ref $words_ref eq 'ARRAY'){
         $_CLASS->_error('no words array reference passed');
     }
@@ -2664,9 +2654,7 @@ sub _substitute_characters{
     my $words_ref = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     unless(defined $words_ref && ref $words_ref eq 'ARRAY'){
         $_CLASS->_error('no words array reference passed');
     }
@@ -2691,7 +2679,7 @@ sub _substitute_characters{
 }
 
 #####-SUB-######################################################################
-# Type       : INSTANCE (PRIVATE)
+# Type       : CLASS (PRIVATE)
 # Purpose    : Perform sanity checks on all defined presets
 # Returns    : Always returns 1 (to keep perlcritic happy)
 # Arguments  : NONE
@@ -2704,9 +2692,7 @@ sub _check_presets{
     my $class = shift;
     
     # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     
     # loop through all presets and perform sanity checks
     my @preset_names = $_CLASS->defined_presets();
@@ -2756,9 +2742,7 @@ sub _best_available_rng{
     my $class = shift;
     
     # validate the args
-    unless($class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     
     # try the good entropy sources in order
     my $rng;
@@ -2822,9 +2806,7 @@ sub _calculate_entropy_stats{
     my $self = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     my %ans = ();
     
@@ -2926,9 +2908,7 @@ sub _calcualte_dictionary_stats{
     my $self = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     # create a hash to aggregate the stats into
     my %ans = ();
@@ -2962,9 +2942,7 @@ sub _passwords_will_contain_symbol{
     my $self = shift;
     
     # validate args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     # assume no symbol, if we find one, set to 1
     my $symbol_used = 0;
@@ -3033,9 +3011,7 @@ sub _update_entropystats_cache{
     my $self = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_CLASS->_error('invalid invocation of instance method');
-    }
+    _force_instance($self);
     
     # do nothing if the dictionary has not been loaded yet (should only happen while the constructor is building an instance)
     return 1 unless($self->{_DICTIONARY_SOURCE} && blessed($self->{_DICTIONARY_SOURCE}) && $self->{_DICTIONARY_SOURCE}->isa($_DICTIONARY_BASE_CLASS));
@@ -3079,9 +3055,7 @@ sub _render_bigint{
     my $bigint = shift;
     
     # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     unless(defined $bigint && $bigint->isa('Math::BigInt')){
         $_CLASS->_error('invalid args, must pass a Math::BigInt object');
     }
@@ -3123,9 +3097,7 @@ sub _grapheme_length{
     my $string = shift;
     
     # validate args
-    unless(defined $class && $class eq $_CLASS){
-        $_CLASS->_error('invalid invocation of class method');
-    }
+    _force_class($class);
     unless(defined $string && ref $string eq q{}){
         $_CLASS->_error('invalid args, must pass a scalar');
     }

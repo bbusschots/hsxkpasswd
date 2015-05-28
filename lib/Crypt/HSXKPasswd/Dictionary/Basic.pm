@@ -31,7 +31,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 use version; our $VERSION = qv('1.1_01');
 
 # utility variables
-my $_CLASS = 'Crypt::HSXKPasswd::Dictionary::Basic';
+my $_CLASS = __PACKAGE__;
 my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 #
@@ -55,9 +55,7 @@ sub new{
     my $encoding = shift;
     
     # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_MAIN_CLASS->_error('invalid invocation of class method');
-    }
+    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
     unless(defined $dict_source && (ref $dict_source eq q{} || ref $dict_source eq 'ARRAY')){
         $_MAIN_CLASS->_error('invalid args - first argument must be a path to a dictionary file or an array ref');
     }
@@ -99,9 +97,7 @@ sub clone{
     my $self = shift;
     
     # validate the args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error('invalid invocation of an instance method');
-    }
+    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
     
     # create an empty object
     my $clone = {
@@ -141,9 +137,7 @@ sub word_list{
     my $self = shift;
     
     # validate the args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error('invalid invocation of an instance method');
-    }
+    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
     
     # return a reference to the word list
     return $self->{words};
@@ -162,9 +156,7 @@ sub source{
     my $self = shift;
     
     # validate args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error('invalid invocation of instance method');
-    }
+    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
     
     my $source = $self->SUPER::source();
     if($self->{sources}->{num_arrays} || scalar @{$self->{sources}->{files}}){
@@ -196,9 +188,7 @@ sub empty{
     my $self = shift;
     
     # validate args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error('invalid invocation of instance method');
-    }
+    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
     
     # blank the word list and sources
     $self->{words} = [];
@@ -229,9 +219,7 @@ sub add_words{
     my $encoding = shift;
     
     # validate args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error('invalid invocation of instance method');
-    }
+    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
     unless(defined $dict_source && (ref $dict_source eq q{} || ref $dict_source eq 'ARRAY')){
         $_MAIN_CLASS->_error('invalid args - first argument must be a path to a dictionary file or an array ref');
     }
@@ -286,7 +274,7 @@ sub add_words{
         if($word && ref $word eq q{} && $word =~ m/$valid_word_re/sx){
             push @{$self->{words}}, "$word";
         }else{
-            carp("Skipping invalid word: $word");
+            $_MAIN_CLASS->_warn("Skipping invalid word: $word");
         }
     }
     

@@ -29,7 +29,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 use version; our $VERSION = qv('1.1_01');
 
 # utility variables
-my $_CLASS = 'Crypt::HSXKPasswd::Dictionary';
+my $_CLASS = __PACKAGE__;
 my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 #
@@ -96,9 +96,7 @@ sub source{
     my $self = shift;
     
     # validate args
-    unless($self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error('invalid invocation of instance method');
-    }
+    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
     
     # return the instances class
     return blessed($self);
@@ -115,10 +113,8 @@ sub source{
 sub print_words{
     my $self = shift;
     
-    # validat args
-    unless($self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error('invalid invocation of instance method');
-    }
+    # validate args
+    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
     
     print join "\n", @{$self->word_list()};
     print "\n";

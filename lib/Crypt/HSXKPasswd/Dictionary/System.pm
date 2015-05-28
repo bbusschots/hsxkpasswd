@@ -31,7 +31,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 use version; our $VERSION = qv('1.1_01');
 
 # utility variables
-my $_CLASS = 'Crypt::HSXKPasswd::Dictionary::System';
+my $_CLASS = __PACKAGE__;
 my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 # possible dictionary file locations
@@ -53,9 +53,7 @@ sub new{
     my $class = shift;
     
     # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_MAIN_CLASS->_error('invalid invocation of class method');
-    }
+    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
     
     # try find a dictionary file
     my $dictionary = q{};
@@ -98,9 +96,7 @@ sub clone{
     my $self = shift;
     
     # validate the args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error('invalid invocation of an instance method');
-    }
+    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
     
     # initialise the clone
     my $clone = {
@@ -128,9 +124,7 @@ sub word_list{
     my $self = shift;
     
     # validate the args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error('invalid invocation of an instance method');
-    }
+    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
     
     # return a reference to the word list
     return $self->{system_dictionary}->word_list();
@@ -149,9 +143,7 @@ sub source{
     my $self = shift;
     
     # validate args
-    unless(defined $self && $self->isa($_CLASS)){
-        $_MAIN_CLASS->_error('invalid invocation of instance method');
-    }
+    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
     
     my $source = $self->SUPER::source();
     $source .= ' ('.$self->{file_path}.')';

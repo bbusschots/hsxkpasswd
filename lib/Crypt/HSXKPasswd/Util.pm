@@ -30,7 +30,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 use version; our $VERSION = qv('1.1_01');
 
 # utility variables
-my $_CLASS = 'Crypt::HSXKPasswd::Util';
+my $_CLASS = __PACKAGE__;
 my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 #
@@ -53,9 +53,7 @@ sub test_presets{
     my $dictionary = shift;
     
     # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_MAIN_CLASS->_error('invalid invocation of class method');
-    }
+    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
     unless(defined $dictionary && blessed($dictionary) && $dictionary->isa('Crypt::HSXKPasswd::Dictionary')){
         $_MAIN_CLASS->_error('invalid args, must pass a dictionary');
     }
@@ -105,9 +103,7 @@ sub print_preset_samples{
     my $dictionary = shift;
     
     # validate the args
-    unless(defined $class && $class eq $_CLASS){
-        $_MAIN_CLASS->_error('invalid invocation of class method');
-    }
+    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
     unless(defined $dictionary && blessed($dictionary) && $dictionary->isa('Crypt::HSXKPasswd::Dictionary')){
         $_MAIN_CLASS->_error('invalid args, must pass a dictionary');
     }
@@ -138,9 +134,7 @@ sub sanitise_dictionary_file{
     my $encoding = shift;
     
     # validate args
-    unless($class && $class eq $_CLASS){
-        $_MAIN_CLASS->_error('invalid invocation of class method');
-    }
+    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
     unless($file_path && -f $file_path){
         $_MAIN_CLASS->error('invalid file path');
     }
@@ -211,9 +205,7 @@ sub dictionary_from_text_file{
     my $encoding = shift;
     
     # validate args
-    unless($class && $class eq $_CLASS){
-        $_MAIN_CLASS->_error('invalid invocation of class method');
-    }
+    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
     ## no critic (RegularExpressions::ProhibitEnumeratedClasses);
     unless($name && $name =~ m/^[a-zA-Z0-9_]+$/sx){
         $_MAIN_CLASS->error('invalid module name');
