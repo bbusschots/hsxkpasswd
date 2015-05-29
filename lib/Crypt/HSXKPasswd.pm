@@ -99,7 +99,7 @@ my $_KEYS = {
             }
             return 1;
         },
-        desc => 'An array ref containing at least 2 single-character scalars',
+        desc => 'A reference to an array containing at least 2 single-character strings',
     },
     separator_alphabet => {
         req => 0,
@@ -112,7 +112,7 @@ my $_KEYS = {
             }
             return 1;
         },
-        desc => 'An array ref containing at least 2 single-character scalars',
+        desc => 'A reference to an array containing at least 2 single-character strings',
     },
     padding_alphabet => {
         req => 0,
@@ -125,7 +125,7 @@ my $_KEYS = {
             }
             return 1;
         },
-        desc => 'An array ref containing at least 2 single-character scalars',
+        desc => 'A reference to an array containing at least 2 single-character strings',
     },
     word_length_min => {
         req => 1,
@@ -135,7 +135,7 @@ my $_KEYS = {
             unless($key =~ m/^\d+$/sx && $key > 3){ return 0; }
             return 1;
         },
-        desc => 'A scalar containing an integer greater than three',
+        desc => 'An integer greater than three',
     },
     word_length_max => {
         req => 1,
@@ -145,7 +145,7 @@ my $_KEYS = {
             unless($key =~ m/^\d+$/sx && $key > 3){ return 0; }
             return 1;
         },
-        desc => 'A scalar containing an integer greater than three',
+        desc => 'An integer greater than three',
     },
     num_words => {
         req => 1,
@@ -155,7 +155,7 @@ my $_KEYS = {
             unless($key =~ m/^\d+$/sx && $key >= 2){ return 0; }
             return 1;
         },
-        desc => 'A scalar containing an integer value greater than or equal to two',
+        desc => 'An integer greater than or equal to two',
     },
     separator_character => {
         req => 1,
@@ -165,7 +165,7 @@ my $_KEYS = {
             unless(length $key == 1 || $key =~ m/^(NONE)|(RANDOM)$/sx){ return 0; }
             return 1;
         },
-        desc => q{A scalar containing a single character, or the special value 'NONE' or 'RANDOM'},
+        desc => q{A single character or one of the special values: 'NONE' or 'RANDOM'},
     },
     padding_digits_before => {
         req => 1,
@@ -175,7 +175,7 @@ my $_KEYS = {
             unless($key =~ m/^\d+$/sx){ return 0; }
             return 1;
         },
-        desc => 'A scalar containing an integer value greater than or equal to zero',
+        desc => 'An integer greater than or equal to zero',
     },
     padding_digits_after => {
         req => 1,
@@ -185,7 +185,7 @@ my $_KEYS = {
             unless($key =~ m/^\d+$/sx){ return 0; }
             return 1;
         },
-        desc => 'A scalar containing an integer value greater than or equal to zero',
+        desc => 'An integer greater than or equal to zero',
     },
     padding_type => {
         req => 1,
@@ -195,7 +195,7 @@ my $_KEYS = {
             unless($key =~ m/^(NONE)|(FIXED)|(ADAPTIVE)$/sx){ return 0; }
             return 1;
         },
-        desc => q{A scalar containg one of the values 'NONE', 'FIXED', or 'ADAPTIVE'},
+        desc => q{One of the values 'NONE', 'FIXED', or 'ADAPTIVE'},
     },
     padding_characters_before => {
         req => 0,
@@ -205,7 +205,7 @@ my $_KEYS = {
             unless($key =~ m/^\d+$/sx && $key >= 0){ return 0; }
             return 1;
         },
-        desc => 'A scalar containing an integer value greater than or equal to one',
+        desc => 'An integer greater than or equal to one',
     },
     padding_characters_after => {
         req => 0,
@@ -215,7 +215,7 @@ my $_KEYS = {
             unless($key =~ m/^\d+$/sx && $key >= 0){ return 0; }
             return 1;
         },
-        desc => 'A scalar containing an integer value greater than or equal to one',
+        desc => 'An integer greater than or equal to one',
     },
     pad_to_length => {
         req => 0,
@@ -225,7 +225,7 @@ my $_KEYS = {
             unless($key =~ m/^\d+$/sx && $key >= 12){ return 0; }
             return 1;
         },
-        desc => 'A scalar containing an integer value greater than or equal to twelve',
+        desc => 'An integer greater than or equal to twelve',
     },
     padding_character => {
         req => 0,
@@ -235,7 +235,7 @@ my $_KEYS = {
             unless(length $key == 1 || $key =~ m/^(NONE)|(RANDOM)|(SEPARATOR)$/sx){return 0; }
             return 1;
         },
-        desc => q{A scalar containing a single character or one of the special values 'NONE', 'RANDOM', or 'SEPARATOR'},
+        desc => q{A single character or one of the special values: 'NONE', 'RANDOM', or 'SEPARATOR'},
     },
     case_transform => {
         req => 0,
@@ -247,7 +247,7 @@ my $_KEYS = {
             ## use critic
             return 1;
         },
-        desc => q{A scalar containing one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERT', 'ALTERNATE', or 'RANDOM'},
+        desc => q{One of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERT', 'ALTERNATE', or 'RANDOM'},
     },
     character_substitutions => {
         req => 0,
@@ -260,7 +260,7 @@ my $_KEYS = {
             }
             return 1;
         },
-        desc => 'An hash ref mapping characters to replace with their replacements - can be empty',
+        desc => 'A hash ref mapping characters to their replacements - can be empty',
     },
 };
 
@@ -614,7 +614,7 @@ sub preset_config{
         foreach my $key (keys %{$overrides}){
             # ensure the key is valid - skip it if not
             unless(defined $_KEYS->{$key}){
-                $_CLASS->_warn("Skippining invalid key=$key");
+                $_CLASS->_warn("Skipping invalid key=$key");
                 next;
             }
             
@@ -791,7 +791,7 @@ sub is_valid_config{
         
         # make sure the passed config contains the key
         unless(defined $config->{$key}){
-            croak("Required key=$key not defined") if $croak;
+            croak("key '$key' is required, but not defined") if $croak;
             return 0;
         }
     }
@@ -805,7 +805,7 @@ sub is_valid_config{
         eval{
             $_CLASS->_validate_key($key, $config->{$key}, 1); # returns 1 on success
         }or do{
-            croak("Invalid value for key=$key. Expected: ".$_KEYS->{$key}->{desc}) if $croak;
+            croak("Invalid value for key '$key'. Expected: ".$_KEYS->{$key}->{desc}) if $croak;
             return 0;
         };
     }
@@ -951,7 +951,7 @@ sub config_to_string{
             $ans .= "}\n";
         }else{
             # this should never happen, but just in case, throw a warning
-            $_CLASS->_warn("encounterd an un-handled key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
+            $_CLASS->_warn("encountered an invalid key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
         }
     }
     
@@ -1164,7 +1164,7 @@ sub config_stats{
             CHAR_SUB:
             foreach my $char (keys %{$config->{character_substitutions}}){
                 if(length $config->{character_substitutions}->{$char} > 1){
-                    $_CLASS->_warn('maximum length calculation is unreliable because the config contains a character substituion with length greater than 1 character');
+                    $_CLASS->_warn('maximum length may be underestimated. The loaded config contains at least one character substitution which replaces a single character with multiple characters.');
                     last CHAR_SUB;
                 }
             }
@@ -3025,14 +3025,14 @@ sub _update_entropystats_cache{
         # blind warning if needed
         unless(uc $SUPRESS_ENTROPY_WARNINGS eq 'BLIND'){
             if($self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min} < $ENTROPY_MIN_BLIND){
-                $_CLASS->_warn('loaded dictionary and config combination results in low minimum entropy for blind attacks ('.$self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min}.", warning threshold is $ENTROPY_MIN_BLIND)");
+                $_CLASS->_warn('for brute force attacks, the combination of the loaded config and dictionary produces an entropy of '.$self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min}.'bits, below the minimum recommended '.$ENTROPY_MIN_BLIND.'bits');
             }
         }
         
         # seen warnings if needed
         unless(uc $SUPRESS_ENTROPY_WARNINGS eq 'SEEN'){
             if($self->{_CACHE_ENTROPYSTATS}->{entropy_seen} < $ENTROPY_MIN_SEEN){
-                $_CLASS->_warn('loaded dictionary and config combination results in low minimum entropy for attacks assuming full knowledge ('.$self->{_CACHE_ENTROPYSTATS}->{entropy_seen}.", warning threshold is $ENTROPY_MIN_SEEN)");
+                $_CLASS->_warn('for attacks assuming full knowledge, the combination of the loaded config and dictionary produces an entropy of '.$self->{_CACHE_ENTROPYSTATS}->{entropy_seen}.'bits, below the minimum recommended '.$ENTROPY_MIN_SEEN.'bits');
             }
         }
     }
