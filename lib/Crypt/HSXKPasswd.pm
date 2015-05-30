@@ -3484,7 +3484,10 @@ containing words.
 =head4 Usage
 
     my $word_source = Crypt::HSXKPasswd::Dictionary::Basic->new('file_path');
-    my $word_source = Crypt::HSXKPasswd::Dictionary::Basic->new('file_path', 'Latin1');
+    my $word_source = Crypt::HSXKPasswd::Dictionary::Basic->new(
+        'file_path',
+        'Latin1'
+    );
     my $word_source = Crypt::HSXKPasswd::Dictionary::Basic->new($array_ref);
 
 
@@ -3498,290 +3501,563 @@ This format is the same as that of the standard Unix Words file, usually found
 at C</usr/share/dict/words> on Unix and Linux operating systems (including OS
 X).
 
-=head2 CONFIGURATION HASHREFS
+=head2 CONFIGURATION
 
-A number of subroutines require a configuration hashref as an argument. The
-following are the valid keys for that hashref, what they mean, and what values
-are valid for each.
+The module builds passwords using the following process.
+
+First, a set of words are randomly chosen from the word source. Then, two
+pseudo-words made of one or more digits may added before and/or after the words
+from. Next, a separator character may be placed between all the words
+(including the groups of digits), and one or more occurrences of a padding
+symbol may be added front and/or back.
+
+You can envisage the process as follows:
+
+    correct HORSE BATTERY staple
+    34 correct HORSE BATTERY staple 56
+    34-correct-HORSE-BATTERY-staple-56
+    !!34-correct-HORSE-BATTERY-staple-56!!
+    
+Many aspects of this password generation process are configurable. You can
+control the length and number of words chosen, and what, if any, case
+transformations should be applied to those words, and how accented characters
+should be treated. How many, if any, digits should be added front and back.
+What symbol, if any, should be used as a separator. And finally how the
+password should be padded, if at all, and with what symbol. Passwords can be
+padded to a given length, or by a given number of symbols front and back.
+
+The symbols used as the separator and for padding can be explicitly specified,
+or the they can be randomly chosen from a given alphabet of possible symbols.
+Both symbols can be randomly chosen from the same alphabet, or from two
+separately specified alphabets.
+
+Every instance of an HSXKPasswd password generator stores its configuration as
+a set of name-value pairs, referred to as I<configuration keys> throughout this
+documentation.
+
+Configurations can be specified either as a complete set of configuration keys
+with values that together form a valid configuration, as a named preset, or, as
+a named preset accompanied by a list of one or more configuration keys
+with new values to override those specified by the preset.
+
+The module contains a preset called C<DEFAULT>, and this preset is used if no
+configuration is specified. The function C<default_config()> will return a copy
+of this configuration as a reference to a hashtable.
+
+For more details on how to specify configurations, see the documentation for
+the constructor (the function C<new()>) below.
+
+=head3 CONFIGURATION KEYS
+
+Below is a list of all supported Keys, a description of what aspect of the
+configuration they control, and the validation rules that apply.
+
+Note that some keys are always required, and that there are dependencies
+across keys. For examples, if you specify that the separator symbol should be
+chosen at random, you must also specify an alphabet from which to chose the
+character.
 
 =over 4
 
 =item *
 
-C<allow_accents> - a truthy value to signify that any accented characters in
-the dictionary should be preserved when filtering to the sub-set of valid words.
-If not specified, or if a falsy value is passed, accented letters will have
-their accents stripped off, e.g. C<E<eacute>> becomes C<e>.
+C<allow_accents> (optional) - if not specified, or if a falsy value is
+specified, accents will be removed from letters in the generated passwords.
+E.g. C<E<eacute>> becomes C<e>. If a truthy value is specified, accents will
+be preserved, and appear in the generated passwords.
 
 =item *
 
-C<case_transform> - the alterations that should be made to the case of the
-letters in the randomly chosen words that make up the bulk of the randomly
-generated passwords. Must be a scalar, and the only valid values for this key
-are:
+C<case_transform> (required) - the transformations, if any, that should be
+applied to the words that appear in the generated passwords. The value specified
+must be one of the following:
 
 =over 4
 
-=item -
+=item *
 
 C<ALTERNATE> - each alternate word will be converted to all upper case and
 all lower case.
 
-=item -
+=item *
 
 C<CAPITALISE> - the first letter in every word will be converted to upper case,
 all other letters will be converted to lower case.
 
-=item -
+=item *
 
 C<INVERT> - the first letter in every word will be converted to lower case,
 all other letters will be converted to upper case.
 
-=item -
+=item *
 
 C<LOWER> - all letters in all the words will be converted to lower case. B<Use
 of this option is strongly discouraged for security reasons.>
 
-=item -
+=item *
 
-C<NONE> - the capitalisation used in the randomly generated password will be
-the same as it is in the dictionary file.
+C<NONE> - the case of the letters that make up the words will not be altered
+from how they were specified in the original word source.
 
-=item -
+=item *
 
 C<RANDOM> - each word will be randomly converted to all upper case or all lower
 case.
 
-=item -
+=item *
 
 C<UPPER> - all letters in all the words will be converted to upper case. B<Use
 of this option is strongly discouraged for security reasons.>
 
 =back
 
-The default value returned by C<default_config()> is C<CAPITALISE>.
+The function C<default_config()> returns a value of C<CAPITALISE> for this key.
 
 =item *
 
-C<character_substitutions> - a hashref containing zero or more character
-substitutions to be applied to the words that make up the bulk of the generated
-passwords. The keys in the hashref are the characters to be replaced, and must
-be single alpha numeric characters, while the values in the hashrefs are the
-replacements, and can be longer.
+C<character_substitutions> (optional) - a reference to a hashtable containing
+containing zero or more character substitutions to be applied to the randomly
+chosen words when generating passwords. The keys in the hashtable must be
+single letters. The substitutions can contain multiple characters. Specifying
+one or more substitutions with a length greater than one could lead to
+passwords being longer than expected, and to entropy calculations being under
+estimated. The module will issue a warning when such a config is loaded.
 
 =item *
 
-C<num_words> - the number of randomly chosen words use as the basis for the
-generated passwords. The default value is four. For security reasons, at least
-two words must be used.
+C<num_words> (required) - the number of words to randomly choose from the word
+source as the basis for the generated passwords.
+
+The function C<default_config()> returns a value of C<3> for this key.
 
 =item *
 
-C<pad_to_length> - the total desired length of the password when using adaptive
-padding (C<padding_type> set to C<ADAPTIVE>). Must be a scalar with an integer
-values greater than or equal to 12 (for security reasons).
+C<pad_to_length> (conditionally required) - the length generated passwords must
+be padded to when using adaptive padding, i.e. when C<padding_type> is set to
+C<ADAPTIVE>). The value must be an integer greater than or equal to 12. Lengths
+of less than 12 are not permitted for security reasons.
 
 =item *
 
-C<padding_alphabet> - this key is optional. It can be used to override
-the contents of C<symbol_alphabet> when C<padding_character> is set to
-C<RANDOM>. If present this key must contain an arrayref containing at
-least two single characters as scalars.
+C<padding_alphabet> (optional) - this key is ignored unless the configuration
+specifies that the padding character should be randomly chosen, i.e. unless
+C<padding_character> is set to C<RANDOM>.
+
+When the padding character is set to be randomly chosen, the module will check
+for the presence of this key. If it is specified, the padding character will
+be randomly chosen from the set of symbols defined by this key. If this key is
+not set, the module will use the set of symbols specified by the key
+C<symbol_alphabet>. If neither this key nor C<symbol_alphabet> are specified,
+then the configuration will be considered invalid.
+
+If specified, this key must be a reference to an array of single-character
+strings.
 
 =item *
 
-C<padding_character> - the character to use when padding the front and/or back
-of the randomly generated password. Must be a scalar containing either a single
-character or one of the special values C<RANDOM> (indicating that a character
-should be chosen at random from the C<symbol_alphabet>), or C<SEPARATOR> (use
-the same character used to separate the words). This key is only needed if
-C<padding_type> is set to C<FIXED> or C<ADAPTIVE>. The default value returned
-by C<default_config> is C<RANDOM>.
+C<padding_character> (conditionally required) - this key is unless the key
+C<padding_type> is set to C<NONE>. It specifies the padding symbol to be used
+when generating passwords.
 
-=item *
-
-C<padding_characters_before> & C<padding_characters_after> - the number of
-symbols to pad the front and end of the randomly generated password with. Must
-be a scalar with an integer value greater than or equal to zero. These keys are
-only needed if C<padding_type> is set to C<FIXED>. The default value returned
-by C<default_config()> for both these keys is 2.
-
-=item *
-
-C<padding_digits_before> & C<padding_digits_after> - the number of random
-digits to include before and after the randomly chosen words making up the bulk
-of the randomly generated password. Must be scalars containing integer values
-greater than or equal to zero. The default value returned by
-C<default_config()> for both these keys is 2. 
-
-=item *
-
-C<padding_type> - the type of symbol padding to be added at the start and/or
-end of the randomly generated password. Must be a scalar with one of the
-following values:
+If specified, they key's value must be a single character string, or one of the
+following special values:
 
 =over 4
 
-=item -
+=item *
 
-C<NONE> - do not pad the generated password with any symbol characters.
+C<RANDOM> - the character should be randomly chosen from the set of characters
+specified by the key C<padding_alphabet> or C<symbol_alphabet>. If specified,
+C<padding_alphabet> takes precedence over C<symbol_alphabet>. If this value
+is specified for C<padding_character>, and neither C<padding_alphabet> nor
+C<symbol_alphabet> are specified, the configuration will be considered invalid.
 
-=item -
+=item *
 
-C<FIXED> - a specified number of symbols will be added to the front and/or
-back of the randomly generated password. If this option is chosen, you must
-also specify the keys C<padding_character>, C<padding_characters_before> &
-C<padding_characters_after>.
+C<SEPARATOR> - pad the password with the same symbol that is used to separate
+the words. The key C<padding_character> cannot be set to C<SEPARATOR> when the
+key C<separator_character> is set to C<NONE>.
 
-=item -
-
-C<ADAPTIVE> - no symbols will be added to the start of the randomly generated
-password, and the appropriate number of symbols will be added to the end to
-make the generated password exactly a certain length. The desired length is
-specified with the key C<pad_to_length>, which is required if this padding type
-is specified.
 
 =back
 
-The default value returned by C<default_config()> is C<FIXED>.
+
+The function C<default_config> return the value C<RANDOM> for this key.
 
 =item *
 
-C<separator_alphabet> - this key is optional. It can be used to override
-the contents of C<symbol_alphabet> when C<separator_character> is set to
-C<RANDOM>. If present this key must contain an arrayref containing at
-least two single characters as scalars.
+C<padding_characters_before> & C<padding_characters_after> (conditionally
+required) - both of these keys are required if the key C<padding_type> is set
+to C<FIXED>.
+
+These keys specify the number of padding symbols that should be added to the
+front and back of the password.
+
+Both keys require that the specified value be an integer greater than or equal
+to zero.
+
+The function C<default_config()> returns a value of C<2> for both of these
+keys.
 
 =item *
 
-C<separator_character> - the character to use to separate the words in the
-generated password. Must be a scalar, and acceptable values are a single
-character, or, the special values C<NONE> (indicating that no separator should
-be used), or C<RANDOM>, indicating that a character should be chosen at random
-from the C<symbol_alphabet>. The default value returned by C<default_config()>
-is C<RANDOM>.
+C<padding_digits_before> & C<padding_digits_after> (required) - the number of
+random digits to include before and after the randomly chosen words when
+generating passwords.
+
+Both keys require that the specified value be an integer greater than or equal
+to zero.
+
+The function C<default_config()> returns a value of C<2> for both of these
+keys.
 
 =item *
 
-C<symbol_alphabet> - an arrayref containing at least two single characters as
-scalars. This alphabet will be used when selecting random characters to act as
-the separator between words, or the padding at the start and/or end of
-generated passwords. Note that this key can be overridden by setting either or
-both C<padding_alphabet> and C<separator_alphabet>. The default value returned
-by C<default_config()> is C<[qw{! @ $ % ^ & * - _ + = : | ~ ?}]>
+C<padding_type> (required) - the way in which padding symbols should be added
+when generating passwords.
+
+Only the following values are valid for this key:
+
+=over 4
 
 =item *
 
-C<word_length_min> & C<word_length_max> - the minimum and maximum length of the
-words that will make up the generated password. The two keys must be scalars,
-and can hold equal values, but C<word_length_max> may not be smaller than
-C<word_length_min>. For security reasons, both values must be greater than 3.
-The default values returned by C<default_config()> is are 4 & 8.
+C<NONE> - do not add any padding symbols when generating passwords.
+
+=item *
+
+C<FIXED> - add an exactly specified number of copies of the padding symbol to
+the front and back of generated passwords.
+
+When they key C<padding_type> is set to C<FIXED>, the three keys
+C<padding_character>, C<padding_characters_before> &
+C<padding_characters_after> become required.
+
+=item *
+
+C<ADAPTIVE> - add no copies of the padding symbol will be added to the front
+of the generated passwords, and copies of the padding character will be added
+to the end of the generated passwords until the total length of the password is
+equal to the value specified for the key C<pad_to_length>.
+
+Note that If the password is longer than the value specified by the key
+C<pad_to_length> before any copies of the padding symbol are added, the
+password will be truncated to the length specified by the key C<pad_to_length>.
+
+When they key C<padding_type> is set to C<ADAPTIVE>, the three keys
+C<padding_character>, C<padding_characters_before> &
+C<padding_characters_after> become required.
+
+=back
+
+The function C<default_config()> returns a value of C<FIXED> for this key.
+
+=item *
+
+C<separator_alphabet> (optional) - this key is ignored unless the configuration
+specifies that the separator character should be randomly chosen, i.e. unless
+C<separator_character> is set to C<RANDOM>.
+
+When the separator character is set to be randomly chosen, the module will
+check for the presence of this key. If it is specified, the separator character
+will be randomly chosen from the set of symbols defined by this key. If this
+key is not set, the module will use the set of symbols specified by the key
+C<symbol_alphabet>. If neither this key nor C<symbol_alphabet> are specified,
+then the configuration will be considered invalid.
+
+If specified, this key must be a reference to an array of single-character
+strings.
+
+=item *
+
+C<separator_character> (required) - the symbol to use to separate the words
+when generating passwords.
+
+The value specified for this key must be a single-character string, or one of
+the following special values:
+
+=over 4
+
+=item *
+
+C<NONE> - no separator character will be used. I.e. the words, and the groups
+of digits before and after the words, if any, will be directly joined together.
+
+C<RANDOM> - a single character will be randomly chosen from the list of symbols
+specified by one of the keys C<separator_alphabet> or C<symbol_alphabet>. If
+both keys are set, C<separator_alphabet> takes precedence.
+
+=back
+
+The function C<default_config()> returns a value of C<RANDOM> for this key.
+
+=item *
+
+C<symbol_alphabet> (optional) - this key specifies a default alphabet of
+symbols that can be used when either or both the separator character and the
+padding character are set to be chosen at random. I.e. when either or both of
+the keys C<separator_character> and C<padding_character> are set to C<RANDOM>.
+
+Note that the keys C<separator_alphabet> and C<padding_alphabet> take
+precedence over this key if specified.
+
+The value specified for this key must be a reference to an array of
+single-character strings.
+
+The function C<default_config()> returns a value of
+C<['!', '@', '$', '%', '^', '&', '*', '-', '_',
+'+', '=', ':', '|', '~', '?', '/', '.', ';']>
+for this key.
+
+=item *
+
+C<word_length_min> & C<word_length_max> (required) - the minimum and maximum
+length of the words that will form the basis of the generated passwords.
+
+The values specified for both keys must be integers greater than three, and
+the value specified for C<word_length_max> must be greater than or equal to
+the value specified for C<word_length_min>.
+
+The function C<default_config()> returns values of C<4> and C<8> for these keys.
 
 =back
 
 =head2 PRESETS
 
-For ease of use, this module comes with a set of pre-defined presets which can
-be passed by name to the functional interface, and the constructor.
+Below is a list of all the presets defined by this module.
 
-Presets can be used as-is, or, they can be used as a starting point for
-creating your own config hashref, as demonstrated by the following example:
-
-    my $config = Crypt::HSXKPasswd->preset_config('XKCD');
-    $config->{separator_character} = q{ }; # change the separator to a space
-    my $hsxkpasswd = Crypt::HSXKPasswd->new(config => $config);
-    
-If you only wish to alter a small number of config settings, the following
-two shortcuts might be of interest (both produce the same result as the
-example above):
-
-    my $config = Crypt::HSXKPasswd->preset_config('XKCD', {separator_character => q{ }});
-    my $hsxkpasswd = Crypt::HSXKPasswd->new(config => $config);
-    
-or
-
-    my $hsxkpasswd = Crypt::HSXKPasswd->new(
-        preset => 'XKCD',
-        preset_overrides => {separator_character => q{ }}
-    );
-
-For more see the definitions for the class functions C<defined_presets()>,
-C<presets_to_string()>, C<preset_description()>, and C<preset_config()>.
-
-The following presets are defined:
+This information can be accessed programatically using the functions
+C<defined_presets()>, C<presets_to_string()>, C<preset_description()>, and
+C<preset_config()>.
 
 =over 4
 
 =item *
 
 C<APPLEID> - a preset respecting the many prerequisites Apple places on Apple
-ID passwords. Apple's official password policy is located here:
-L<http://support.apple.com/kb/ht4232>. Note that Apple's knowledge base article
-omits to mention that passwords can't be longer than 32 characters. This preset
-is also configured to use only characters that are easy to type on the standard
-iOS keyboard, i.e. those appearing on the letters keyboard (C<ABC>) or the
-numbers keyboard C<.?123>, and not those on the harder to reach symbols
-keyboard C<#+=>. Below is a sample password generated with this preset:
+ID passwords. Apple's official password policy cam be found at the following
+URL: L<http://support.apple.com/kb/ht4232>. Note that Apple's knowledge base
+article omits to mention that passwords can't be longer than 32 characters.
+This preset is also configured to use only characters that are easy to type on
+the standard iOS keyboard, i.e. those appearing on the letters keyboard
+(C<ABC>) or the numbers keyboard C<.?123>, and not those on the harder to reach
+symbols keyboard C<#+=>. 
+
+Sample Password:
 
     @60:london:TAUGHT:forget:70@
+    
+Preset Definition:
+
+    {
+        padding_alphabet => [qw{! ? @ &}],
+        separator_alphabet => [qw{- : .}, q{,}],
+        word_length_min => 5,
+        word_length_max => 7,
+        num_words => 3,
+        separator_character => 'RANDOM',
+        padding_digits_before => 2,
+        padding_digits_after => 2,
+        padding_type => 'FIXED',
+        padding_character => 'RANDOM',
+        padding_characters_before => 1,
+        padding_characters_after => 1,
+        case_transform => 'RANDOM',
+        allow_accents => 0,
+    }
 
 =item *
 
-C<DEFAULT> - the default configuration. Below is a sample password generated
-with this preset:
+C<DEFAULT> - the default configuration. 
+
+Sample Password:
 
     ~~12:settle:SUCCEED:summer:48~~
+    
+Preset Definition:
+
+    {
+        symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ? / . ;}],
+        word_length_min => 4,
+        word_length_max => 8,
+        num_words => 3,
+        separator_character => 'RANDOM',
+        padding_digits_before => 2,
+        padding_digits_after => 2,
+        padding_type => 'FIXED',
+        padding_character => 'RANDOM',
+        padding_characters_before => 2,
+        padding_characters_after => 2,
+        case_transform => 'ALTERNATE',
+        allow_accents => 0,
+    }
 
 =item *
 
-C<NTLM> - a preset for 14 character NTMLv1 (NTLM Version 1) passwords. ONLY USE
-THIS PRESET IF YOU MUST! The 14 character limit does not allow for sufficient
-entropy in the case where the attacker knows the dictionary and config used
-to generate the password, hence this preset will generate low entropy warnings.
-Below is a sample password generated with this preset:
+C<NTLM> - a preset for 14 character NTMLv1 (NTLM Version 1) passwords. B<ONLY
+USE THIS PRESET IF YOU MUST!> The 14 character limit does not allow for
+sufficient entropy in scenarios where the attacker knows the dictionary and
+config used to generate the password. Use of this preset will generate a low
+entropy warning.
+
+Sample Password:
 
     0=mAYAN=sCART@
+    
+Preset Definition:
+
+    {
+        padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+        separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+        word_length_min => 5,
+        word_length_max => 5,
+        num_words => 2,
+        separator_character => 'RANDOM',
+        padding_digits_before => 1,
+        padding_digits_after => 0,
+        padding_type => 'FIXED',
+        padding_character => 'RANDOM',
+        padding_characters_before => 0,
+        padding_characters_after => 1,
+        case_transform => 'INVERT',
+        allow_accents => 0,
+    }
 
 =item *
 
-C<SECURITYQ> - a preset for creating fake answers to security questions. It
-generates long nonsense sentences ending in C<.> C<!> or C<?>, for example:
+C<SECURITYQ> - a preset for creating fake answers to security questions. This
+preset generates long nonsense sentences ending in C<.> C<!> or C<?>.
+
+Sample 'Password':
 
     Wales outside full month minutes gentle?
+    
+Preset Definition:
+
+    {
+        word_length_min => 4,
+        word_length_max => 8,
+        num_words => 6,
+        separator_character => q{ },
+        padding_digits_before => 0,
+        padding_digits_after => 0,
+        padding_type => 'FIXED',
+        padding_character => 'RANDOM',
+        padding_alphabet => [qw{. ! ?}],
+        padding_characters_before => 0,
+        padding_characters_after => 1,
+        case_transform => 'NONE',
+        allow_accents => 0,
+    }
 
 =item *
 
-C<WEB16> - a preset for websites that don't allow more than 16 character long
-passwords. Because 16 characters is not very long, a large set of
-symbols are chosen from for the padding and separator. Below is a sample
-password generated with this preset:
+C<WEB16> - a preset for websites that don't allow passwords to be longer than
+16 characters. Because 16 characters is not very long, a large symbol alphabet
+had to be used to provide sufficient entropy.
+
+Sample Password:
 
     :baby.ohio.DEAR:
     
+Preset Definition:
+
+    {
+        padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+        separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+        word_length_min => 4,
+        word_length_max => 4,
+        num_words => 3,
+        separator_character => 'RANDOM',
+        padding_digits_before => 0,
+        padding_digits_after => 0,
+        padding_type => 'FIXED',
+        padding_character => 'RANDOM',
+        padding_characters_before => 1,
+        padding_characters_after => 1,
+        case_transform => 'RANDOM',
+        allow_accents => 0,
+    }
+    
 =item *
 
-C<WEB32> - a preset for websites that don't allow more than 32 character long
-passwords. Below is a sample password generated with this preset:
+C<WEB32> - a preset for websites that don't allow passwords to be longer than
+32 characters.
+
+Sample Password:
 
     +93-took-CASE-money-AHEAD-31+
+    
+Preset Definition:
+
+    {
+        padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+        separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+        word_length_min => 4,
+        word_length_max => 5,
+        num_words => 4,
+        separator_character => 'RANDOM',
+        padding_digits_before => 2,
+        padding_digits_after => 2,
+        padding_type => 'FIXED',
+        padding_character => 'RANDOM',
+        padding_characters_before => 1,
+        padding_characters_after => 1,
+        case_transform => 'ALTERNATE',
+        allow_accents => 0,
+    }
 
 =item *
 
 C<WIFI> - a preset for generating 63 character long WPA2 keys (most routers
-allow 64 characters, but some only 63, hence the odd length). Below is a sample
-password generated with this preset:
+allow 64 characters, but some only allow 63, hence the somewhat unexpected
+length).
+
+Sample Password:
 
     2736_ITSELF_PARTIAL_QUICKLY_SCOTLAND_wild_people_7441!!!!!!!!!!
+    
+Preset Definition:
+
+    {
+        padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+        separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+        word_length_min => 4,
+        word_length_max => 8,
+        num_words => 6,
+        separator_character => 'RANDOM',
+        padding_digits_before => 4,
+        padding_digits_after => 4,
+        padding_type => 'ADAPTIVE',
+        padding_character => 'RANDOM',
+        pad_to_length => 63,
+        case_transform => 'RANDOM',
+        allow_accents => 0,
+    }
 
 =item *
 
 C<XKCD> - a preset inspired by the original XKCD comic
 (L<http://xkcd.com/936/>), but with some alterations to provide sufficient
-entropy to avoid low entropy warnings. Below is a sample password generated
-with this preset:
+entropy to avoid low entropy warnings.
+
+Sample Password:
 
     KING-madrid-exercise-BELGIUM
+    
+Preset Definition:
+
+    {
+        word_length_min => 4,
+        word_length_max => 8,
+        num_words => 4,
+        separator_character => q{-},
+        padding_digits_before => 0,
+        padding_digits_after => 0,
+        padding_type => 'NONE',
+        case_transform => 'RANDOM',
+        allow_accents => 0,
+    }
 
 =back
 
@@ -4368,7 +4644,10 @@ passed the preset C<DEFAULT> is assumed.
 This function can optionally accept a second argument, a hashref
 containing keys with values to override the defaults with.
 
-    my $config = Crypt::HSXKPasswd->preset_config('XKCD', {case_transform => 'INVERT'});
+    my $config = Crypt::HSXKPasswd->preset_config(
+        'XKCD',
+        {case_transform => 'INVERT'}
+    );
     
 When overrides are present, the function will carp if an invalid key or value is
 passed, and croak if the resulting merged config is invalid.
@@ -4515,7 +4794,7 @@ will croak.
     $hsxkpasswd_instance->rng($rng_instance);
     
 When called with no arguments this function returns currently loaded Random
-Number Genereatator (RNG) which will be an instance of a class that extends
+Number Generator (RNG) which will be an instance of a class that extends
 C<Crypt::HSXKPasswd::RNG>.
 
 To load a new RNG into an instance, call this function with a single
