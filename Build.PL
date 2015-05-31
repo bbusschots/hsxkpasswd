@@ -29,6 +29,7 @@ my $builder = Module::Build->new(
         'Type::Tiny' => 0,
         'Type::Library' => 0,
         'Types::Standard' => 0,
+        'Data::Dumper' => 0,
     },
     recommends => {
         'Data::Entropy::Algorithms' => 0,
