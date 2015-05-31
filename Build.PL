@@ -26,6 +26,9 @@ my $builder = Module::Build->new(
         'Params::Validate' => 0,
         'Scalar::Util' => 0,
         'Text::Unidecode' => 0,
+        'Type::Tiny' => 0,
+        'Type::Library' => 0,
+        'Types::Standard' => 0,
     },
     recommends => {
         'Data::Entropy::Algorithms' => 0,

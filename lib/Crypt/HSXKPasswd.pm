@@ -10,6 +10,8 @@ use English qw( -no_match_vars ); # for more readable code
 use Scalar::Util qw( blessed ); # for checking if a reference is blessed
 use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
+use Types::Standard qw( :types ); # for basic type checking (Int Str etc.)
+use Crypt::HSXKPasswd::Types qw( :types :is ); # for custom type checking
 use Crypt::HSXKPasswd::Dictionary::Basic;
 use Crypt::HSXKPasswd::RNG::Math_Random_Secure;
 use Crypt::HSXKPasswd::RNG::Data_Entropy;
@@ -81,176 +83,116 @@ my $_RNG_BASE_CLASS = 'Crypt::HSXKPasswd::RNG';
 my $_KEYS = {
     allow_accents => {
         req => 0,
-        ref => q{}, # SCALAR
-        validate => sub {
-            # let everything through - just interested in truthiness
-            return 1;
-        },
+        type => Value,
         desc => 'Any truthy or falsy scalar value',
     },
     symbol_alphabet => {
         req => 0,
-        ref => 'ARRAY', # ARRAY REF
-        validate => sub { # at least 2 scalar elements
-            my $key = shift;
-            unless(scalar @{$key} >= 2){ return 0; }
-            foreach my $symbol (@{$key}){
-                unless(ref $symbol eq q{} && length $symbol == 1){ return 0; }
-            }
-            return 1;
-        },
-        desc => 'A reference to an array containing at least 2 single-character strings',
+        type => SymbolAlphabet,
+        desc => 'A reference to an array containing at least 2 distinct single-character strings',
     },
     separator_alphabet => {
         req => 0,
-        ref => 'ARRAY', # ARRAY REF
-        validate => sub { # at least 2 scalar elements
-            my $key = shift;
-            unless(scalar @{$key} >= 2){ return 0; }
-            foreach my $symbol (@{$key}){
-                unless(ref $symbol eq q{} && length $symbol == 1){ return 0; }
-            }
-            return 1;
-        },
-        desc => 'A reference to an array containing at least 2 single-character strings',
+        type => SymbolAlphabet,
+        desc => 'A reference to an array containing at least 2 distinct single-character strings',
     },
     padding_alphabet => {
         req => 0,
-        ref => 'ARRAY', # ARRAY REF
-        validate => sub { # at least 2 scalar elements
-            my $key = shift;
-            unless(scalar @{$key} >= 2){ return 0; }
-            foreach my $symbol (@{$key}){
-                unless(ref $symbol eq q{} && length $symbol == 1){ return 0; }
-            }
-            return 1;
-        },
-        desc => 'A reference to an array containing at least 2 single-character strings',
+        type => SymbolAlphabet,
+        desc => 'A reference to an array containing at least 2 distinct single-character strings',
     },
     word_length_min => {
         req => 1,
-        ref => q{}, # SCALAR
-        validate => sub { # int > 3
-            my $key = shift;
-            unless($key =~ m/^\d+$/sx && $key > 3){ return 0; }
-            return 1;
-        },
+        type => WordLength,
         desc => 'An integer greater than three',
     },
     word_length_max => {
         req => 1,
-        ref => q{}, # SCALAR
-        validate => sub { # int > 3
-            my $key = shift;
-            unless($key =~ m/^\d+$/sx && $key > 3){ return 0; }
-            return 1;
-        },
+        type => WordLength,
         desc => 'An integer greater than three',
     },
     num_words => {
         req => 1,
-        ref => q{}, # SCALAR
-        validate => sub { # an int >= 2
-            my $key = shift;
-            unless($key =~ m/^\d+$/sx && $key >= 2){ return 0; }
-            return 1;
-        },
+        type => Type::Tiny->new(
+            parent => Int,
+            constraint => sub{
+                return $_ >= 2;
+            },
+        ),
         desc => 'An integer greater than or equal to two',
     },
     separator_character => {
         req => 1,
-        ref => q{}, # SCALAR
-        validate => sub {
-            my $key = shift;
-            unless(length $key == 1 || $key =~ m/^(NONE)|(RANDOM)$/sx){ return 0; }
-            return 1;
-        },
+        type => Type::Tiny->new(
+            parent => Str,
+            constraint => sub{
+                return is_Symbol($_) || $_ =~ m/^(NONE)|(RANDOM)$/sx;
+            },
+        ),
         desc => q{A single character or one of the special values: 'NONE' or 'RANDOM'},
     },
     padding_digits_before => {
         req => 1,
-        ref => q{}, # SCALAR
-        validate => sub { # an int >= 0
-            my $key = shift;
-            unless($key =~ m/^\d+$/sx){ return 0; }
-            return 1;
-        },
+        type => PositiveInteger,
         desc => 'An integer greater than or equal to zero',
     },
     padding_digits_after => {
         req => 1,
-        ref => q{}, # SCALAR
-        validate => sub { # an int >= 0
-            my $key = shift;
-            unless($key =~ m/^\d+$/sx){ return 0; }
-            return 1;
-        },
+        type => PositiveInteger,
         desc => 'An integer greater than or equal to zero',
     },
     padding_type => {
         req => 1,
-        ref => q{}, # SCALAR
-        validate => sub {
-            my $key = shift;
-            unless($key =~ m/^(NONE)|(FIXED)|(ADAPTIVE)$/sx){ return 0; }
-            return 1;
-        },
+        type => Type::Tiny->new(
+            parent => Str,
+            constraint => sub{
+                return $_ =~ m/^(NONE)|(FIXED)|(ADAPTIVE)$/sx;
+            },
+        ),
         desc => q{One of the values 'NONE', 'FIXED', or 'ADAPTIVE'},
     },
     padding_characters_before => {
         req => 0,
-        ref => q{}, # SCALAR
-        validate => sub { # positive integer or 0
-            my $key = shift;
-            unless($key =~ m/^\d+$/sx && $key >= 0){ return 0; }
-            return 1;
-        },
+        type => PositiveInteger,
         desc => 'An integer greater than or equal to one',
     },
     padding_characters_after => {
         req => 0,
-        ref => q{}, # SCALAR
-        validate => sub { # positive integer or 0
-            my $key = shift;
-            unless($key =~ m/^\d+$/sx && $key >= 0){ return 0; }
-            return 1;
-        },
+        type => PositiveInteger,
         desc => 'An integer greater than or equal to one',
     },
     pad_to_length => {
         req => 0,
-        ref => q{}, # SCALAR
-        validate => sub { # positive integer >= 12
-            my $key = shift;
-            unless($key =~ m/^\d+$/sx && $key >= 12){ return 0; }
-            return 1;
-        },
+        type => Type::Tiny->new(
+            parent => Int,
+            constraint => sub{
+                return $_ >= 12;
+            },
+        ),
         desc => 'An integer greater than or equal to twelve',
     },
     padding_character => {
         req => 0,
-        ref => q{}, # SCALAR
-        validate => sub {
-            my $key = shift;
-            unless(length $key == 1 || $key =~ m/^(NONE)|(RANDOM)|(SEPARATOR)$/sx){return 0; }
-            return 1;
-        },
+        type => Type::Tiny->new(
+            parent => Str,
+            constraint => sub{
+                return is_Symbol($_) || $_ =~ m/^(NONE)|(RANDOM)|(SEPARATOR)$/sx;
+            },
+        ),
         desc => q{A single character or one of the special values: 'NONE', 'RANDOM', or 'SEPARATOR'},
     },
     case_transform => {
         req => 0,
-        ref => q{}, # SCALAR
-        validate => sub {
-            my $key = shift;
-            ## no critic (ProhibitComplexRegexes);
-            unless($key =~ m/^(NONE)|(UPPER)|(LOWER)|(CAPITALISE)|(INVERT)|(ALTERNATE)|(RANDOM)$/sx){ return 0; }
-            ## use critic
-            return 1;
-        },
+        type => Type::Tiny->new(
+            parent => Enum[qw( NONE UPPER LOWER CAPITALISE INVERT ALTERNATE RANDOM )],
+        ),
         desc => q{One of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERT', 'ALTERNATE', or 'RANDOM'},
     },
     character_substitutions => {
         req => 0,
+        type => Type::Tiny->new(
+            
+        ),
         ref => 'HASH', # Hashref REF
         validate => sub {
             my $key = shift;
@@ -547,6 +489,80 @@ sub new{
 
 #####-SUB-######################################################################
 # Type       : CLASS
+# Purpose    : Get a list of defined config keys.
+# Returns    : An array of strings.
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation
+# Notes      :
+# See Also   :
+sub defined_config_keys{
+    my $class = shift;
+    
+    # validate args
+    _force_class($class);
+    
+    # gather the list of config key names
+    my @keys = sort keys %{$_KEYS};
+    
+    # return the list
+    return @keys;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Return the specification for a given config key.
+# Returns    : A hash indexed by 'required', 'type', and 'type_description'.
+# Arguments  : 1) a valid config key name
+# Throws     : Croaks on invalid invocation and args
+# Notes      :
+# See Also   :
+sub config_key_definition{
+    my $class = shift;
+    my $key = shift;
+    
+    # validate arguments
+    _force_class($class);
+    unless($key && $_KEYS->{$key}){
+        $_CLASS->_error("invalid arguments - a valid key must be passed as the first argument");
+    }
+    
+    # assemble the hash
+    my %definition = (
+        required => $_KEYS->{$key}->{req},
+        type => $_KEYS->{$key}->{type},
+        type_description => $_KEYS->{$key}->{desc},
+    );
+    
+    # return the hash
+    return %definition;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Return a hash of all key definitions indexed by key name.
+# Returns    : A hash of key defintions as returned by config_key_definition().
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation
+# Notes      :
+# See Also   : config_key_definition()
+sub config_key_definitions{
+    my $class = shift;
+    
+    # validate arguments
+    _force_class($class);
+    
+    # gather the definitions
+    my %definitions = ();
+    foreach my $key ($_CLASS->defined_config_keys()){
+        $definitions{$key} = $_CLASS->config_key_definition($key);
+    }
+    
+    # return the definitions
+    return %definitions;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
 # Purpose    : generate a config hashref populated with the default values
 # Returns    : a hashref
 # Arguments  : 1. OPTIONAL - a hashref with config keys to over-ride when
@@ -717,13 +733,14 @@ sub clone_config{
     # copy over all the scalar keys
     KEY_TO_CLONE:
     foreach my $key (keys %{$_KEYS}){
-        # skip non-scalar keys
-        next KEY_TO_CLONE unless $_KEYS->{$key}->{ref} eq q{};
+        # skip the key if it is not defined in the config to clone
+        next KEY_TO_CLONE unless defined $config->{$key};
         
-        #if the key exists in the config to clone, copy it to the clone
-        if(defined $config->{$key}){
-            $clone->{$key} = $config->{$key};
-        }
+        # skip non-scalar keys
+        next KEY_TO_CLONE unless ref $config->{$key} eq q{};
+        
+        # copy the key to the clone
+        $clone->{$key} = $config->{$key};
     }
     
     # deal with the non-scarlar keys
@@ -805,7 +822,7 @@ sub is_valid_config{
         eval{
             $_CLASS->_validate_key($key, $config->{$key}, 1); # returns 1 on success
         }or do{
-            croak("Invalid value for key '$key'. Expected: ".$_KEYS->{$key}->{desc}) if $croak;
+            croak("Invalid value specified for config key '$key'. Must Be: ".$_KEYS->{$key}->{desc}) if $croak;
             return 0;
         };
     }
@@ -815,7 +832,7 @@ sub is_valid_config{
     # if there is a need for a symbol alphabet, make sure one is defined
     if($config->{separator_character} eq 'RANDOM'){
         unless(defined $config->{symbol_alphabet} || defined $config->{separator_alphabet}){
-            croak(qq{separator_character='$config->{separator_character}' requires either a symbol_alphabet or separator_alphabet be specified}) if $croak;
+            croak(qq{setting separator_character='$config->{separator_character}' requires that one of the config keys symbol_alphabet or separator_alphabet be set}) if $croak;
             return 0;
         }
     }
@@ -823,12 +840,12 @@ sub is_valid_config{
     # if there is any kind of character padding, make sure a padding character is specified
     if($config->{padding_type} ne 'NONE'){
         unless(defined $config->{padding_character}){
-            croak(qq{padding_type='$config->{padding_type}' requires padding_character be set}) if $croak;
+            croak(qq{setting padding_type='$config->{padding_type}' requires that the config key padding_character be set}) if $croak;
             return 0;
         }
         if($config->{padding_character} eq 'RANDOM'){
             unless(defined $config->{symbol_alphabet} || defined $config->{padding_alphabet}){
-                croak(qq{padding_character='$config->{padding_character}' requires either a symbol_alphabet or padding_alphabet be specified}) if $croak;
+                croak(qq{setting padding_character='$config->{padding_character}' requires that one of the config keys symbol_alphabet or padding_alphabet be set}) if $croak;
             return 0;
             }
         }
@@ -837,11 +854,11 @@ sub is_valid_config{
     # if there is fixed character padding, make sure before and after are specified, and at least one has a value greater than 1
     if($config->{padding_type} eq 'FIXED'){
         unless(defined $config->{padding_characters_before} && defined $config->{padding_characters_after}){
-            croak(q{padding_type='FIXED' requires padding_characters_before & padding_characters_after be set}) if $croak;
+            croak(q{setting padding_type='FIXED' requires that both the config keys padding_characters_before and padding_characters_after be set}) if $croak;
             return 0;
         }
         unless($config->{padding_characters_before} + $config->{padding_characters_after} > 0){
-            croak(q{padding_type='FIXED' requires at least one of padding_characters_before & padding_characters_after be greater than one (to use no padding use padding_type='NONE')}) if $croak;
+            croak(q{setting padding_type='FIXED' requires that both the config keys padding_characters_before and padding_characters_after be set, and that at least one of them be set to a value greater than one (to specify that no padding be used, set the config key padding_type to 'NONE')}) if $croak;
             return 0;
         }
     }
@@ -849,7 +866,7 @@ sub is_valid_config{
     # if there is adaptive padding, make sure a length is specified
     if($config->{padding_type} eq 'ADAPTIVE'){
         unless(defined $config->{pad_to_length}){
-            croak(q{padding_type='ADAPTIVE' requires pad_to_length be set}) if $croak;
+            croak(q{setting padding_type='ADAPTIVE' requires that the config key pad_to_length be set}) if $croak;
             return 0;
         }
     }
@@ -915,24 +932,22 @@ sub config_to_string{
     unless(defined $config && ref $config eq 'HASH'){
         $_CLASS->_error('invalid arguments');
     }
+    unless($_CLASS->is_valid_config($config)){
+        $_CLASS->_error('invalid arguments - invalid config hashref passed');
+    }
     
     # assemble the string to return
     my $ans = q{};
+    CONFIG_KEY:
     foreach my $key (sort keys %{$_KEYS}){
         # skip undefined keys
-        next unless defined $config->{$key};
-        
-        # make sure the key has the expected type
-        unless(ref $config->{$key} eq $_KEYS->{$key}->{ref}){
-            $_CLASS->_warn("unexpected key type for key=$key (expected ref='$_KEYS->{$key}->{ref}', got ref='".ref $config->{$key}.q{')});
-            next;
-        }
+        next CONFIG_KEY unless defined $config->{$key};
         
         # process the key
-        if($_KEYS->{$key}->{ref} eq q{}){
+        if(ref $config->{$key} eq q{}){
             # the key is a scalar
             $ans .= $key.q{: '}.$config->{$key}.qq{'\n};
-        }elsif($_KEYS->{$key}->{ref} eq 'ARRAY'){
+        }elsif(ref $config->{$key} eq 'ARRAY'){
             # the key is an array ref
             $ans .= "$key: [";
             my @parts = ();
@@ -941,7 +956,7 @@ sub config_to_string{
             }
             $ans .= join q{, }, @parts;
             $ans .= "]\n";
-        }elsif($_KEYS->{$key}->{ref} eq 'HASH'){
+        }elsif(ref $config->{$key} eq 'HASH'){
             $ans .= "$key: {";
             my @parts = ();
             foreach my $subkey (sort keys %{$config->{$key}}){
@@ -951,7 +966,7 @@ sub config_to_string{
             $ans .= "}\n";
         }else{
             # this should never happen, but just in case, throw a warning
-            $_CLASS->_warn("encountered an invalid key type ($_KEYS->{$key}->{ref}) for key=$key - skipping key");
+            $_CLASS->_warn("the data for the key '$key' is of an un-expected type (".(ref $config->{$key}).') - skipping key');
         }
     }
     
@@ -2162,6 +2177,25 @@ sub _error{
 }
 
 #####-SUB-######################################################################
+# Type       : CLASS ('PRIVATE')
+# Purpose    : Return a reference to $_KEYS to make the variable directly
+#              available to bundled packages.
+# Returns    : A hashref
+# Arguments  : NONE
+# Throws     : Croaks on invalid invocation
+# Notes      :
+# See Also   :
+sub _key_definitions{
+    my $class = shift;
+    
+    # validate args
+    _force_class($class);
+    
+    # return the reference
+    return $_KEYS;
+}
+
+#####-SUB-######################################################################
 # Type       : INSTANCE ('PRIVATE')
 # Purpose    : Clone the instance's config hashref
 # Returns    : a hashref
@@ -2217,19 +2251,13 @@ sub _validate_key{
     
     # make sure the key exists
     unless(defined $_KEYS->{$key}){
-        carp("invalid key=$key") if $croak;
-        return 0;
-    }
-    
-    # make sure the value is of the correct type
-    unless(ref $val eq $_KEYS->{$key}->{ref}){
-        croak("invalid type for key=$key. Expected: ".$_KEYS->{$key}->{desc}) if $croak;
+        carp("'$key' is not a valid config key name") if $croak;
         return 0;
     }
     
     # make sure the value passes the validation function for the key
-    unless($_KEYS->{$key}->{validate}->($val)){
-        croak("invalid value for key=$key. Expected: ".$_KEYS->{$key}->{desc}) if $croak;
+    unless($_KEYS->{$key}->{type}->check($val)){
+        croak("Invalid value specified for config key '$key'. Must be: ".$_KEYS->{$key}->{desc}) if $croak;
         return 0;
     }
     
@@ -4533,6 +4561,37 @@ croak.
 This function must be passed a valid config hashref as the first argument or it
 will croak. The function returns a hashref.
 
+=head3 config_key_definition()
+
+    my %key_definition = Crypt::HSXKPasswd->config_key_definition($key_name);
+    
+A function to return the definition for a config key. The definition is returned
+as a hash indexed by the following keys:
+
+=over 4
+
+=item *
+
+C<required> - 1 if the key is a required key, and 0 otherwise.
+
+=item *
+
+C<type> - a C<Type::Tiny> object representing the valid data type for the key.
+
+=item *
+
+C<type_description> - an English description of valid values for the key.
+
+=back
+
+=head3 config_key_definitions()
+
+    my %key_definitions = Crypt::HSXKPasswd->config_key_definitions();
+    
+A function to return definitions for all defined config keys as a hash indexed
+by config key names. Each definition is represented as a hash with the same keys
+as the hashes returned by the function C<config_key_definition()>.
+
 =head3 config_stats()
 
     my %stats = Crypt::HSXKPasswd->config_stats($config);
@@ -4607,11 +4666,17 @@ are equivalent to the following:
     my $config = Crypt::HSXKPasswd->preset_config('DEFAULT');
     my $config = Crypt::HSXKPasswd->preset_config('DEFAULT', {num_words => 3});
 
+=head3 defined_config_keys()
+
+    my @config_key_names = Crypt::HSXKPasswd->defined_config_keys();
+    
+This function returns the list of valid config key names as an array of strings.
+
 =head3 defined_presets()
 
     my @preset_names = Crypt::HSXKPasswd->defined_presets();
     
-This function returns the list of defined preset names as an array of scalars.
+This function returns the list of defined preset names as an array of strings.
 
 =head3 is_valid_config()
 
@@ -5070,6 +5135,18 @@ C<strict> - L<http://search.cpan.org/perldoc?strict>
 =item *
 
 C<Text::Unidecode> - L<http://search.cpan.org/perldoc?Text%3A%3AUnidecode>
+
+=item *
+
+C<Type::Library> - L<http://search.cpan.org/perldoc?Type%3A%3ALibrary>
+
+=item *
+
+C<Type::Tiny> - L<http://search.cpan.org/perldoc?Type%3A%3ATiny>
+
+=item *
+
+C<Types::Standard> - L<http://search.cpan.org/perldoc?Types%3A%3AStandard>
 
 =item *
 
