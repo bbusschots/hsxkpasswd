@@ -34,6 +34,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 #
 
 # add a type for a single letter (a single alpha grapheme)
+my $LETTER_ENGLISH = q{a string containing exactly one letter};
 my $LETTER = Type::Tiny->new(
     name => 'Letter',
     parent => Str,
@@ -41,13 +42,17 @@ my $LETTER = Type::Tiny->new(
         return $_ =~ m/^\pL$/sx;
     },
     message => sub{
-        return _var_to_string($_).q{ is not a Letter (must be a string containing exactly one letter)};
+        return _var_to_string($_).qq{ is not a Letter (must be $LETTER_ENGLISH)};
+    },
+    my_methods => {
+        english => sub {return $LETTER_ENGLISH;},
     },
 );
 __PACKAGE__->meta->add_type($LETTER);
 
 # add a type for words (a grouping of alpha characters at least four graphemes
 # long)
+my $WORD_ENGLISH = q{a string of only letters at least four long};
 my $WORD = Type::Tiny->new(
     name => 'Word',
     parent => Str,
@@ -55,12 +60,16 @@ my $WORD = Type::Tiny->new(
         return $_ =~ m/^\pL{4,}$/sx;
     },
     message => sub{
-        return _var_to_string($_).q{ is not a Word (must be a string of only letters at least four long)};
+        return _var_to_string($_).qq{ is not a Word (must be $WORD_ENGLISH)};
+    },
+    my_methods => {
+        english => sub {return $WORD_ENGLISH;},
     },
 );
 __PACKAGE__->meta->add_type($WORD);
 
 # add a type for a single symbol (a single non-letter unicode grapheme)
+my $SYMBOL_ENGLISH = 'a string containing exactly one non-letter character';
 my $SYMBOL = Type::Tiny->new(
     name => 'Symbol',
     parent => Str,
@@ -68,13 +77,17 @@ my $SYMBOL = Type::Tiny->new(
         return $_ =~ m/^\X$/sx && $_ =~ m/^[^\pL]$/sx;
     },
     message => sub{
-        return _var_to_string($_).q{ is not a Symbol (must be a string containing exactly one non-letter character)};
+        return _var_to_string($_).qq{ is not a Symbol (must be $SYMBOL_ENGLISH)};
+    },
+    my_methods => {
+        english => sub {return $SYMBOL_ENGLISH;},
     },
 );
 __PACKAGE__->meta->add_type($SYMBOL);
 
 # add a type for symbol alphabets - array refs containing only, and at least 2,
 # single-character strings
+my $SYMBOL_ALPHABET_ENGLISH = 'a reference to an array of distinct Symbols at least two long';
 my $SYMBOL_ALPHABET = Type::Tiny->new(
     name => 'SymbolAlphabet',
     parent => ArrayRef[$SYMBOL],
@@ -83,12 +96,16 @@ my $SYMBOL_ALPHABET = Type::Tiny->new(
         return scalar @unique_symbols >= 2;
     },
     message => sub{
-        return _var_to_string($_).q{ is not a Symbol Alphabet (must be a reference to an array of distinct Symbols at least two long)};
+        return _var_to_string($_).qq{ is not a Symbol Alphabet (must be $SYMBOL_ALPHABET_ENGLISH)};
+    },
+    my_methods => {
+        english => sub {return $SYMBOL_ALPHABET_ENGLISH;},
     },
 );
 __PACKAGE__->meta->add_type($SYMBOL_ALPHABET);
 
 # add a type for positive integers (including 0)
+my $POSITIVE_INTEGER_ENGLISH = 'an integer greater than or equal to zero';
 my $POSITIVE_INTEGER = Type::Tiny->new(
     name => 'PositiveInteger',
     parent => Int,
@@ -96,12 +113,16 @@ my $POSITIVE_INTEGER = Type::Tiny->new(
         return $_ >= 0;
     },
     message => sub{
-        return _var_to_string($_).q{ is not a Positive Integer};
+        return _var_to_string($_).qq{ is not $POSITIVE_INTEGER_ENGLISH};
+    },
+    my_methods => {
+        english => sub {return $POSITIVE_INTEGER_ENGLISH;},
     },
 );
 __PACKAGE__->meta->add_type($POSITIVE_INTEGER);
 
 # add a type for word lengths - integers greater than 3
+my $WORD_LENGTH_ENGLISH = 'an integer greater than 3';
 my $WORD_LENGTH = Type::Tiny->new(
     name => 'WordLength',
     parent => Int,
@@ -109,133 +130,220 @@ my $WORD_LENGTH = Type::Tiny->new(
         return $_ > 3;
     },
     message => sub{
-        return _var_to_string($_).q{ is not a valid Word Length (must be an integer greater than 3)};
+        return _var_to_string($_).qq{ is not a valid Word Length (must be $WORD_LENGTH_ENGLISH)};
+    },
+    my_methods => {
+        english => sub {return $WORD_LENGTH_ENGLISH;},
     },
 );
 __PACKAGE__->meta->add_type($WORD_LENGTH);
+
+# add a type for word lengths - integers greater than 3
+my $TRUE_FALSE_ENGLISH = '1 to indicate true, or 0, undef, or the empty string to indicate false';
+my $TRUE_FALSE = Type::Tiny->new(
+    name => 'TrueFalse',
+    parent => Bool,
+    message => sub{
+        return _var_to_string($_).qq{ is not a valid True/False value (must be $TRUE_FALSE_ENGLISH)};
+    },
+    my_methods => {
+        english => sub {return $TRUE_FALSE_ENGLISH;},
+    },
+);
+__PACKAGE__->meta->add_type($TRUE_FALSE);
 
 #
 # === Define the Config Keys and Types ========================================#
 #
 
+# define the config keys
 my $_KEYS = {
     allow_accents => {
-        req => 0,
-        type => Value,
-        desc => 'Any truthy or falsy scalar value',
+        required => 0,
+        expected => $TRUE_FALSE_ENGLISH,
+        type => Type::Tiny->new(
+            parent => $TRUE_FALSE,
+            message => sub {
+                return _config_key_message($_, 'allow_accents', $TRUE_FALSE_ENGLISH);
+            },
+        ),
     },
     symbol_alphabet => {
-        req => 0,
-        type => $SYMBOL_ALPHABET,
-        desc => 'A reference to an array containing at least 2 distinct single-character strings',
+        required => 0,
+        expected => $SYMBOL_ALPHABET_ENGLISH,
+        type => Type::Tiny->new(
+            parent => $SYMBOL_ALPHABET,
+            message => sub {
+                return _config_key_message($_, 'key symbol_alphabet', $SYMBOL_ALPHABET_ENGLISH);
+            },
+        ),
     },
     separator_alphabet => {
-        req => 0,
-        type => $SYMBOL_ALPHABET,
-        desc => 'A reference to an array containing at least 2 distinct single-character strings',
+        required => 0,
+        expected => $SYMBOL_ALPHABET_ENGLISH,
+        type => Type::Tiny->new(
+            parent => $SYMBOL_ALPHABET,
+            message => sub {
+                return _config_key_message($_, 'separator_alphabet', $SYMBOL_ALPHABET_ENGLISH);
+            },
+        ),
     },
     padding_alphabet => {
-        req => 0,
-        type => $SYMBOL_ALPHABET,
-        desc => 'A reference to an array containing at least 2 distinct single-character strings',
+        required => 0,
+        expected => $SYMBOL_ALPHABET_ENGLISH,
+        type => Type::Tiny->new(
+            parent => $SYMBOL_ALPHABET,
+            message => sub {
+                return _config_key_message($_, 'padding_alphabet', $SYMBOL_ALPHABET_ENGLISH);
+            },
+        ),
     },
     word_length_min => {
-        req => 1,
-        type => $WORD_LENGTH,
-        desc => 'An integer greater than three',
+        required => 1,
+        expected => $WORD_LENGTH_ENGLISH,
+        type => Type::Tiny->new(
+            parent => $WORD_LENGTH,
+            message => sub {
+                return _config_key_message($_, 'word_length_min', $WORD_LENGTH_ENGLISH);
+            },
+        ),
     },
     word_length_max => {
-        req => 1,
-        type => $WORD_LENGTH,
-        desc => 'An integer greater than three',
-    },
-    num_words => {
-        req => 1,
+        required => 1,
+        expected => $WORD_LENGTH_ENGLISH,
         type => Type::Tiny->new(
-            parent => Int,
-            constraint => sub{
-                return $_ >= 2;
+            parent => $WORD_LENGTH,
+            message => sub {
+                return _config_key_message($_, 'word_length_max', $WORD_LENGTH_ENGLISH);
             },
         ),
-        desc => 'An integer greater than or equal to two',
-    },
-    separator_character => {
-        req => 1,
-        type => Type::Tiny->new(
-            parent => Str,
-            constraint => sub{
-                return $SYMBOL->check($_) || $_ =~ m/^(NONE)|(RANDOM)$/sx;
-            },
-        ),
-        desc => q{A single character or one of the special values: 'NONE' or 'RANDOM'},
     },
     padding_digits_before => {
-        req => 1,
-        type => $POSITIVE_INTEGER,
-        desc => 'An integer greater than or equal to zero',
+        required => 1,
+        expected => $POSITIVE_INTEGER_ENGLISH,
+        type => Type::Tiny->new(
+            parent => $POSITIVE_INTEGER,
+            message => sub {
+                return _config_key_message($_, 'padding_digits_before', $POSITIVE_INTEGER_ENGLISH);
+            },
+        ),
     },
     padding_digits_after => {
-        req => 1,
-        type => $POSITIVE_INTEGER,
-        desc => 'An integer greater than or equal to zero',
-    },
-    padding_type => {
-        req => 1,
+        required => 1,
+        expected => $POSITIVE_INTEGER_ENGLISH,
         type => Type::Tiny->new(
-            parent => Str,
-            constraint => sub{
-                return $_ =~ m/^(NONE)|(FIXED)|(ADAPTIVE)$/sx;
+            parent => $POSITIVE_INTEGER,
+            message => sub {
+                return _config_key_message($_, 'padding_digits_after', $POSITIVE_INTEGER_ENGLISH);
             },
         ),
-        desc => q{One of the values 'NONE', 'FIXED', or 'ADAPTIVE'},
     },
     padding_characters_before => {
-        req => 0,
-        type => $POSITIVE_INTEGER,
-        desc => 'An integer greater than or equal to one',
+        required => 0,
+        expected => $POSITIVE_INTEGER_ENGLISH,
+        type => Type::Tiny->new(
+            parent => $POSITIVE_INTEGER,
+            message => sub {
+                return _config_key_message($_, 'padding_characters_before', $POSITIVE_INTEGER_ENGLISH);
+            },
+        ),
     },
     padding_characters_after => {
-        req => 0,
-        type => $POSITIVE_INTEGER,
-        desc => 'An integer greater than or equal to one',
-    },
-    pad_to_length => {
-        req => 0,
+        required => 0,
+        expected => $POSITIVE_INTEGER_ENGLISH,
         type => Type::Tiny->new(
-            parent => Int,
-            constraint => sub{
-                return $_ >= 12;
+            parent => $POSITIVE_INTEGER,
+            message => sub {
+                return _config_key_message($_, 'padding_characters_after', $POSITIVE_INTEGER_ENGLISH);
             },
         ),
-        desc => 'An integer greater than or equal to twelve',
-    },
-    padding_character => {
-        req => 0,
-        type => Type::Tiny->new(
-            parent => Str,
-            constraint => sub{
-                return $SYMBOL->check($_) || $_ =~ m/^(NONE)|(RANDOM)|(SEPARATOR)$/sx;
-            },
-        ),
-        desc => q{A single character or one of the special values: 'NONE', 'RANDOM', or 'SEPARATOR'},
-    },
-    case_transform => {
-        req => 0,
-        type => Type::Tiny->new(
-            parent => Enum[qw( NONE UPPER LOWER CAPITALISE INVERT ALTERNATE RANDOM )],
-        ),
-        desc => q{One of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERT', 'ALTERNATE', or 'RANDOM'},
-    },
-    character_substitutions => {
-        req => 0,
-        type => Type::Tiny->new(
-            parent => Map[$LETTER, Str],
-        ),
-        desc => 'A hash ref mapping letters to their replacements - can be empty',
     },
 };
+$_KEYS->{num_words} = {
+    required => 1,
+    expected => 'an integer greater than or equal to two',
+};
+$_KEYS->{num_words}->{type} = Type::Tiny->new(
+    parent => Int,
+    constraint => sub{
+        return $_ >= 2;
+    },
+    message => sub {
+        return _config_key_message($_, 'num_words', $_KEYS->{num_words}->{expected});
+    },
+);
+$_KEYS->{separator_character} = {
+    required => 1,
+    expected => q{a single Symbol or one of the special values: 'NONE' or 'RANDOM'},
+};
+$_KEYS->{separator_character}->{type} = Type::Tiny->new(
+    parent => Str,
+    constraint => sub{
+        return $SYMBOL->check($_) || $_ =~ m/^(NONE)|(RANDOM)$/sx;
+    },
+    message => sub {
+        return _config_key_message($_, 'separator_character', $_KEYS->{separator_character}->{expected});
+    },
+);
+$_KEYS->{padding_type} = {
+    required => 1,
+    expected => q{one of the values 'NONE', 'FIXED', or 'ADAPTIVE'},
+};
+$_KEYS->{padding_type}->{type} = Type::Tiny->new(
+    parent => Enum[qw( NONE FIXED ADAPTIVE )],
+    message => sub {
+        return _config_key_message($_, 'key padding_type', $_KEYS->{padding_type}->{expected});
+    },
+);
+$_KEYS->{pad_to_length} = {
+    required => 0,
+    expected => 'an integer greater than or equal to twelve',
+};
+$_KEYS->{pad_to_length}->{type} = Type::Tiny->new(
+    parent => Int,
+    constraint => sub{
+        return $_ >= 12;
+    },
+    message => sub {
+        return _config_key_message($_, 'pad_to_length', $_KEYS->{pad_to_length}->{expected});
+    },
+);
+$_KEYS->{padding_character} = {
+    required => 0,
+    expected => q{a single Symbol or one of the special values: 'NONE', 'RANDOM', or 'SEPARATOR'},
+};
+$_KEYS->{padding_character}->{type} = Type::Tiny->new(
+    parent => Str,
+    constraint => sub{
+        return $SYMBOL->check($_) || $_ =~ m/^(NONE)|(RANDOM)|(SEPARATOR)$/sx;
+    },
+    message => sub {
+        return _config_key_message($_, 'padding_character', $_KEYS->{padding_character}->{expected});
+    },
+);
+$_KEYS->{case_transform} = {
+    required => 0,
+    expected => q{one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERT', 'ALTERNATE', or 'RANDOM'},
+};
+$_KEYS->{case_transform}->{type} = Type::Tiny->new(
+    parent => Enum[qw( NONE UPPER LOWER CAPITALISE INVERT ALTERNATE RANDOM )],
+    message => sub {
+        return _config_key_message($_, 'case_transform', $_KEYS->{case_transform}->{expected});
+    },
+);
+$_KEYS->{character_substitutions} = {
+    required => 0,
+    expected => 'a reference to a hash mapping zero or more Letters to their replacements which must be strings',
+};
+$_KEYS->{character_substitutions}->{type} = Type::Tiny->new(
+    parent => Map[$LETTER, Str],
+    message => sub {
+        return _config_key_message($_, 'character_substitutions', $_KEYS->{character_substitutions}->{expected});
+    },
+);
 
 # add a type for config key names
+my $CONFIG_KEY_NAME_ENGLISH = 'for a list of all defined config key names see the docs, or the output from the function Crypt::HSXKPasswd->defined_config_keys()';
 my $CONFIG_KEY_NAME = Type::Tiny->new(
     name => 'ConfigKeyName',
     parent => Str,
@@ -248,15 +356,22 @@ my $CONFIG_KEY_NAME = Type::Tiny->new(
         }
         return 0;
     },
+    message => sub{
+        return _var_to_string($_).qq{ is not a defined Config Name ($CONFIG_KEY_NAME_ENGLISH)};
+    },
+    my_methods => {
+        english => sub {return 'a defined config name - '.$CONFIG_KEY_NAME_ENGLISH;},
+    },
 );
 __PACKAGE__->meta->add_type($CONFIG_KEY_NAME);
 
 # add a type for a config key name-value pair - must be a reference to a
 # hash with exactly one key, which must be a valid config key, and the
 # value accompanying that key must be valid for the given key
-my $CONFIG_KEY = Type::Tiny->new(
-    name => 'ConfigKey',
-    parent => Map[$CONFIG_KEY_NAME, Defined],
+my $CONFIG_KEY_ASSIGNMENT_ENGLISH = 'a mapping from a valid config key name to a valid value for that key';
+my $CONFIG_KEY_ASSIGNMENT = Type::Tiny->new(
+    name => 'ConfigKeyAssignment',
+    parent => Map[$CONFIG_KEY_NAME, Item],
     constraint => sub{
         # make sure there is exactly 1 key
         unless(scalar keys %{$_} == 1){
@@ -268,15 +383,37 @@ my $CONFIG_KEY = Type::Tiny->new(
         my $val = $_->{$key};
         
         # validate the value and return the result
-        return Crypt::HSXKPasswd->_key_definitions()->{$key}->{type}->check($val);
+        return $_KEYS->{$key}->{type}->check($val);
+    },
+    message => sub{
+        # if we were not even passed a single-keyed hash, give the basic error
+        unless(HashRef->check($_) && scalar keys %{$_} == 1){
+            return _var_to_string($_).qq{ is not a valid Config Key Assignment (must be $CONFIG_KEY_ASSIGNMENT_ENGLISH)};
+        }
+        
+        # extract the key and value
+        my $key = (keys %{$_})[0];
+        my $val = $_->{$key};
+        
+        # if the config key is not valid, offer help with that
+        unless($CONFIG_KEY_NAME->check($key)){
+            return _var_to_string($_).' is not a valid Config Key Assignment because the specified key name '._var_to_string($key). " is not defined - $CONFIG_KEY_NAME_ENGLISH";
+        }
+        
+        # if we got here the problem must be with the value, so give useful info about the expected value
+        return _var_to_string($_).' is not a valid Config Key Assignment because '.$_KEYS->{$key}->{type}->get_message($val);
+    },
+    my_methods => {
+        english => sub {return $CONFIG_KEY_ASSIGNMENT_ENGLISH;},
     },
 );
-__PACKAGE__->meta->add_type($CONFIG_KEY);
+__PACKAGE__->meta->add_type($CONFIG_KEY_ASSIGNMENT);
 
 # a type for config overrides
-my $OVERRIDES = Type::Tiny->new(
-    name => 'ConfigOverrides',
-    parent => Map[$CONFIG_KEY_NAME, Defined],
+my $CONFIG_OVERRIDE_ENGLISH = 'a reference to a hash containing one or more Config Key Assignments';
+my $CONFIG_OVERRIDE = Type::Tiny->new(
+    name => 'ConfigOverride',
+    parent => Map[$CONFIG_KEY_NAME, Item],
     constraint => sub{
         my %test_hash = %{$_};
         
@@ -287,7 +424,7 @@ my $OVERRIDES = Type::Tiny->new(
         
         # make sure each key specified maps to a valid value
         foreach my $key (keys %test_hash){
-            unless($CONFIG_KEY->check({$key => $test_hash{$key}})){
+            unless($CONFIG_KEY_ASSIGNMENT->check({$key => $test_hash{$key}})){
                 return 0;
             }
         }
@@ -295,15 +432,131 @@ my $OVERRIDES = Type::Tiny->new(
         # if we got here, all is well, so return 1
         return 1;
     },
+    message => sub{
+        # if we were not even passed a hash, give the basic error
+        unless(HashRef->check($_)){
+            return _var_to_string($_).qq{ is not a valid Config Override (must be $CONFIG_OVERRIDE_ENGLISH)};
+        }
+        
+        # get an easy reference to the hash
+        my %overrides = %{$_};
+        
+        # make sure at least one key is present
+        unless(scalar keys %overrides){
+            return _var_to_string($_)." is not a valid Config Override because it is empty (must be $CONFIG_OVERRIDE_ENGLISH)";
+        }
+        
+        # check for invalid names
+        my @invalid_key_names = _extract_invalid_key_names(\%overrides);
+        if(scalar @invalid_key_names){
+            my $msg = _var_to_string($_)." is not a valid Config Override because it contains one or more invalid Config Key Names:\n";
+            foreach my $key (sort @invalid_key_names){
+                $msg .= "* '$key'\n";
+            }
+            $msg .= "($CONFIG_KEY_NAME_ENGLISH)";
+            return $msg;
+        }
+        
+        # it must be down to invalid values, find the offending key(s)
+        my @invalid_valued_keys = _extract_invalid_valued_keys(\%overrides);
+        if(scalar @invalid_valued_keys){
+            my $msg = _var_to_string($_)." is not a valid Config Override because one of more of the config keys specify an invalid value:\n";
+            foreach my $key_name (@invalid_valued_keys){
+                $msg .= '* '.$_KEYS->{$key_name}->{type}->get_message($overrides{$key_name})."\n";
+            }
+            chomp $msg;
+            return $msg;
+        }
+        
+        # it should not be possible to get here, but to be sure to be sure, return a basic message
+        return _var_to_string($_)." is not a valid Config Override for an unexpected reason - (must be $CONFIG_OVERRIDE_ENGLISH)";
+    },
+    my_methods => {
+        english => sub {return $CONFIG_OVERRIDE_ENGLISH;},
+    },
 );
-__PACKAGE__->meta->add_type($OVERRIDES);
+__PACKAGE__->meta->add_type($CONFIG_OVERRIDE);
 
 # add a type for a valid config hashref
+my $CONFIG_ENGLISH = 'a reference to a hash indexed only by valid Config Names, containing only valid values, with all required config names present, and all config key interdependencies satisfied';
 my $CONFIG = Type::Tiny->new(
     name => 'Config',
-    parent => Map[$CONFIG_KEY_NAME, Defined],
+    parent => $CONFIG_OVERRIDE,
     constraint => sub{
-        return Crypt::HSXKPasswd->is_valid_config($_);
+        # check for missing required keys
+        my @missing_required_keys = _extract_missing_required_keys($_);
+        if(scalar @missing_required_keys){
+            return 0;
+        }
+        
+        # check for unfulfilled dependencies
+        my @unfulfilled_key_interdependencies = _extract_unfulfilled_key_interdependencies($_);
+        if(scalar @unfulfilled_key_interdependencies){
+            return 0;
+        }
+        
+        # if we got here, all is well, so return 1
+        return 1;
+    },
+    my_methods => {
+        english => sub {return $CONFIG_ENGLISH;},
+    },
+    message => sub{
+        # if we were not even passed a hash, give the basic error
+        unless(HashRef->check($_)){
+            return _var_to_string($_).qq{ is not a valid Config (must be $CONFIG_ENGLISH)};
+        }
+        
+        # get an easy reference to the hash
+        my $config = $_;
+        
+        # check for invalid names
+        my @invalid_key_names = _extract_invalid_key_names($config);
+        if(scalar @invalid_key_names){
+            my $msg = _var_to_string($_)." is not a valid Config because it contains one or more invalid Config Key Names:\n";
+            foreach my $key (sort @invalid_key_names){
+                $msg .= "* '$key'\n";
+            }
+            $msg .= "($CONFIG_KEY_NAME_ENGLISH)";
+            return $msg;
+        }
+        
+        # check for missing required keys
+        my @missing_required_keys = _extract_missing_required_keys($_);
+        if(scalar @missing_required_keys){
+            my $msg = _var_to_string($_)." is not a valid Config because one or more required config keys are missing:\n";
+            foreach my $key (sort @missing_required_keys){
+                $msg .= "'$key'\n";
+            }
+            chomp $msg;
+            return $msg;
+        }
+        
+        # check for invalid values and find the offending key(s)
+        my @invalid_valued_keys = _extract_invalid_valued_keys($config);
+        if(scalar @invalid_valued_keys){
+            my $msg = _var_to_string($_)." is not a valid Config because one of more of the config keys specify invalid values:\n";
+            foreach my $key_name (@invalid_valued_keys){
+                $msg .= '* '.$_KEYS->{$key_name}->{type}->get_message($config->{$key_name})."\n";
+            }
+            chomp $msg;
+            return $msg;
+        }
+        
+        # that means it must be unfulfilled interdependencies
+        my @unfulfilled_key_interdependencies = _extract_unfulfilled_key_interdependencies($_);
+        if(scalar @unfulfilled_key_interdependencies){
+            my $msg = _var_to_string($_)." is not a valid Config because one of more interdependencies between config keys is not fullfilled:\n";
+            foreach my $problem (@unfulfilled_key_interdependencies){
+                $msg .= "* $problem\n";
+            }
+            chomp $msg;
+            return $msg;
+        }
+        
+        
+        # it should not be possible to get here, but to be sure to be sure, return a basic message
+        return _var_to_string($_)." is not a valid Config for an unexpected reason - (must be $CONFIG_ENGLISH)";
     },
 );
 __PACKAGE__->meta->add_type($CONFIG);
@@ -334,7 +587,7 @@ __PACKAGE__->meta->make_immutable;
 #              party devs - Use the public function
 #              Crypt::HSXKPasswd->config_key_definitions() instead!
 # See Also   : Crypt::HSXKPasswd->config_key_definitions()
-sub _key_definitions{
+sub _config_keys{
     return $_KEYS;
 }
 
@@ -389,6 +642,177 @@ sub _var_to_string{
     }else{
         return "Reference to $ref";
     }
+}
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE (PRIVATE)
+# Purpose    : Generate the error message for a config key
+# Returns    : a string
+# Arguments  : 1) the invalid value
+#              2) the name of the config key
+#              3) a description of the expected value
+# Throws     : NOTHING
+# Notes      :
+# See Also   :
+sub _config_key_message{
+    my $val = shift;
+    my $key = shift;
+    my $exp = shift;
+    return _var_to_string($val).qq{ is not a valid value for the config key '$key' - must be $exp};
+}
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE (PRIVATE)
+# Purpose    : Extract invalid key names from a hashref
+# Returns    : An array of strings, potentially of length 0
+# Arguments  : 1) a reference to a hash validated against HashRef
+# Throws     : NOTHING
+# Notes      : If invalid args are received, an empty array is returned.
+#              Validation against HashRef is assumed, and not re-tested.
+# See Also   :
+sub _extract_invalid_key_names{
+    my $hashref = shift;
+    
+    # validate args
+    unless(defined $hashref && ref $hashref eq 'HASH'){
+        return ();
+    }
+    
+    # check each key in the hash and return all that are not valid config key names
+    my @invaid_keys = ();
+    foreach my $key (keys %{$hashref}){
+        unless($CONFIG_KEY_NAME->check($key)){
+            push @invaid_keys, $key;
+        }
+    }
+    return @invaid_keys;
+}
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE
+# Purpose    : Extract keys with invalid values from a hashref
+# Returns    : An array of strings, potentially of length 0
+# Arguments  : 1) a reference to a hash where every key has been validated
+#                 against ConfigKeyName.
+# Throws     : NOTHING
+# Notes      : If invalid args are received, an empty array is returned.
+#              Validation of the keys is assumed and not re-tested.
+# See Also   :
+sub _extract_invalid_valued_keys{
+    my $hashref = shift;
+    
+    # validate args
+    unless(defined $hashref && ref $hashref eq 'HASH'){
+        return ();
+    }
+    
+    # check each value in the hash and return the keys for all that are not valid
+    my @invaid_valued_keys = ();
+    foreach my $key (keys %{$hashref}){
+        unless($CONFIG_KEY_ASSIGNMENT->check({$key => $hashref->{$key}})){
+            push @invaid_valued_keys, $key;
+        }
+    }
+    return @invaid_valued_keys;
+}
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE (PRIVATE)
+# Purpose    : Return a list of required config keys not defined in a hashref
+# Returns    : An array of strings
+# Arguments  : 1) a reference to a hashref that has been validated against
+#                 ConfigOverrides
+# Throws     : NOTHIG
+# Notes      : If invalid args are received, an empty array is returned.
+#              Validation against ConfigOverrides is assumed and not re-tested.
+# See Also   :
+sub _extract_missing_required_keys{
+    my $hashref = shift;
+    
+    # validate args
+    unless(defined $hashref && ref $hashref eq 'HASH'){
+        return ();
+    }
+    
+    # check that each required key is present
+    my @missing_keys = ();
+    CONFIG_KEY:
+    foreach my $key (keys %{$_KEYS}){
+        # skip keys that are not required
+        next CONFIG_KEY unless $_KEYS->{$key}->{required};
+        
+        # check the required key is present, and if not, save that fact
+        unless(defined $hashref->{$key}){
+            push @missing_keys, $key;
+        }
+    }
+    
+    # return the list of missing keys
+    return @missing_keys;
+}
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE (PRIVATE)
+# Purpose    : Return a list of unfulfilled config key interdependencies
+# Returns    : An array of strings
+# Arguments  : 1) a reference to a hashref that has been validated against
+#                 ConfigOverrides
+# Throws     : NOTHING
+# Notes      : If invalid args are received, an empty array is returned.
+#              Validation against ConfigOverrides is assumed and not re-tested.
+# See Also   :
+sub _extract_unfulfilled_key_interdependencies{
+    my $hashref = shift;
+    
+    # validate args
+    unless(defined $hashref && ref $hashref eq 'HASH'){
+        return ();
+    }
+    
+    # check that all key interrelationships are valid
+    my @unfulfilled_key_interdependencies = ();
+    
+    # if there is a need for a symbol alphabet, make sure one is defined
+    if($hashref->{separator_character} eq 'RANDOM'){
+        unless(defined $hashref->{symbol_alphabet} || defined $hashref->{separator_alphabet}){
+            push @unfulfilled_key_interdependencies, q{when the config key 'separator_character' is set to 'RANDOM', a symbol alphabet must be specified with one of the config keys 'symbol_alphabet' or 'separator_alphabet'};
+        }
+    }
+    
+    # if there is any kind of character padding, make sure a cromulent padding character is specified
+    if($hashref->{padding_type} ne 'NONE'){
+        unless(defined $hashref->{padding_character}){
+            push @unfulfilled_key_interdependencies, q{when the config key 'padding_type' is not set to 'NONE', the config key 'padding_character' must be set};
+        }
+        if($hashref->{padding_character} eq 'RANDOM'){
+            unless(defined $hashref->{symbol_alphabet} || defined $hashref->{padding_alphabet}){
+                push @unfulfilled_key_interdependencies, q{when the config key 'padding_character' is set to 'RANDOM', a symbol alphabet must be specified with one of the config keys 'symbol_alphabet' or 'padding_alphabet'};
+            }
+        }
+        if($hashref->{padding_character} eq 'SEPARATOR' && $hashref->{separator_character} eq 'NONE'){
+            push @unfulfilled_key_interdependencies, q{the config key 'padding_character' cannot be set 'SEPARATOR' when the config key 'separator_character' is set to 'NONE'};
+        }
+    }
+    
+    # if there is fixed character padding, make sure before and after are specified, and at least one has a value greater than 1
+    if($hashref->{padding_type} eq 'FIXED'){
+        unless(defined $hashref->{padding_characters_before} && defined $hashref->{padding_characters_after}){
+            push @unfulfilled_key_interdependencies, q{when the config key 'padding_type' is set to 'FIXED', both the config keys 'padding_characters_before' and 'padding_characters_after' must be set};
+        }
+        unless($hashref->{padding_characters_before} + $hashref->{padding_characters_after} > 0){
+            push @unfulfilled_key_interdependencies, q{when the config key 'padding_type' is set to 'FIXED', at least one of the config keys 'padding_characters_before' and 'padding_characters_after' must be set to a value greater than 1. (to specify that no symbol padding should be used, set the config key 'padding_type' to 'NONE')};
+        }
+    }
+    
+    # if there is adaptive padding, make sure a length is specified
+    if($hashref->{padding_type} eq 'ADAPTIVE'){
+        unless(defined $hashref->{pad_to_length}){
+            push @unfulfilled_key_interdependencies, q{when the config key 'padding_type' is set to 'ADAPTIVE', the config key 'pad_to_length' must be set};
+        }
+    }
+    
+    # return the list of unfullfilled requirements
+    return @unfulfilled_key_interdependencies;
 }
 
 1; # because perl is a tad odd :)

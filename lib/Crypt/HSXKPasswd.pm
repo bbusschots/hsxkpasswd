@@ -3433,6 +3433,152 @@ blind entropy falls below 78bits, or the seen entropy falls below 52 bits.
 
 =head1 SUBROUTINES/METHODS
 
+=head2 CUSTOM DATA TYPES
+
+This module uses a custom type library created with C<Type::Library> for data
+validation. It is important to know this for two reasons - fisrtly, these
+custom types are mentioned in many error messages, and these custom types
+are available for developers to use in their own code, either when utilising
+C<Crypt::HSXKPasswd>, or writting custom word sources by extending
+C<Crypt::HSXKPasswd::Dictionary>, or when writitng custom random number
+generators by extending C<Crypt::HSXKPasswd::RNG>.
+
+=head3 Defined Types
+
+=over 4
+
+=item *
+
+C<Letter> - a string containing a single letter. Because this module is
+Unicode-aware, it should be noted that a letter is defined as a single Unicode
+grapheme with the Unicode property C<Letter>. What this means is that accented
+letters like C<E<eacute>> are considered valid, as are ligatures like
+C<E<aelig>>.
+
+=item *
+
+C<Symbol> - a string contianing a single non-letter character. Because this
+module is Unicode-aware, should be noted that a non-letter character is defined
+as a single Unicode grapheme that does not have the Unicode property C<Letter>.
+What this means is that neither letters, accented characters, nor ligatures can
+be used as symbols, but just about every other Unicode character can, including
+punctuation symbols, mathematical symbols, and even emoji!
+
+=item *
+
+C<Word> - a string containing only letters (as defined by the type C<Letter>),
+and at least four long.
+
+=item *
+
+C<SymbolAlphabet> - a symbold alphabet is a reference to an array that contains
+at least two disctinct symbols (as defined by the type C<Symbol>), and no values
+that are not symbols.
+
+=item *
+
+C<PositiveInteger> - a whole number greater than or equal to zero.
+
+=item *
+
+C<WordLength> - a valid value when specifying the length of a word,
+specifically, a whole number greater than or equal to four.
+
+=item *
+
+C<TrueFalse> - a reasonable boolean value, specifically, C<undef>, and empty
+string, or 0 to indicate false, and a 1 to indicate true.
+
+=item *
+
+C<ConfigKeyName> - a valid configuration key name, see the CONFIGURATION section
+of this document for a description of each configuation key supported by this
+module. You can get a list of valid configuration key names programatically by
+calling the function C<Crypt::HSXKPasswd->defined_config_keys()>.
+
+=item *
+
+C<ConfigKeyAssignment> - a mapping between a valid configuration key name and a
+valid value for that configuration key.
+
+=item *
+
+C<ConfigOverride> - a reference to hash containing one or more configuration key
+assignments as defined by the type C<ConfigKeyAssignment>.
+
+=item *
+
+C<Config> - a reference to a hash that contains a complete and valid set of
+mappings between configuration key names and values. For a config to be
+considered valid it must contain only valid valid configuration key assignments
+as defined by the type C<ConfigKeyAssignment>, must contain a configuration key
+assignment for each required configuration key and all interdependencies between
+the specified configuration key assignments must be fulfilled.
+
+See the CONFIG section of this document for a detailed description of each of
+the defined configuation keys and their various interdependencies.
+
+=back
+
+=head 3 Using the Custom Types
+
+The library of custom types is defined in the package
+C<Crypt::HSXKPasswd::Types>, and it is a standard C<Type::Library> type library
+containing C<Type::Tiny> type definitions.
+
+Useful Links:
+
+=over 4
+
+=item *
+
+The documentation for C<Type::Tiny> -
+L<http://search.cpan.org/perldoc?Type%3A%3ATiny>
+
+=item *
+
+The documentation for C<Type::Library> -
+L<http://search.cpan.org/perldoc?Type%3A%3ALibrary>
+
+=back
+
+To use the bare type definitions listed above, import the module as follows:
+
+    use Crypt::HSXKPasswd::Types qw( :types );
+    
+Each type listed above will now be imported, and become available as a bare
+word. The C<Type::Tiny> documentation provides a full list of available
+functions, but the examples below illustrate some of the more useful ones:
+
+    $is_valid = Letter->check('e'); # $is_valid = 1
+    $is_valid = Letter->check('-'); # $is_valid = undef
+    $err_msg = Letter->validate('e'); # $err_msg = undef
+    $err_msg = Letter->validate('-'); # $err_msg = "'-' is not a Letter ...
+                    # ... (must be a string containing exactly one letter)"
+
+C<Type::Library> automatically creates an C<is_TypeName> function for each type
+defined in the library. These are not imported by default. To import them add
+the export tag C<:is> to the C<use> line. I would recommend the following C<use>
+line:
+
+    use Crypt::HSXKPasswd::Types qw( :types :is );
+    
+You can now do things like the following:
+
+    $is_valid = is_Letter('e'); # $is_valid = 1
+    $is_valid = is_Letter('-'); # $is_valid = undef
+    
+Each of the types listed above also contains a custom function using
+C<Type::Tiny>'s new, and still officially experimental, C<my_methods> feature.
+The custom function is called C<my_english>, and can be used to return an
+English description of the values considered valid by the type, e.g.:
+
+    print Letter->my_english(); # prints: a string containing exactly one letter
+    
+Finally, as well as the named types listed above, there are also anonymous types
+defined for each supported configuration key. These can be accessed using the
+function C<Crypt::HSXKPasswd->config_key_definitions()>.
+
 =head2 WORD SOURCES (DICTIONARIES)
 
 The abstract class C<Crypt::HSXKPasswd::Dictionary> acts as a base class for
@@ -4151,7 +4297,7 @@ C<ALL> - all entropy warnings are suppressed.
 
 =back
 
-=head3 CAVEATS
+=head3 Caveats
 
 The entropy calculations make some assumptions which may in some cases lead to
 the results being inaccurate. In general, an attempt has been made to always
