@@ -160,7 +160,7 @@ __PACKAGE__->meta->add_type($TRUE_FALSE);
 my $_KEYS = {
     allow_accents => {
         required => 0,
-        expected => $TRUE_FALSE_ENGLISH,
+        expects => $TRUE_FALSE_ENGLISH,
         type => Type::Tiny->new(
             parent => $TRUE_FALSE,
             message => sub {
@@ -170,7 +170,7 @@ my $_KEYS = {
     },
     symbol_alphabet => {
         required => 0,
-        expected => $SYMBOL_ALPHABET_ENGLISH,
+        expects => $SYMBOL_ALPHABET_ENGLISH,
         type => Type::Tiny->new(
             parent => $SYMBOL_ALPHABET,
             message => sub {
@@ -180,7 +180,7 @@ my $_KEYS = {
     },
     separator_alphabet => {
         required => 0,
-        expected => $SYMBOL_ALPHABET_ENGLISH,
+        expects => $SYMBOL_ALPHABET_ENGLISH,
         type => Type::Tiny->new(
             parent => $SYMBOL_ALPHABET,
             message => sub {
@@ -190,7 +190,7 @@ my $_KEYS = {
     },
     padding_alphabet => {
         required => 0,
-        expected => $SYMBOL_ALPHABET_ENGLISH,
+        expects => $SYMBOL_ALPHABET_ENGLISH,
         type => Type::Tiny->new(
             parent => $SYMBOL_ALPHABET,
             message => sub {
@@ -200,7 +200,7 @@ my $_KEYS = {
     },
     word_length_min => {
         required => 1,
-        expected => $WORD_LENGTH_ENGLISH,
+        expects => $WORD_LENGTH_ENGLISH,
         type => Type::Tiny->new(
             parent => $WORD_LENGTH,
             message => sub {
@@ -210,7 +210,7 @@ my $_KEYS = {
     },
     word_length_max => {
         required => 1,
-        expected => $WORD_LENGTH_ENGLISH,
+        expects => $WORD_LENGTH_ENGLISH,
         type => Type::Tiny->new(
             parent => $WORD_LENGTH,
             message => sub {
@@ -220,7 +220,7 @@ my $_KEYS = {
     },
     padding_digits_before => {
         required => 1,
-        expected => $POSITIVE_INTEGER_ENGLISH,
+        expects => $POSITIVE_INTEGER_ENGLISH,
         type => Type::Tiny->new(
             parent => $POSITIVE_INTEGER,
             message => sub {
@@ -230,7 +230,7 @@ my $_KEYS = {
     },
     padding_digits_after => {
         required => 1,
-        expected => $POSITIVE_INTEGER_ENGLISH,
+        expects => $POSITIVE_INTEGER_ENGLISH,
         type => Type::Tiny->new(
             parent => $POSITIVE_INTEGER,
             message => sub {
@@ -240,7 +240,7 @@ my $_KEYS = {
     },
     padding_characters_before => {
         required => 0,
-        expected => $POSITIVE_INTEGER_ENGLISH,
+        expects => $POSITIVE_INTEGER_ENGLISH,
         type => Type::Tiny->new(
             parent => $POSITIVE_INTEGER,
             message => sub {
@@ -250,7 +250,7 @@ my $_KEYS = {
     },
     padding_characters_after => {
         required => 0,
-        expected => $POSITIVE_INTEGER_ENGLISH,
+        expects => $POSITIVE_INTEGER_ENGLISH,
         type => Type::Tiny->new(
             parent => $POSITIVE_INTEGER,
             message => sub {
@@ -261,7 +261,7 @@ my $_KEYS = {
 };
 $_KEYS->{num_words} = {
     required => 1,
-    expected => 'an integer greater than or equal to two',
+    expects => 'an integer greater than or equal to two',
 };
 $_KEYS->{num_words}->{type} = Type::Tiny->new(
     parent => Int,
@@ -269,12 +269,12 @@ $_KEYS->{num_words}->{type} = Type::Tiny->new(
         return $_ >= 2;
     },
     message => sub {
-        return _config_key_message($_, 'num_words', $_KEYS->{num_words}->{expected});
+        return _config_key_message($_, 'num_words', $_KEYS->{num_words}->{expects});
     },
 );
 $_KEYS->{separator_character} = {
     required => 1,
-    expected => q{a single Symbol or one of the special values: 'NONE' or 'RANDOM'},
+    expects => q{a single Symbol or one of the special values: 'NONE' or 'RANDOM'},
 };
 $_KEYS->{separator_character}->{type} = Type::Tiny->new(
     parent => Str,
@@ -282,22 +282,22 @@ $_KEYS->{separator_character}->{type} = Type::Tiny->new(
         return $SYMBOL->check($_) || $_ =~ m/^(NONE)|(RANDOM)$/sx;
     },
     message => sub {
-        return _config_key_message($_, 'separator_character', $_KEYS->{separator_character}->{expected});
+        return _config_key_message($_, 'separator_character', $_KEYS->{separator_character}->{expects});
     },
 );
 $_KEYS->{padding_type} = {
     required => 1,
-    expected => q{one of the values 'NONE', 'FIXED', or 'ADAPTIVE'},
+    expects => q{one of the values 'NONE', 'FIXED', or 'ADAPTIVE'},
 };
 $_KEYS->{padding_type}->{type} = Type::Tiny->new(
     parent => Enum[qw( NONE FIXED ADAPTIVE )],
     message => sub {
-        return _config_key_message($_, 'key padding_type', $_KEYS->{padding_type}->{expected});
+        return _config_key_message($_, 'key padding_type', $_KEYS->{padding_type}->{expects});
     },
 );
 $_KEYS->{pad_to_length} = {
     required => 0,
-    expected => 'an integer greater than or equal to twelve',
+    expects => 'an integer greater than or equal to twelve',
 };
 $_KEYS->{pad_to_length}->{type} = Type::Tiny->new(
     parent => Int,
@@ -305,12 +305,12 @@ $_KEYS->{pad_to_length}->{type} = Type::Tiny->new(
         return $_ >= 12;
     },
     message => sub {
-        return _config_key_message($_, 'pad_to_length', $_KEYS->{pad_to_length}->{expected});
+        return _config_key_message($_, 'pad_to_length', $_KEYS->{pad_to_length}->{expects});
     },
 );
 $_KEYS->{padding_character} = {
     required => 0,
-    expected => q{a single Symbol or one of the special values: 'NONE', 'RANDOM', or 'SEPARATOR'},
+    expects => q{a single Symbol or one of the special values: 'NONE', 'RANDOM', or 'SEPARATOR'},
 };
 $_KEYS->{padding_character}->{type} = Type::Tiny->new(
     parent => Str,
@@ -318,27 +318,27 @@ $_KEYS->{padding_character}->{type} = Type::Tiny->new(
         return $SYMBOL->check($_) || $_ =~ m/^(NONE)|(RANDOM)|(SEPARATOR)$/sx;
     },
     message => sub {
-        return _config_key_message($_, 'padding_character', $_KEYS->{padding_character}->{expected});
+        return _config_key_message($_, 'padding_character', $_KEYS->{padding_character}->{expects});
     },
 );
 $_KEYS->{case_transform} = {
     required => 0,
-    expected => q{one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERT', 'ALTERNATE', or 'RANDOM'},
+    expects => q{one of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERT', 'ALTERNATE', or 'RANDOM'},
 };
 $_KEYS->{case_transform}->{type} = Type::Tiny->new(
     parent => Enum[qw( NONE UPPER LOWER CAPITALISE INVERT ALTERNATE RANDOM )],
     message => sub {
-        return _config_key_message($_, 'case_transform', $_KEYS->{case_transform}->{expected});
+        return _config_key_message($_, 'case_transform', $_KEYS->{case_transform}->{expects});
     },
 );
 $_KEYS->{character_substitutions} = {
     required => 0,
-    expected => 'a reference to a hash mapping zero or more Letters to their replacements which must be strings',
+    expects => 'a reference to a hash mapping zero or more Letters to their replacements which must be strings',
 };
 $_KEYS->{character_substitutions}->{type} = Type::Tiny->new(
     parent => Map[$LETTER, Str],
     message => sub {
-        return _config_key_message($_, 'character_substitutions', $_KEYS->{character_substitutions}->{expected});
+        return _config_key_message($_, 'character_substitutions', $_KEYS->{character_substitutions}->{expects});
     },
 );
 

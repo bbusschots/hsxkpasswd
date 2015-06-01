@@ -8,7 +8,7 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw( -no_match_vars ); # for more readable code
-use Crypt::HSXKPasswd; # for the error function
+use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 
 # set things up for using UTF-8
 use 5.016; # min Perl for good UTF-8 support, implies feature 'unicode_strings'
@@ -31,7 +31,6 @@ use version; our $VERSION = qv('1.1_01');
 
 # utility variables
 my $_CLASS = __PACKAGE__;
-my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 #
 # --- Constructor -------------------------------------------------------------
@@ -48,7 +47,7 @@ sub new{
     my $class = shift;
     
     # validate the args
-    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
+    _force_class($class);
     
     # bless and return an empty object
     my $instance = {};
@@ -75,9 +74,9 @@ sub random_numbers{
     my $num = shift;
     
     # validate the args
-    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
+    _force_instance($self);
     unless(defined $num && $num =~ m/^\d+$/sx && $num >= 1){
-        $_MAIN_CLASS->_error('invalid args - the number of random numbers needed per password must be a positive integer');
+        _error('invalid args - the number of random numbers needed per password must be a positive integer');
     }
     
     # generate the random numbers

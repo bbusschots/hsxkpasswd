@@ -9,7 +9,7 @@ use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw(-no_match_vars); # for more readable code
 use List::MoreUtils qw(uniq); # for array deduplication
-use Crypt::HSXKPasswd; # for the error function
+use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 
 # set things up for using UTF-8
 use 5.016; # min Perl for good UTF-8 support, implies feature 'unicode_strings'
@@ -32,7 +32,6 @@ use version; our $VERSION = qv('1.1_01');
 
 # utility variables
 my $_CLASS = __PACKAGE__;
-my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 #
 # --- Constructor -------------------------------------------------------------
@@ -55,9 +54,9 @@ sub new{
     my $encoding = shift;
     
     # validate the args
-    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
+    _force_class($class);
     unless(defined $dict_source && (ref $dict_source eq q{} || ref $dict_source eq 'ARRAY')){
-        $_MAIN_CLASS->_error('invalid args - first argument must be a path to a dictionary file or an array ref');
+        _error('invalid args - first argument must be a path to a dictionary file or an array ref');
     }
     unless($encoding){
         $encoding = 'UTF-8';
@@ -97,7 +96,7 @@ sub clone{
     my $self = shift;
     
     # validate the args
-    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
+    _force_instance($self);
     
     # create an empty object
     my $clone = {
@@ -137,7 +136,7 @@ sub word_list{
     my $self = shift;
     
     # validate the args
-    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
+    _force_instance($self);
     
     # return a reference to the word list
     return $self->{words};
@@ -156,7 +155,7 @@ sub source{
     my $self = shift;
     
     # validate args
-    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
+    _force_instance($self);
     
     my $source = $self->SUPER::source();
     if($self->{sources}->{num_arrays} || scalar @{$self->{sources}->{files}}){
@@ -188,7 +187,7 @@ sub empty{
     my $self = shift;
     
     # validate args
-    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
+    _force_instance($self);
     
     # blank the word list and sources
     $self->{words} = [];
@@ -219,9 +218,9 @@ sub add_words{
     my $encoding = shift;
     
     # validate args
-    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
+    _force_instance($self);
     unless(defined $dict_source && (ref $dict_source eq q{} || ref $dict_source eq 'ARRAY')){
-        $_MAIN_CLASS->_error('invalid args - first argument must be a path to a dictionary file or an array ref');
+        _error('invalid args - first argument must be a path to a dictionary file or an array ref');
     }
     unless($encoding){
         $encoding = 'UTF-8';
@@ -241,11 +240,11 @@ sub add_words{
         
         # make sure the file path is valid
         unless(-f $dict_source){
-            $_MAIN_CLASS->_error("file $dict_source not found");
+            _error("file $dict_source not found");
         }
         
         # try load and parse the contents of the file
-        open my $WORD_FILE_FH, "<:encoding($encoding)", $dict_source or $_MAIN_CLASS->_error("Failed to open $dict_source with error: $OS_ERROR");
+        open my $WORD_FILE_FH, "<:encoding($encoding)", $dict_source or _error("Failed to open $dict_source with error: $OS_ERROR");
         my $word_file_contents = do{local $/ = undef; <$WORD_FILE_FH>};
         close $WORD_FILE_FH;
         LINE:
@@ -262,7 +261,7 @@ sub add_words{
         
         # make sure we got at least one word!
         unless(scalar @words){
-            $_MAIN_CLASS->_error("file $dict_source contained no valid words");
+            _error("file $dict_source contained no valid words");
         }
         
         # add the file to the list of loaded files
@@ -274,7 +273,7 @@ sub add_words{
         if($word && ref $word eq q{} && $word =~ m/$valid_word_re/sx){
             push @{$self->{words}}, "$word";
         }else{
-            $_MAIN_CLASS->_warn("Skipping invalid word: $word");
+            _warn("Skipping invalid word: $word");
         }
     }
     

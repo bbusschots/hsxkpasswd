@@ -9,7 +9,7 @@ use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw( -no_match_vars ); # for more readable code
 use Params::Validate qw(:all); # for argument validation
-use Crypt::HSXKPasswd; # for the error function
+use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 
 # set things up for using UTF-8
 use 5.016; # min Perl for good UTF-8 support, implies feature 'unicode_strings'
@@ -50,7 +50,6 @@ use version; our $VERSION = qv('1.1_01');
 
 # utility variables
 my $_CLASS = __PACKAGE__;
-my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 # Random.org settings
 my $RDO_URL = 'https://www.random.org/integers/';
@@ -85,9 +84,9 @@ sub new{
     my $email = shift @args;
     
     # validate the args
-    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
+    _force_class($class);
     unless($email && Email::Valid->address($email)){
-        $_MAIN_CLASS->_error('invalid arguments - must supply a valid email address as the first argument');
+        _error('invalid arguments - must supply a valid email address as the first argument');
     }
     my %args = validate(@args,
         {
@@ -133,9 +132,9 @@ sub random_numbers{
     my $num_per_password = shift;
     
     # validate the args
-    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
+    _force_instance($self);
     unless(defined $num_per_password && $num_per_password =~ m/^\d+$/sx && $num_per_password >= 1){
-        $_MAIN_CLASS->_error('invalid args - the number of random numbers needed per password must be a positive integer');
+        _error('invalid args - the number of random numbers needed per password must be a positive integer');
     }
     
     # figure out how many numbers to request from the web service
@@ -146,7 +145,7 @@ sub random_numbers{
         $num = $num_per_password * $self->{num_passwords};
     }
     unless($num){
-        $_MAIN_CLASS->_error('failed to determine how many passwords to request from the web service (this error should be impossible!)');
+        _error('failed to determine how many passwords to request from the web service (this error should be impossible!)');
     }
     
     # generate the URL + query string
@@ -170,7 +169,7 @@ sub random_numbers{
     # execute the web request
     my $response = $ua->get($url);
     if($response->is_error()){
-        $_MAIN_CLASS->_error('failed to retrieve numbers from Random.Org web service with error code '.$response->code().' ('.$response->message.')');
+        _error('failed to retrieve numbers from Random.Org web service with error code '.$response->code().' ('.$response->message.')');
     }
     
     # parse the result
@@ -180,14 +179,14 @@ sub random_numbers{
     foreach my $line (split /\n/sx, $raw_numbers){
         # validate the line
         unless($line && $line =~ m/^\d+$/sx){
-            $_MAIN_CLASS->_warn("received invalid number from Random.Org ($line)");
+            _warn("received invalid number from Random.Org ($line)");
             next RESPONSE_LINE;
         }
         
         # convert from integer to decimal between 0 and 1
         my $dec = $line/$RDO_MAX_INT;
         unless($dec >= 0 && $dec <=1){
-            $_MAIN_CLASS->_warn("failed to convert integer from from Random.Org to decimal between 0 and 1 ($line => $dec)");
+            _warn("failed to convert integer from from Random.Org to decimal between 0 and 1 ($line => $dec)");
             next RESPONSE_LINE;
         }
         
@@ -195,7 +194,7 @@ sub random_numbers{
         push @ans, $dec;
     }
     unless(scalar @ans){
-        $_MAIN_CLASS->_error('no valid random numbers found in response from Random.Org web service');
+        _error('no valid random numbers found in response from Random.Org web service');
     }
     
     # return the random numbers

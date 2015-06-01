@@ -6,7 +6,7 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw( -no_match_vars ); # for more readable code
-use Crypt::HSXKPasswd; # for the error function
+use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 
 # set things up for using UTF-8
 use 5.016; # min Perl for good UTF-8 support, implies feature 'unicode_strings'
@@ -29,7 +29,6 @@ use version; our $VERSION = qv('1.1_01');
 
 # utility variables
 my $_CLASS = __PACKAGE__;
-my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 #
 # --- Constructor -------------------------------------------------------------
@@ -45,7 +44,7 @@ my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 # See Also   :
 ## no critic (Subroutines::RequireFinalReturn);
 sub new{
-    $_MAIN_CLASS->_error("$_CLASS must be extended to be used");
+    _error("$_CLASS must be extended to be used");
 }
 ## use critic
 
@@ -66,7 +65,7 @@ sub new{
 # See Also   :
 ## no critic (Subroutines::RequireFinalReturn);
 sub random_numbers{
-    $_MAIN_CLASS->_error("$_CLASS must be extended to be used, and the function random_numbers() must be overridden");
+    _error("$_CLASS must be extended to be used, and the function random_numbers() must be overridden");
 }
 ## use critic
 

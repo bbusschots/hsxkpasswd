@@ -8,6 +8,7 @@ use Fatal qw( :void open close binmode ); # make builtins throw exceptions on fa
 use English qw( -no_match_vars ); # for more readable code
 use DateTime; # for generating timestamps
 use Scalar::Util qw(blessed); # for checking if a reference is blessed
+use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 use Crypt::HSXKPasswd;
 
 # set things up for using UTF-8
@@ -53,9 +54,9 @@ sub test_presets{
     my $dictionary = shift;
     
     # validate the args
-    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
+    _force_class($class);
     unless(defined $dictionary && blessed($dictionary) && $dictionary->isa('Crypt::HSXKPasswd::Dictionary')){
-        $_MAIN_CLASS->_error('invalid args, must pass a dictionary');
+        _error('invalid args, must pass a dictionary');
     }
     
     # get the list of config names from the parent
@@ -103,9 +104,9 @@ sub print_preset_samples{
     my $dictionary = shift;
     
     # validate the args
-    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
+    _force_class($class);
     unless(defined $dictionary && blessed($dictionary) && $dictionary->isa('Crypt::HSXKPasswd::Dictionary')){
-        $_MAIN_CLASS->_error('invalid args, must pass a dictionary');
+        _error('invalid args, must pass a dictionary');
     }
     
     foreach my $preset ($_MAIN_CLASS->defined_presets()){
@@ -134,9 +135,9 @@ sub sanitise_dictionary_file{
     my $encoding = shift;
     
     # validate args
-    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
+    _force_class($class);
     unless($file_path && -f $file_path){
-        $_MAIN_CLASS->error('invalid file path');
+        _error('invalid file path');
     }
     unless($encoding){
         $encoding = 'UTF-8';
@@ -174,7 +175,7 @@ sub sanitise_dictionary_file{
         
         1; # ensure truthy evaluation on successful execution
     }or do{
-        $_MAIN_CLASS->_error("failed to load words with error: $EVAL_ERROR");
+        _error("failed to load words with error: $EVAL_ERROR");
     };
     
     # sort and print the words
@@ -205,14 +206,14 @@ sub dictionary_from_text_file{
     my $encoding = shift;
     
     # validate args
-    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
+    _force_class($class);
     ## no critic (RegularExpressions::ProhibitEnumeratedClasses);
     unless($name && $name =~ m/^[a-zA-Z0-9_]+$/sx){
-        $_MAIN_CLASS->error('invalid module name');
+        _error('invalid module name');
     }
     ## use critic
     unless($file_path && -f $file_path){
-        $_MAIN_CLASS->error('invalid file path');
+        _error('invalid file path');
     }
     unless($encoding){
         $encoding = 'UTF-8';
@@ -250,7 +251,7 @@ sub dictionary_from_text_file{
         
         1; # ensure truthy evaluation on successful execution
     }or do{
-        $_MAIN_CLASS->_error("failed to load words with error: $EVAL_ERROR");
+        _error("failed to load words with error: $EVAL_ERROR");
     };
     
     # generate an ISO 8601 timestamp

@@ -12,6 +12,7 @@ use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
 use Types::Standard qw( :types ); # for basic type checking (Int Str etc.)
 use Crypt::HSXKPasswd::Types qw( :types :is ); # for custom type checking
+use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 use Crypt::HSXKPasswd::Dictionary::Basic;
 use Crypt::HSXKPasswd::RNG::Math_Random_Secure;
 use Crypt::HSXKPasswd::RNG::Data_Entropy;
@@ -26,9 +27,6 @@ use utf8;
 binmode STDOUT, ':encoding(UTF-8)';
 
 # import (or not) optional modules
-my $_CAN_STACK_TRACE = eval{
-    require Devel::StackTrace; # for better error reporting when debugging
-};
 my $_CAN_JSON = eval{
     require JSON; # for JSON parsing
 };
@@ -76,135 +74,9 @@ our $DEBUG = 0; # default to not having debugging enabled
 
 # utility variables
 my $_CLASS = __PACKAGE__;
+my $_TYPES_CLASS = 'Crypt::HSXKPasswd::Types';
 my $_DICTIONARY_BASE_CLASS = 'Crypt::HSXKPasswd::Dictionary';
 my $_RNG_BASE_CLASS = 'Crypt::HSXKPasswd::RNG';
-
-# config key definitions
-my $_KEYS = {
-    allow_accents => {
-        req => 0,
-        type => Value,
-        desc => 'Any truthy or falsy scalar value',
-    },
-    symbol_alphabet => {
-        req => 0,
-        type => SymbolAlphabet,
-        desc => 'A reference to an array containing at least 2 distinct single-character strings',
-    },
-    separator_alphabet => {
-        req => 0,
-        type => SymbolAlphabet,
-        desc => 'A reference to an array containing at least 2 distinct single-character strings',
-    },
-    padding_alphabet => {
-        req => 0,
-        type => SymbolAlphabet,
-        desc => 'A reference to an array containing at least 2 distinct single-character strings',
-    },
-    word_length_min => {
-        req => 1,
-        type => WordLength,
-        desc => 'An integer greater than three',
-    },
-    word_length_max => {
-        req => 1,
-        type => WordLength,
-        desc => 'An integer greater than three',
-    },
-    num_words => {
-        req => 1,
-        type => Type::Tiny->new(
-            parent => Int,
-            constraint => sub{
-                return $_ >= 2;
-            },
-        ),
-        desc => 'An integer greater than or equal to two',
-    },
-    separator_character => {
-        req => 1,
-        type => Type::Tiny->new(
-            parent => Str,
-            constraint => sub{
-                return is_Symbol($_) || $_ =~ m/^(NONE)|(RANDOM)$/sx;
-            },
-        ),
-        desc => q{A single character or one of the special values: 'NONE' or 'RANDOM'},
-    },
-    padding_digits_before => {
-        req => 1,
-        type => PositiveInteger,
-        desc => 'An integer greater than or equal to zero',
-    },
-    padding_digits_after => {
-        req => 1,
-        type => PositiveInteger,
-        desc => 'An integer greater than or equal to zero',
-    },
-    padding_type => {
-        req => 1,
-        type => Type::Tiny->new(
-            parent => Str,
-            constraint => sub{
-                return $_ =~ m/^(NONE)|(FIXED)|(ADAPTIVE)$/sx;
-            },
-        ),
-        desc => q{One of the values 'NONE', 'FIXED', or 'ADAPTIVE'},
-    },
-    padding_characters_before => {
-        req => 0,
-        type => PositiveInteger,
-        desc => 'An integer greater than or equal to one',
-    },
-    padding_characters_after => {
-        req => 0,
-        type => PositiveInteger,
-        desc => 'An integer greater than or equal to one',
-    },
-    pad_to_length => {
-        req => 0,
-        type => Type::Tiny->new(
-            parent => Int,
-            constraint => sub{
-                return $_ >= 12;
-            },
-        ),
-        desc => 'An integer greater than or equal to twelve',
-    },
-    padding_character => {
-        req => 0,
-        type => Type::Tiny->new(
-            parent => Str,
-            constraint => sub{
-                return is_Symbol($_) || $_ =~ m/^(NONE)|(RANDOM)|(SEPARATOR)$/sx;
-            },
-        ),
-        desc => q{A single character or one of the special values: 'NONE', 'RANDOM', or 'SEPARATOR'},
-    },
-    case_transform => {
-        req => 0,
-        type => Type::Tiny->new(
-            parent => Enum[qw( NONE UPPER LOWER CAPITALISE INVERT ALTERNATE RANDOM )],
-        ),
-        desc => q{One of the values 'NONE' , 'UPPER', 'LOWER', 'CAPITALISE', 'INVERT', 'ALTERNATE', or 'RANDOM'},
-    },
-    character_substitutions => {
-        req => 0,
-        type => Type::Tiny->new(
-            
-        ),
-        ref => 'HASH', # Hashref REF
-        validate => sub {
-            my $key = shift;
-            foreach my $char (keys %{$key}){
-                unless(ref $char eq q{} && $char =~ m/^\w$/sx){ return 0; } # single char key
-                unless(ref $key->{$char} eq q{} && $key->{$char} =~ m/^\S+$/sx){ return 0; }
-            }
-            return 1;
-        },
-        desc => 'A hash ref mapping characters to their replacements - can be empty',
-    },
-};
 
 # preset definitions
 my $_PRESETS = {
@@ -394,6 +266,7 @@ my $_PRESETS = {
 sub new{
     my @args = @_;
     my $class = shift @args;
+    
     my %args = validate(
         @args, {
             dictionary => {isa => $_DICTIONARY_BASE_CLASS, optional => 1},
@@ -477,7 +350,7 @@ sub new{
     $instance->rng($rng);
     
     # if debugging, print status
-    $_CLASS->_debug("instantiated $_CLASS object with the following details:\n".$instance->status());
+    _debug("instantiated $_CLASS object with the following details:\n".$instance->status());
     
     # return the initialised object
     return $instance;
@@ -502,7 +375,7 @@ sub defined_config_keys{
     _force_class($class);
     
     # gather the list of config key names
-    my @keys = sort keys %{$_KEYS};
+    my @keys = sort keys %{$_TYPES_CLASS->_config_keys()};
     
     # return the list
     return @keys;
@@ -511,7 +384,7 @@ sub defined_config_keys{
 #####-SUB-######################################################################
 # Type       : CLASS
 # Purpose    : Return the specification for a given config key.
-# Returns    : A hash indexed by 'required', 'type', and 'type_description'.
+# Returns    : A hash indexed by 'required', 'type', and 'expects'.
 # Arguments  : 1) a valid config key name
 # Throws     : Croaks on invalid invocation and args
 # Notes      :
@@ -520,17 +393,20 @@ sub config_key_definition{
     my $class = shift;
     my $key = shift;
     
+    # get a referece to the keys hashref from the Types class
+    my $defined_keys = $_TYPES_CLASS->_config_keys();
+    
     # validate arguments
     _force_class($class);
-    unless($key && $_KEYS->{$key}){
-        $_CLASS->_error("invalid arguments - a valid key must be passed as the first argument");
+    unless($key && $defined_keys->{$key}){
+        _error("invalid arguments - a valid key must be passed as the first argument");
     }
     
     # assemble the hash
     my %definition = (
-        required => $_KEYS->{$key}->{req},
-        type => $_KEYS->{$key}->{type},
-        type_description => $_KEYS->{$key}->{desc},
+        required => $defined_keys->{$key}->{required},
+        type => $defined_keys->{$key}->{type},
+        expects => $defined_keys->{$key}->{expects},
     );
     
     # return the hash
@@ -611,26 +487,29 @@ sub preset_config{
     # validate the args
     _force_class($class);
     unless(ref $preset eq q{}){
-        $_CLASS->_error('invalid args - if present, the first argument must be a scalar');
+        _error('invalid args - if present, the first argument must be a scalar');
     }
     unless(defined $_PRESETS->{$preset}){
-        $_CLASS->_error("preset '$preset' does not exist");
+        _error("preset '$preset' does not exist");
     }
     if(defined $overrides){
         unless(ref $overrides eq 'HASH'){
-            $_CLASS->_error('invalid args, overrides must be passed as a hashref');
+            _error('invalid args, overrides must be passed as a hashref');
         }
     }
     
     # start by loading the preset
     my $config = $_CLASS->clone_config($_PRESETS->{$preset}->{config});
     
+    # get a references to the keys hashref from the types class
+    my $key_definitions = $_TYPES_CLASS->_config_keys();
+    
     # if overrides were passed, apply them and validate
     if(defined $overrides){
         foreach my $key (keys %{$overrides}){
             # ensure the key is valid - skip it if not
-            unless(defined $_KEYS->{$key}){
-                $_CLASS->_warn("Skipping invalid key=$key");
+            unless(defined $key_definitions->{$key}){
+                _warn("Skipping invalid key=$key");
                 next;
             }
             
@@ -638,7 +517,7 @@ sub preset_config{
             eval{
                 $_CLASS->_validate_key($key, $overrides->{$key}, 1); # returns 1 if valid
             }or do{
-                $_CLASS->_warn("Skipping key=$key because of invalid value. Expected: $_KEYS->{$key}->{desc}");
+                _warn("Skipping key=$key because of invalid value. Expected: $key_definitions->{$key}->{expects}");
                 next;
             };
             
@@ -646,7 +525,7 @@ sub preset_config{
             $config->{$key} = $overrides->{$key};
         }
         unless($_CLASS->is_valid_config($config)){
-            $_CLASS->_error('The default config combined with the specified overrides has resulted in an inalid config');
+            _error('The preset combined with the specified overrides has resulted in an inalid config');
         }
     }
     
@@ -677,7 +556,7 @@ sub presets_json{
     
     # make sure JSON parsing is available
     unless($_CAN_JSON){
-        $_CLASS->_error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) to use this function');
+        _error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) to use this function');
     }
     
     # assemble an object cotaining the presets with any keys that can't be
@@ -701,7 +580,7 @@ sub presets_json{
         $json_string = JSON->new()->encode($return_object);
         1; # ensure truthy evaluation on succesful execution
     }or do{
-        $_CLASS->_error("failed to render presets as JSON string with error: $EVAL_ERROR");
+        _error("failed to render presets as JSON string with error: $EVAL_ERROR");
     };
     
     # return the JSON string
@@ -724,15 +603,18 @@ sub clone_config{
     # validate the args
     _force_class($class);
     unless(defined $config && $_CLASS->is_valid_config($config)){
-        $_CLASS->_error('invalid args - a valid config hashref must be passed');
+        _error('invalid args - a valid config hashref must be passed');
     }
+    
+    # get a reference to the key definitions from the types class
+    my $defined_keys = $_TYPES_CLASS->_config_keys();
     
     # start with a blank hashref
     my $clone = {};
     
     # copy over all the scalar keys
     KEY_TO_CLONE:
-    foreach my $key (keys %{$_KEYS}){
+    foreach my $key (keys %{$defined_keys}){
         # skip the key if it is not defined in the config to clone
         next KEY_TO_CLONE unless defined $config->{$key};
         
@@ -792,19 +674,22 @@ sub is_valid_config{
     # validate the args
     _force_class($class);
     unless($config && ref $config eq 'HASH'){
-        $_CLASS->_error('invalid arguments');
+        _error('invalid arguments');
     }
     
     #
     # check the keys
     #
     
-    my @keys = sort keys %{$_KEYS};
+    # get a reference to the key definitions in the types class
+    my $key_definitions = $_TYPES_CLASS->_config_keys();
+    
+    my @keys = sort keys %{$key_definitions};
     
     # first ensure all required keys are present
     foreach my $key (@keys){
         # skip non-required keys
-        next unless $_KEYS->{$key}->{req};
+        next unless $key_definitions->{$key}->{required};
         
         # make sure the passed config contains the key
         unless(defined $config->{$key}){
@@ -822,7 +707,7 @@ sub is_valid_config{
         eval{
             $_CLASS->_validate_key($key, $config->{$key}, 1); # returns 1 on success
         }or do{
-            croak("Invalid value specified for config key '$key'. Must Be: ".$_KEYS->{$key}->{desc}) if $croak;
+            croak("Invalid value specified for config key '$key'. Must Be: ".$key_definitions->{$key}->{expects}) if $croak;
             return 0;
         };
     }
@@ -893,12 +778,12 @@ sub config_to_json{
     # validate the args
     _force_class($class);
     unless(defined $config && ref $config eq 'HASH'){
-        $_CLASS->_error('invalid arguments');
+        _error('invalid arguments');
     }
     
     # make sure JSON parsing is available
     unless($_CAN_JSON){
-        $_CLASS->_error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) before you can pass the config as a JSON stirng');
+        _error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) before you can pass the config as a JSON stirng');
     }
     
     # try render the config to a JSON string
@@ -907,7 +792,7 @@ sub config_to_json{
         $ans = encode_json($config);
         1; # ensure a thurthy evaluation on successful execution
     }or do{
-        $_CLASS->_error("Failed to convert config to JSON stirng with error: $EVAL_ERROR");
+        _error("Failed to convert config to JSON stirng with error: $EVAL_ERROR");
     };
     
     # return the string
@@ -930,16 +815,19 @@ sub config_to_string{
     # validate the args
     _force_class($class);
     unless(defined $config && ref $config eq 'HASH'){
-        $_CLASS->_error('invalid arguments');
+        _error('invalid arguments');
     }
     unless($_CLASS->is_valid_config($config)){
-        $_CLASS->_error('invalid arguments - invalid config hashref passed');
+        _error('invalid arguments - invalid config hashref passed');
     }
+    
+    # get a reference to the key definitions from the types class
+    my $defined_keys = $_TYPES_CLASS->_config_keys();
     
     # assemble the string to return
     my $ans = q{};
     CONFIG_KEY:
-    foreach my $key (sort keys %{$_KEYS}){
+    foreach my $key (sort keys %{$defined_keys}){
         # skip undefined keys
         next CONFIG_KEY unless defined $config->{$key};
         
@@ -966,7 +854,7 @@ sub config_to_string{
             $ans .= "}\n";
         }else{
             # this should never happen, but just in case, throw a warning
-            $_CLASS->_warn("the data for the key '$key' is of an un-expected type (".(ref $config->{$key}).') - skipping key');
+            _warn("the data for the key '$key' is of an un-expected type (".(ref $config->{$key}).') - skipping key');
         }
     }
     
@@ -996,10 +884,10 @@ sub preset_description{
     # validate the args
     _force_class($class);
     unless(ref $preset eq q{}){
-        $_CLASS->_error('invalid args - if present, the first argument must be a scalar');
+        _error('invalid args - if present, the first argument must be a scalar');
     }
     unless(defined $_PRESETS->{$preset}){
-        $_CLASS->_error("preset '$preset' does not exist");
+        _error("preset '$preset' does not exist");
     }
     
     # return the description by loading the preset
@@ -1082,7 +970,7 @@ sub config_random_numbers_required{
     # validate the args
     _force_class($class);
     unless(defined $config && ($skip_validation || $_CLASS->is_valid_config($config))){
-        $_CLASS->_error('invalid args - a valid config hashref must be passed');
+        _error('invalid args - a valid config hashref must be passed');
     }
     
     # calculate the number of random numbers needed to generate the password
@@ -1134,7 +1022,7 @@ sub config_stats{
     # validate the args
     _force_class($class);
     unless(defined $config && $_CLASS->is_valid_config($config)){
-        $_CLASS->_error('invalid args - a valid config hashref must be passed');
+        _error('invalid args - a valid config hashref must be passed');
     }
     
     # calculate the lengths
@@ -1179,7 +1067,7 @@ sub config_stats{
             CHAR_SUB:
             foreach my $char (keys %{$config->{character_substitutions}}){
                 if(length $config->{character_substitutions}->{$char} > 1){
-                    $_CLASS->_warn('maximum length may be underestimated. The loaded config contains at least one character substitution which replaces a single character with multiple characters.');
+                    _warn('maximum length may be underestimated. The loaded config contains at least one character substitution which replaces a single character with multiple characters.');
                     last CHAR_SUB;
                 }
             }
@@ -1238,7 +1126,7 @@ sub dictionary{
         
         # croak if we are called before the config has been loaded into the instance
         unless(defined $self->{_CONFIG}->{word_length_min} && $self->{_CONFIG}->{word_length_max}){
-            $_CLASS->_error('failed to load dictionary file - config has not been loaded yet');
+            _error('failed to load dictionary file - config has not been loaded yet');
         }
         
         # get a dictionary instance
@@ -1248,7 +1136,7 @@ sub dictionary{
         }elsif(ref $dictionary_source eq q{} || ref $dictionary_source eq 'ARRAY'){
             $new_dict = Crypt::HSXKPasswd::Dictionary::Basic->new($dictionary_source, $encoding); # could throw an error
         }else{
-            $_CLASS->_error('invalid args - must pass a valid dictinary, hashref, or file path');
+            _error('invalid args - must pass a valid dictinary, hashref, or file path');
         }
         
         # load the dictionary
@@ -1314,7 +1202,7 @@ sub config{
             
             # make sure JSON parsing is available
             unless($_CAN_JSON){
-                $_CLASS->_error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) before you can pass the config as a JSON stirng');
+                _error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) before you can pass the config as a JSON stirng');
             }
             
             # try parse the received string as JSON
@@ -1322,10 +1210,10 @@ sub config{
                 $config = decode_json($config_raw);
                 1; # ensure truthy evaluation on successful execution
             }or do{
-                $_CLASS->_error("Failed to parse JSON config string with error: $EVAL_ERROR");
+                _error("Failed to parse JSON config string with error: $EVAL_ERROR");
             };
         }else{
-            $_CLASS->_error('invalid arguments - the config passed must be a hashref or a JSON string');
+            _error('invalid arguments - the config passed must be a hashref or a JSON string');
         }
         
         # validate the passed config hashref
@@ -1336,7 +1224,7 @@ sub config{
             if($self->{debug}){
                 $msg .= " ($EVAL_ERROR)";
             }
-            $_CLASS->_error($msg);
+            _error($msg);
         };
         
         # save a clone of the passed config into the instance
@@ -1411,33 +1299,36 @@ sub update_config{
     # validate args
     _force_instance($self);
     unless(defined $new_keys && ref $new_keys eq 'HASH'){
-        $_CLASS->_error('invalid arguments - the new config keys must be passed as a hashref');
+        _error('invalid arguments - the new config keys must be passed as a hashref');
     }
     
     # clone the current config as a starting point for the new config
     my $new_config = $self->_clone_config();
     
+    # get a reference to the key definitions from the types class
+    my $defined_keys = $_TYPES_CLASS->_config_keys();
+    
     # merge the new values into the config
     my $num_keys_updated = 0;
-    foreach my $key (sort keys %{$_KEYS}){
+    foreach my $key (sort keys %{$defined_keys}){
         # skip the key if it's not present in the list of new keys
         next unless defined $new_keys->{$key};
         
         #validate the new key value
         unless($_CLASS->_validate_key($key, $new_keys->{$key})){
-            $_CLASS->_error("invalid new value for key=$key");
+            _error("invalid new value for key=$key");
         }
         
         # update the key in the new config
         $new_config->{$key} = $new_keys->{$key};
         $num_keys_updated++;
-        $_CLASS->_debug("updated $key to new value");
+        _debug("updated $key to new value");
     }
-    $_CLASS->_debug("updated $num_keys_updated keys");
+    _debug("updated $num_keys_updated keys");
     
     # validate the merged config
     unless($_CLASS->is_valid_config($new_config)){
-        $_CLASS->_error('updated config is invalid');
+        _error('updated config is invalid');
     }
     
     # re-calculate the dictionary cache if needed
@@ -1484,7 +1375,7 @@ sub rng{
         
         # croak if we were not passed a valid RNG
         unless(defined $rng && blessed($rng) && $rng->isa($_RNG_BASE_CLASS)){
-            $_CLASS->_error('failed to set RNG - invalid value passed');
+            _error('failed to set RNG - invalid value passed');
         }
         
         # set the RNG
@@ -1543,15 +1434,15 @@ sub password{
         #
         # start by generating the needed parts of the password
         #
-        $_CLASS->_debug('starting to generate random words');
+        _debug('starting to generate random words');
         my @words = $self->_random_words();
-        $_CLASS->_debug('got random words='.(join q{, }, @words));
+        _debug('got random words='.(join q{, }, @words));
         $self->_transform_case(\@words);
         $self->_substitute_characters(\@words); # TO DO
         my $separator = $self->_separator();
-        $_CLASS->_debug("got separator=$separator");
+        _debug("got separator=$separator");
         my $pad_char = $self->_padding_char($separator);
-        $_CLASS->_debug("got pad_char=$pad_char");
+        _debug("got pad_char=$pad_char");
         
         #
         # Then assemble the finished password
@@ -1559,7 +1450,7 @@ sub password{
         
         # start with the words and the separator
         $password = join $separator, @words;
-        $_CLASS->_debug("assembled base password: $password");
+        _debug("assembled base password: $password");
         
         # next add the numbers front and back
         if($self->{_CONFIG}->{padding_digits_before} > 0){
@@ -1568,7 +1459,7 @@ sub password{
         if($self->{_CONFIG}->{padding_digits_after} > 0){
             $password = $password.$separator.$self->_random_digits($self->{_CONFIG}->{padding_digits_after});
         }
-        $_CLASS->_debug("added random digits (as configured): $password");
+        _debug("added random digits (as configured): $password");
         
         
         # then finally add the padding characters
@@ -1597,10 +1488,10 @@ sub password{
                 $password = substr $password, 0, $self->{_CONFIG}->{pad_to_length};
             }
         }
-        $_CLASS->_debug("added padding (as configured): $password");
+        _debug("added padding (as configured): $password");
         1; # ensure true evaluation on successful execution
     }or do{
-        $_CLASS->_error("Failed to generate password with the following error: $EVAL_ERROR");
+        _error("Failed to generate password with the following error: $EVAL_ERROR");
     };
     
     # increment the passwords generated counter
@@ -1625,7 +1516,7 @@ sub passwords{
     # validate args
     _force_instance($self);
     unless(defined $num_pws && ref $num_pws eq q{} && $num_pws =~ m/^\d+$/sx && $num_pws > 0){
-        $_CLASS->_error('invalid args - must specify the number of passwords to generate as a positive integer');
+        _error('invalid args - must specify the number of passwords to generate as a positive integer');
     }
     
     # generate the needed passwords
@@ -1665,12 +1556,12 @@ sub passwords_json{
     # validate args
     _force_instance($self);
     unless(defined $num_pws && ref $num_pws eq q{} && $num_pws =~ m/^\d+$/sx && $num_pws > 0){
-        $_CLASS->_error('invalid args - must specify the number of passwords to generate as a positive integer');
+        _error('invalid args - must specify the number of passwords to generate as a positive integer');
     }
     
     # make sure JSON parsing is available
     unless($_CAN_JSON){
-        $_CLASS->_error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) to use this function');
+        _error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) to use this function');
     }
     
     # try generate the passwords and stats - could croak
@@ -1698,7 +1589,7 @@ sub passwords_json{
         $json_string = JSON->new()->encode($response_obj);
         1; # ensure truthy evaluation on succesful execution
     }or do{
-        $_CLASS->_error("Failed to render hashref as JSON string with error: $EVAL_ERROR");
+        _error("Failed to render hashref as JSON string with error: $EVAL_ERROR");
     };
     
     # return the JSON string
@@ -1871,15 +1762,15 @@ sub status{
     $status .= "# Random Numbers needed per-password: $stats{password_random_numbers_required}\n";
     $status .= "Passwords Generated: $stats{passwords_generated}\n";
     
-    # debug-only info
-    if($DEBUG){
-        $status .= "\n*DEBUG INFO*\n";
-        if($_CAN_STACK_TRACE){
-            $status .= "Devel::StackTrace IS installed\n";
-        }else{
-            $status .= "Devel::StackTrace is NOT installed\n";
-        }
-    }
+    # debug-only info - TO FIX LATER
+    #if($DEBUG){
+    #    $status .= "\n*DEBUG INFO*\n";
+    #    if($_CAN_STACK_TRACE){
+    #        $status .= "Devel::StackTrace IS installed\n";
+    #    }else{
+    #        $status .= "Devel::StackTrace is NOT installed\n";
+    #    }
+    #}
     
     # return the status
     return $status;
@@ -1906,7 +1797,7 @@ sub hsxkpasswd{
         $hsxkpasswd = $_CLASS->new(@constructor_args);
         1; # ensure truthy evaliation on successful execution
     } or do {
-        $_CLASS->_error("Failed to generate password with the following error: $EVAL_ERROR");
+        _error("Failed to generate password with the following error: $EVAL_ERROR");
     };
     
     # genereate and return a password - could croak
@@ -1916,284 +1807,6 @@ sub hsxkpasswd{
 #
 # 'Private' functions ---------------------------------------------------------
 #
-
-#####-SUB-######################################################################
-# Type       : SUBROUTINE (PRIVATE)
-# Purpose    : Test the $class in a class function to make sure it was actually
-#              invoked on the correct class.
-# Returns    : Always returns 1 (to keep perlcritic happy)
-# Arguments  : 1) the $class variable to test
-#              2) OPTIONAL - the class to compare against - defaults to $_CLASS.
-#                 This option makes it possible for other classes in the package
-#                 to use this function.
-# Throws     : Croaks if $class is not valid
-# Notes      :
-# See Also   :
-sub _force_class{
-    my $test_class = shift;
-    my $required_class = shift;
-    $required_class = $_CLASS unless $required_class;
-    
-    unless(defined $test_class && ref $test_class eq q{} && $test_class eq $required_class){
-        $_CLASS->_error("invalid invocation - must be invoked on the package $required_class", 1);
-    }
-    
-    return 1;
-}
-
-#####-SUB-######################################################################
-# Type       : SUBROUTINE (PRIVATE)
-# Purpose    : Test the $self in an instance function to make sure it was
-#              actually invoked as an instance function.
-# Returns    : Always  returns 1 (to keep PerlCritic happy)
-# Arguments  : 1) the $self variable to test
-#              2) OPTIONAL - the class to test against - defaults to $_CLASS.
-#                 This option makes it possible for other classes in the package
-#                 to use this function.
-# Throws     : Croaks if the $self variable is not an instance of this class.
-# Notes      :
-# See Also   :
-sub _force_instance{
-    my $test_self = shift;
-    my $package = shift;
-    $package = $_CLASS unless $package;
-    
-    unless(defined $test_self && blessed($test_self) && $test_self->isa($package)){
-        $_CLASS->_error("invalid invocation - must be invoked on an instance of $package", 1);
-    }
-    
-    return 1;
-}
-
-#####-SUB-######################################################################
-# Type       : CLASS (PRIVATE)
-# Purpose    : Function to log output from the module - SHOULD NEVER BE CALLED
-#              DIRECTLY
-# Returns    : Always returns 1 (to keep perlcritic happy)
-# Arguments  : 1. the severity of the message (one of 'DEBUG', 'WARNING', or
-#                 'ERROR')
-#              2. the message to log
-#              3. OPTIONAL - an increment to add to the argument to caller - to
-#                 allow functions like _force_instance to invisibly invoke
-#                 _debug(), _warn() & _error().
-# Throws     : Croaks on invalid invocation
-# Notes      : THIS FUNCTION SHOULD NEVER BE CALLED DIRECTLY, but always called
-#              via _debug(), _warn(), or _error().
-#              This function does not croak on invalid args, it confess with as
-#              useful an output as it can.
-#              If the function prints output, it will do so to $LOG_STREAM. The
-#              severity determines the functions exact behaviour:
-#              * 'DEBUG' - message is always printed without a stack trace
-#              * 'WARNING' - output is carped, and, if $LOG_ERRORS is true the
-#                message is also printed
-#              * 'ERROR' - output is confessed if $DEBUG and croaked otherwise.
-#                If $LOG_ERRORS is true the message is also printed with a
-#                stack trace (the stack trace is omited if Devel::StackTrace) is
-#                not installed.
-# See Also   : _debug(), _warn() & _error()
-## no critic (ProhibitExcessComplexity);
-sub _log{
-    my $class = shift;
-    my $severity = uc shift;
-    my $message = shift;
-    my $stack_increment = shift;
-    
-    # validate the args
-    unless($class && $class eq $_CLASS){
-        croak((caller 0)[3].'(): invalid invocation of class method');
-    }
-    unless(defined $severity && ref $severity eq q{} && length $severity > 1){
-        $severity = 'UNKNOWN_SEVERITY';
-    }
-    unless(defined $message && ref $message eq q{}){
-        my $output = 'ERROR - '.(caller 0)[3]."(): invoked with severity '$severity' without message at ".(caller 1)[1].q{:}.(caller 1)[2];
-        if($LOG_ERRORS){
-            my $log_output = $output;
-            if($_CAN_STACK_TRACE){
-                $log_output .= "\nStack Trace:\n".Devel::StackTrace->new()->as_string();
-            }
-            print {$LOG_STREAM} $log_output."\n";
-        }
-        confess($output);
-    }
-    if(defined $stack_increment){
-        unless(ref $stack_increment eq q{} && $stack_increment =~ m/^\d+$/sx){
-            carp((caller 0)[3].'(): passed invalid stack increment - ignoring');
-            $stack_increment = 0;
-        }
-    }else{
-        $stack_increment = 0;
-    }
-    
-    # figure out the correct index for the function that is really responsible
-    my $caller_index = 2 + $stack_increment;
-    my $calling_func = (caller 1)[3];
-    unless($calling_func =~ m/^$_CLASS[:]{2}((_debug)|(_warn)|(_error))$/sx){
-        print {$LOG_STREAM} 'WARNING - '.(caller 0)[3].q{(): invoked directly rather than via _debug(), _warn() or _error() - DO NOT DO THIS!};
-        $caller_index++;
-    }
-    
-    # deal with evals
-    my $true_caller = q{};
-    my @caller = caller $caller_index;
-    if(@caller){
-        $true_caller = $caller[3];
-    }
-    my $eval_depth = 0;
-    while($true_caller eq '(eval)'){
-        $eval_depth++;
-        $caller_index++;
-        my @next_caller = caller $caller_index;
-        if(@next_caller){
-            $true_caller = $next_caller[3];
-        }else{
-            $true_caller = q{};
-        }
-    }
-    if($true_caller eq q{}){
-        $true_caller = 'UNKNOWN_FUNCTION';
-    }
-    
-    # deal with the message as appropriate
-    my $output = "$severity - ";
-    if($eval_depth > 0){
-        if($eval_depth == 1){
-            $output .= "eval() within $true_caller";
-        }else{
-            $output .= "$eval_depth deep eval()s within $true_caller";
-        }
-    }else{
-        $output .= $true_caller;
-    }
-    $output .= "(): $message";
-    if($severity eq 'DEBUG'){
-        # debugging, so always print and do nothing more
-        print {$LOG_STREAM} "$output\n" if $DEBUG;
-    }elsif($severity eq 'WARNING'){
-        # warning - always carp, but first print if needed
-        if($LOG_ERRORS){
-            print {$LOG_STREAM} "$output\n";
-        }
-        carp($output);
-    }elsif($severity eq 'ERROR'){
-        # error - print if needed, then confess or croak depending on whether or not debugging
-        if($LOG_ERRORS){
-            my $log_output = $output;
-            if($DEBUG && $_CAN_STACK_TRACE){
-                $log_output .= "\nStack Trace:\n".Devel::StackTrace->new()->as_string();
-                print {$LOG_STREAM} "$output\n";
-            }
-            print {$LOG_STREAM} "$log_output\n";
-        }
-        if($DEBUG){
-            confess($output);
-        }else{
-            croak($output);
-        }
-    }else{
-        # we have an unknown severity, so assume the worst and confess (also log if needed)
-        if($LOG_ERRORS){
-            my $log_output = $output;
-            if($_CAN_STACK_TRACE){
-                $log_output .= "\nStack Trace:\n".Devel::StackTrace->new()->as_string();
-            }
-            print {$LOG_STREAM} "$log_output\n";
-        }
-        confess($output);
-    }
-    
-    # to keep perlcritic happy
-    return 1;
-}
-## use critic
-
-#####-SUB-######################################################################
-# Type       : CLASS (PRIVATE)
-# Purpose    : Function for printing a debug message
-# Returns    : Always return 1 (to keep perlcritic happpy)
-# Arguments  : 1. the debug message to log
-#              2. OPTIONAL - a number of function calls to hide from users in
-#                 the output.
-# Throws     : Croaks on invalid invocation
-# Notes      : a wrapper for _log() which invokes that function with a severity
-#              of 'DEBUG'
-# See Also   : _log()
-sub _debug{
-    my $class = shift;
-    my $message = shift;
-    my $stack_increment = shift;
-    
-    # validate the args
-    _force_class($class);
-    
-    #pass the call on to _log
-    return $_CLASS->_log('DEBUG', $message, $stack_increment);
-}
-
-#####-SUB-######################################################################
-# Type       : CLASS (PRIVATE)
-# Purpose    : Function for issuing a warning
-# Returns    : Always returns 1 to keep perlcritic happy
-# Arguments  : 1. the warning message to log
-#              2. OPTIONAL - a number of function calls to hide from users in
-#                 the output.
-# Throws     : Croaks on invalid invocation
-# Notes      : a wrapper for _log() which invokes that function with a severity
-#              of 'WARNING'
-# See Also   : _log()
-sub _warn{
-    my $class = shift;
-    my $message = shift;
-    my $stack_increment = shift;
-    
-    # validate the args
-    _force_class($class);
-    
-    #pass the call on to _log
-    return $_CLASS->_log('WARNING', $message, $stack_increment);
-}
-
-#####-SUB-######################################################################
-# Type       : CLASS (PRIVATE)
-# Purpose    : Function for throwing an error
-# Returns    : Always returns 1 to keep perlcritic happy
-# Arguments  : 1. the error message to log
-#              2. OPTIONAL - a number of function calls to hide from users in
-#                 the output.
-# Throws     : Croaks on invalid invocation
-# Notes      : a wrapper for _log() which invokes that function with a severity
-#              of 'ERROR'
-# See Also   : _log()
-sub _error{
-    my $class = shift;
-    my $message = shift;
-    my $stack_increment = shift;
-    
-    # validate the args
-    _force_class($class);
-    
-    #pass the call on to _log
-    return $_CLASS->_log('ERROR', $message, $stack_increment);
-}
-
-#####-SUB-######################################################################
-# Type       : CLASS ('PRIVATE')
-# Purpose    : Return a reference to $_KEYS to make the variable directly
-#              available to bundled packages.
-# Returns    : A hashref
-# Arguments  : NONE
-# Throws     : Croaks on invalid invocation
-# Notes      :
-# See Also   :
-sub _key_definitions{
-    my $class = shift;
-    
-    # validate args
-    _force_class($class);
-    
-    # return the reference
-    return $_KEYS;
-}
 
 #####-SUB-######################################################################
 # Type       : INSTANCE ('PRIVATE')
@@ -2218,7 +1831,7 @@ sub _clone_config{
         eval{
             $_CLASS->is_valid_config($clone, 1); # returns 1 if valid
         }or do{
-            $_CLASS->_error('cloning error ('.$EVAL_ERROR.')');
+            _error('cloning error ('.$EVAL_ERROR.')');
         };
     }
     
@@ -2246,18 +1859,21 @@ sub _validate_key{
     # validate the args
     _force_class($class);
     unless(defined $key && ref $key eq q{} && defined $val){
-        $_CLASS->_error('invoked with invalid args');
+        _error('invoked with invalid args');
     }
     
+    # get a reference to the key definitions
+    my $key_definitions = $_TYPES_CLASS->_config_keys();
+    
     # make sure the key exists
-    unless(defined $_KEYS->{$key}){
+    unless(defined $key_definitions->{$key}){
         carp("'$key' is not a valid config key name") if $croak;
         return 0;
     }
     
     # make sure the value passes the validation function for the key
-    unless($_KEYS->{$key}->{type}->check($val)){
-        croak("Invalid value specified for config key '$key'. Must be: ".$_KEYS->{$key}->{desc}) if $croak;
+    unless($key_definitions->{$key}->{type}->check($val)){
+        croak("Invalid value specified for config key '$key'. Must be: ".$key_definitions->{$key}->{expects}) if $croak;
         return 0;
     }
     
@@ -2287,13 +1903,13 @@ sub _filter_word_list{
     # validate the args
     _force_class($class);
     unless(defined $word_list_ref && ref $word_list_ref eq q{ARRAY}){
-        $_CLASS->_error('invoked with invalid word list');
+        _error('invoked with invalid word list');
     }
     unless(defined $min_len && ref $min_len eq q{} && $min_len =~ m/^\d+$/sx && $min_len > 3){
-        $_CLASS->_error('invoked with invalid minimum word length');
+        _error('invoked with invalid minimum word length');
     }
     unless(defined $max_len && ref $max_len eq q{} && $max_len =~ m/^\d+$/sx && $max_len >= $min_len){
-        $_CLASS->_error('invoked with invalid maximum word length');
+        _error('invoked with invalid maximum word length');
     }
     
     #build the array of words of appropriate length
@@ -2338,7 +1954,7 @@ sub _contains_accented_letters{
     # validate the args
     _force_class($class);
     unless(defined $word_list_ref && ref $word_list_ref eq q{ARRAY}){
-        $_CLASS->_error('invoked with invalid word list');
+        _error('invoked with invalid word list');
     }
     
     # assume no accented characters, test until 1 is found
@@ -2376,14 +1992,14 @@ sub _random_int{
     # validate args
     _force_instance($self);
     unless(defined $max && $max =~ m/^\d+$/sx && $max > 0){
-        $_CLASS->_error('invoked with invalid random limit');
+        _error('invoked with invalid random limit');
     }
     
     # calculate the random number
     my $ans = ($self->_rand() * 1_000_000) % $max;
     
     # return it
-    $_CLASS->_debug("returning $ans (max=$max)");
+    _debug("returning $ans (max=$max)");
     return $ans;
 }
 
@@ -2403,7 +2019,7 @@ sub _random_digits{
     # validate args
     _force_instance($self);
     unless(defined $num && $num =~ m/^\d+$/sx && $num > 0){
-        $_CLASS->_error('invoked with invalid number of digits');
+        _error('invoked with invalid number of digits');
     }
     
     # assemble the response
@@ -2436,7 +2052,7 @@ sub _rand{
     my $num = shift @{$self->{_CACHE_RANDOM}};
     if(!defined $num){
         # the cache was empty - so try top up the random cache - could croak
-        $_CLASS->_debug('random cache empty - attempting to replenish');
+        _debug('random cache empty - attempting to replenish');
         $self->_increment_random_cache();
         
         # try shift again
@@ -2445,11 +2061,11 @@ sub _rand{
     
     # make sure we got a valid random number
     unless(defined $num && $num =~ m/^\d+([.]\d+)?$/sx && $num >= 0 && $num <= 1){
-        $_CLASS->_error('found invalid entry in random cache');
+        _error('found invalid entry in random cache');
     }
     
     # return the random number
-    $_CLASS->_debug("returning $num (".(scalar @{$self->{_CACHE_RANDOM}}).' remaining in cache)');
+    _debug("returning $num (".(scalar @{$self->{_CACHE_RANDOM}}).' remaining in cache)');
     return $num;
 }
 
@@ -2470,15 +2086,15 @@ sub _increment_random_cache{
     
     # genereate the random numbers
     my @random_numbers = $self->{_RNG}->random_numbers($_CLASS->config_random_numbers_required($self->{_CONFIG}, 'skip valiation'));
-    $_CLASS->_debug('generated '.(scalar @random_numbers).' random numbers ('.(join q{, }, @random_numbers).')');
+    _debug('generated '.(scalar @random_numbers).' random numbers ('.(join q{, }, @random_numbers).')');
     
     # validate them
     unless(scalar @random_numbers){
-        $_CLASS->_error('random function did not return any random numbers');
+        _error('random function did not return any random numbers');
     }
     foreach my $num (@random_numbers){
         unless($num =~ m/^1|(0([.]\d+)?)$/sx){
-            $_CLASS->_error("random function returned and invalid value ($num)");
+            _error("random function returned and invalid value ($num)");
         }
     }
     
@@ -2509,15 +2125,15 @@ sub _random_words{
     
     # get the random words
     my @ans = ();
-    $_CLASS->_debug('about to generate '.$self->{_CONFIG}->{num_words}.' words');
+    _debug('about to generate '.$self->{_CONFIG}->{num_words}.' words');
     while ((scalar @ans) < $self->{_CONFIG}->{num_words}){
         my $word = $self->{_CACHE_DICTIONARY_LIMITED}->[$self->_random_int(scalar @{$self->{_CACHE_DICTIONARY_LIMITED}})];
-        $_CLASS->_debug("generate word=$word");
+        _debug("generate word=$word");
         push @ans, $word;
     }
     
     # return the list of random words
-    $_CLASS->_debug('returning '.(scalar @ans).' words');
+    _debug('returning '.(scalar @ans).' words');
     return @ans;
 }
 
@@ -2571,7 +2187,7 @@ sub _padding_char{
     # validate args
     _force_instance($self);
     unless(defined $sep){
-        $_CLASS->_error('no separator character passed');
+        _error('no separator character passed');
     }
     
     # if there is no padding character needed, return an empty string
@@ -2614,7 +2230,7 @@ sub _transform_case{
     # validate args
     _force_instance($self);
     unless(defined $words_ref && ref $words_ref eq 'ARRAY'){
-        $_CLASS->_error('no words array reference passed');
+        _error('no words array reference passed');
     }
     
     # if the transform is set to nothing, then just return
@@ -2684,7 +2300,7 @@ sub _substitute_characters{
     # validate args
     _force_instance($self);
     unless(defined $words_ref && ref $words_ref eq 'ARRAY'){
-        $_CLASS->_error('no words array reference passed');
+        _error('no words array reference passed');
     }
     
     # if no substitutions are defined, do nothing
@@ -2731,12 +2347,12 @@ sub _check_presets{
             $_CLASS->is_valid_config($_PRESETS->{$preset}->{config}, 1);
             1; # ensure truthy evaluation on success
         }or do{
-            $_CLASS->_warn("preset $preset has invalid config ($EVAL_ERROR)");
+            _warn("preset $preset has invalid config ($EVAL_ERROR)");
             $num_problems++;
         };
     }
     if($num_problems == 0){
-        $_CLASS->_debug('all presets OK');
+        _debug('all presets OK');
     }
     
     # to keep perlcritic happy
@@ -2777,24 +2393,24 @@ sub _best_available_rng{
     eval{
         $rng = Crypt::HSXKPasswd::RNG::Math_Random_Secure->new(); # will return a truthy value on success
     }or do{
-        $_CLASS->_debug("Failed to instantiate a Crypt::HSXKPasswd::RNG::Math_Random_Secure object with error: $EVAL_ERROR");
+        _debug("Failed to instantiate a Crypt::HSXKPasswd::RNG::Math_Random_Secure object with error: $EVAL_ERROR");
     };
     return $rng if $rng;
     eval{
         $rng = Crypt::HSXKPasswd::RNG::Data_Entropy->new(); # will return a truthy value on success
     }or do{
-        $_CLASS->_debug("Failed to instantiate a Crypt::HSXKPasswd::RNG::Data_Entropy object with error: $EVAL_ERROR");
+        _debug("Failed to instantiate a Crypt::HSXKPasswd::RNG::Data_Entropy object with error: $EVAL_ERROR");
     };
     return $rng if $rng;
     eval{
         $rng = Crypt::HSXKPasswd::RNG::DevUrandom->new(); # will return a truthy value on success
     }or do{
-        $_CLASS->_debug("Failed to instantiate a Crypt::HSXKPasswd::RNG::DevUrandom object with error: $EVAL_ERROR");
+        _debug("Failed to instantiate a Crypt::HSXKPasswd::RNG::DevUrandom object with error: $EVAL_ERROR");
     };
     return $rng if $rng;
     
     # if we got here, no secure RNGs were avaialable, so warn, then return an instance of the basic RNG
-    $_CLASS->_warn(q{using Perl's built-in rand() function for random number generation. This is secure enough for most users, but you can get more secure random numbers by installing Math::Random::Secure or Data::Entropy::Algorithms});
+    _warn(q{using Perl's built-in rand() function for random number generation. This is secure enough for most users, but you can get more secure random numbers by installing Math::Random::Secure or Data::Entropy::Algorithms});
     return Crypt::HSXKPasswd::RNG::Basic->new();
 }
 
@@ -2857,11 +2473,11 @@ sub _calculate_entropy_stats{
     my $b_alphabet_count = Math::BigInt->new($alphabet_count);
     my $length_avg = round(($config_stats{length_min} + $config_stats{length_max})/2);
     $ans{permutations_blind_min} = $b_alphabet_count->copy()->bpow($b_length_min); #$alphabet_count ** $length_min;
-    $_CLASS->_debug('got permutations_blind_min='.$ans{permutations_blind_min});
+    _debug('got permutations_blind_min='.$ans{permutations_blind_min});
     $ans{permutations_blind_max} = $b_alphabet_count->copy()->bpow($b_length_max); #$alphabet_count ** $length_max;
-    $_CLASS->_debug('got permutations_blind_max='.$ans{permutations_blind_max});
+    _debug('got permutations_blind_max='.$ans{permutations_blind_max});
     $ans{permutations_blind} = $b_alphabet_count->copy()->bpow(Math::BigInt->new($length_avg)); #$alphabet_count ** $length_avg;
-    $_CLASS->_debug('got permutations_blind='.$ans{permutations_blind});
+    _debug('got permutations_blind='.$ans{permutations_blind});
     
     # calculate the seen permutations
     my $num_words = scalar @{$self->{_CACHE_DICTIONARY_LIMITED}};
@@ -2897,17 +2513,17 @@ sub _calculate_entropy_stats{
         $num_padding_digits--;
     }
     $ans{permutations_seen} = $b_seen_perms;
-    $_CLASS->_debug('got permutations_seen='.$ans{permutations_seen});
+    _debug('got permutations_seen='.$ans{permutations_seen});
     
     # calculate the entropy values based on the permutations
     $ans{entropy_blind_min} = $ans{permutations_blind_min}->copy()->blog(2)->numify();
-    $_CLASS->_debug('got entropy_blind_min='.$ans{entropy_blind_min});
+    _debug('got entropy_blind_min='.$ans{entropy_blind_min});
     $ans{entropy_blind_max} = $ans{permutations_blind_max}->copy()->blog(2)->numify();
-    $_CLASS->_debug('got entropy_blind_max='.$ans{entropy_blind_max});
+    _debug('got entropy_blind_max='.$ans{entropy_blind_max});
     $ans{entropy_blind} = $ans{permutations_blind}->copy()->blog(2)->numify();
-    $_CLASS->_debug('got entropy_blind='.$ans{entropy_blind});
+    _debug('got entropy_blind='.$ans{entropy_blind});
     $ans{entropy_seen} = $ans{permutations_seen}->copy()->blog(2)->numify();
-    $_CLASS->_debug('got entropy_seen='.$ans{entropy_seen});
+    _debug('got entropy_seen='.$ans{entropy_seen});
     
     # return the stats
     return %ans;
@@ -3053,14 +2669,14 @@ sub _update_entropystats_cache{
         # blind warning if needed
         unless(uc $SUPRESS_ENTROPY_WARNINGS eq 'BLIND'){
             if($self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min} < $ENTROPY_MIN_BLIND){
-                $_CLASS->_warn('for brute force attacks, the combination of the loaded config and dictionary produces an entropy of '.$self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min}.'bits, below the minimum recommended '.$ENTROPY_MIN_BLIND.'bits');
+                _warn('for brute force attacks, the combination of the loaded config and dictionary produces an entropy of '.$self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min}.'bits, below the minimum recommended '.$ENTROPY_MIN_BLIND.'bits');
             }
         }
         
         # seen warnings if needed
         unless(uc $SUPRESS_ENTROPY_WARNINGS eq 'SEEN'){
             if($self->{_CACHE_ENTROPYSTATS}->{entropy_seen} < $ENTROPY_MIN_SEEN){
-                $_CLASS->_warn('for attacks assuming full knowledge, the combination of the loaded config and dictionary produces an entropy of '.$self->{_CACHE_ENTROPYSTATS}->{entropy_seen}.'bits, below the minimum recommended '.$ENTROPY_MIN_SEEN.'bits');
+                _warn('for attacks assuming full knowledge, the combination of the loaded config and dictionary produces an entropy of '.$self->{_CACHE_ENTROPYSTATS}->{entropy_seen}.'bits, below the minimum recommended '.$ENTROPY_MIN_SEEN.'bits');
             }
         }
     }
@@ -3085,7 +2701,7 @@ sub _render_bigint{
     # validate the args
     _force_class($class);
     unless(defined $bigint && $bigint->isa('Math::BigInt')){
-        $_CLASS->_error('invalid args, must pass a Math::BigInt object');
+        _error('invalid args, must pass a Math::BigInt object');
     }
     
     # convert the bigint to an array of characters
@@ -3127,7 +2743,7 @@ sub _grapheme_length{
     # validate args
     _force_class($class);
     unless(defined $string && ref $string eq q{}){
-        $_CLASS->_error('invalid args, must pass a scalar');
+        _error('invalid args, must pass a scalar');
     }
     
     # do the calculation
@@ -4726,7 +4342,7 @@ C<type> - a C<Type::Tiny> object representing the valid data type for the key.
 
 =item *
 
-C<type_description> - an English description of valid values for the key.
+C<expects> - an English description of valid values for the key.
 
 =back
 

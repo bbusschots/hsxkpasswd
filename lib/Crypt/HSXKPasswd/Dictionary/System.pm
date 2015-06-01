@@ -8,7 +8,7 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw( -no_match_vars ); # for more readable code
-use Crypt::HSXKPasswd; # for the error function
+use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 use Crypt::HSXKPasswd::Dictionary::Basic; # used to process the dictionary file
 
 # set things up for using UTF-8
@@ -32,7 +32,6 @@ use version; our $VERSION = qv('1.1_01');
 
 # utility variables
 my $_CLASS = __PACKAGE__;
-my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 
 # possible dictionary file locations
 my @_DICTIONARY_PATHS = qw(/usr/share/dict/words /usr/dict/words);
@@ -53,7 +52,7 @@ sub new{
     my $class = shift;
     
     # validate the args
-    Crypt::HSXKPasswd::_force_class($class, $_CLASS);
+    _force_class($class);
     
     # try find a dictionary file
     my $dictionary = q{};
@@ -65,7 +64,7 @@ sub new{
         }
     }
     unless($dictionary){
-        $_MAIN_CLASS->_error('no system dictionary found');
+        _error('no system dictionary found');
     }
     
     # initialise and bless the object
@@ -96,7 +95,7 @@ sub clone{
     my $self = shift;
     
     # validate the args
-    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
+    _force_instance($self);
     
     # initialise the clone
     my $clone = {
@@ -124,7 +123,7 @@ sub word_list{
     my $self = shift;
     
     # validate the args
-    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
+    _force_instance($self);
     
     # return a reference to the word list
     return $self->{system_dictionary}->word_list();
@@ -143,7 +142,7 @@ sub source{
     my $self = shift;
     
     # validate args
-    Crypt::HSXKPasswd::_force_instance($self, $_CLASS);
+    _force_instance($self);
     
     my $source = $self->SUPER::source();
     $source .= ' ('.$self->{file_path}.')';
