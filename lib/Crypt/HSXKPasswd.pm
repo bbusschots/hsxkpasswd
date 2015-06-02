@@ -563,14 +563,9 @@ sub presets_json{
 #              valid config key is added to the library.
 # See Also   :
 sub clone_config{
-    my $class = shift;
-    my $config = shift;
-    
-    # validate the args
+    state $args_check = compile(ClassName, Config);
+    my ($class, $config) = $args_check->(@_);
     _force_class($class);
-    unless(defined $config && $_CLASS->is_valid_config($config)){
-        _error('invalid args - a valid config hashref must be passed');
-    }
     
     # get a reference to the key definitions from the types class
     my $defined_keys = $_TYPES_CLASS->_config_keys();
@@ -626,104 +621,27 @@ sub clone_config{
 # Purpose    : validate a config hashref
 # Returns    : 1 if the config is valid, 0 otherwise
 # Arguments  : 1. a hashref to validate
-#              2. OPTIONAL - a true value to throw exception on error
+#              2. OPTIONAL - a named argument croak with a value of 1 or 1
 # Throws     : Croaks on invalid args, or on error if second arg is truthy
 # Notes      : This function needs to be updated each time a new valid config
 #              key is added to the library.
 # See Also   :
 ## no critic (ProhibitExcessComplexity);
 sub is_valid_config{
-    my $class = shift;
-    my $config = shift;
-    my $croak = shift;
-    
-    # validate the args
+    state $args_check = compile(ClassName, Item, slurpy Dict[croak => Optional[TrueFalse]]);
+    my ($class, $config, $options) = $args_check->(@_);
     _force_class($class);
-    unless($config && ref $config eq 'HASH'){
-        _error('invalid arguments');
+    
+    # validate the config
+    my $is_valid = Config->check($config) || 0;
+    
+    # croak if appropriate
+    if($options->{croak}){
+        _error(Config->get_message($config));
     }
     
-    #
-    # check the keys
-    #
-    
-    # get a reference to the key definitions in the types class
-    my $key_definitions = $_TYPES_CLASS->_config_keys();
-    
-    my @keys = sort keys %{$key_definitions};
-    
-    # first ensure all required keys are present
-    foreach my $key (@keys){
-        # skip non-required keys
-        next unless $key_definitions->{$key}->{required};
-        
-        # make sure the passed config contains the key
-        unless(defined $config->{$key}){
-            croak("key '$key' is required, but not defined") if $croak;
-            return 0;
-        }
-    }
-    
-    # next ensure all passed keys have valid values
-    foreach my $key (@keys){
-        # skip keys not present in the config under test
-        next unless defined $config->{$key};
-        
-        # validate the key
-        eval{
-            $_CLASS->_validate_key($key, $config->{$key}, 1); # returns 1 on success
-        }or do{
-            croak("Invalid value specified for config key '$key'. Must Be: ".$key_definitions->{$key}->{expects}) if $croak;
-            return 0;
-        };
-    }
-    
-    # finally, make sure all other requirements are met
-    
-    # if there is a need for a symbol alphabet, make sure one is defined
-    if($config->{separator_character} eq 'RANDOM'){
-        unless(defined $config->{symbol_alphabet} || defined $config->{separator_alphabet}){
-            croak(qq{setting separator_character='$config->{separator_character}' requires that one of the config keys symbol_alphabet or separator_alphabet be set}) if $croak;
-            return 0;
-        }
-    }
-    
-    # if there is any kind of character padding, make sure a padding character is specified
-    if($config->{padding_type} ne 'NONE'){
-        unless(defined $config->{padding_character}){
-            croak(qq{setting padding_type='$config->{padding_type}' requires that the config key padding_character be set}) if $croak;
-            return 0;
-        }
-        if($config->{padding_character} eq 'RANDOM'){
-            unless(defined $config->{symbol_alphabet} || defined $config->{padding_alphabet}){
-                croak(qq{setting padding_character='$config->{padding_character}' requires that one of the config keys symbol_alphabet or padding_alphabet be set}) if $croak;
-            return 0;
-            }
-        }
-    }
-    
-    # if there is fixed character padding, make sure before and after are specified, and at least one has a value greater than 1
-    if($config->{padding_type} eq 'FIXED'){
-        unless(defined $config->{padding_characters_before} && defined $config->{padding_characters_after}){
-            croak(q{setting padding_type='FIXED' requires that both the config keys padding_characters_before and padding_characters_after be set}) if $croak;
-            return 0;
-        }
-        unless($config->{padding_characters_before} + $config->{padding_characters_after} > 0){
-            croak(q{setting padding_type='FIXED' requires that both the config keys padding_characters_before and padding_characters_after be set, and that at least one of them be set to a value greater than one (to specify that no padding be used, set the config key padding_type to 'NONE')}) if $croak;
-            return 0;
-        }
-    }
-    
-    # if there is adaptive padding, make sure a length is specified
-    if($config->{padding_type} eq 'ADAPTIVE'){
-        unless(defined $config->{pad_to_length}){
-            croak(q{setting padding_type='ADAPTIVE' requires that the config key pad_to_length be set}) if $croak;
-            return 0;
-        }
-    }
-    
-    # if we got this far, all is well, so return true
-    return 1;
+    # return the result of the validation
+    return $is_valid;
 }
 ## use critic
 
@@ -732,20 +650,14 @@ sub is_valid_config{
 # Purpose    : Convert a config hashref to a JSON String
 # Returns    : A scalar
 # Arguments  : 1. A config hashref
-# Throws     : Croaks on invalid invocation or with invalid args. Carps if there
-#              are problems with the config hashref.
-# Notes      : The function will croak unless the standard Perl JSON module is
-#              installed.
+# Throws     : Croaks on invalid invocation, invalid args, or if the JSON module
+#              is not available
+# Notes      : 
 # See Also   :
 sub config_to_json{
-    my $class = shift;
-    my $config = shift;
-    
-    # validate the args
+    state $args_check = compile(ClassName, Config);
+    my ($class, $config) = $args_check->(@_);
     _force_class($class);
-    unless(defined $config && ref $config eq 'HASH'){
-        _error('invalid arguments');
-    }
     
     # make sure JSON parsing is available
     unless($_CAN_JSON){
@@ -775,17 +687,9 @@ sub config_to_json{
 # Notes      :
 # See Also   :
 sub config_to_string{
-    my $class = shift;
-    my $config = shift;
-    
-    # validate the args
+    state $args_check = compile(ClassName, Config);
+    my ($class, $config) = $args_check->(@_);
     _force_class($class);
-    unless(defined $config && ref $config eq 'HASH'){
-        _error('invalid arguments');
-    }
-    unless($_CLASS->is_valid_config($config)){
-        _error('invalid arguments - invalid config hashref passed');
-    }
     
     # get a reference to the key definitions from the types class
     my $defined_keys = $_TYPES_CLASS->_config_keys();
@@ -838,26 +742,13 @@ sub config_to_string{
 # Notes      :
 # See Also   :
 sub preset_description{
-    my $class = shift;
-    my $preset = shift;
-    
-    # default blank presets to 'DEFAULT'
-    $preset = 'DEFAULT' unless defined $preset;
-    
-    # convert preset names to upper case
-    $preset = uc $preset;
+    state $args_check = compile(ClassName, Optional[PresetName]);
+    my ($class, $preset) = $args_check->(@_);
+    _force_class($class);
+    $preset = 'DEFAULT' unless $preset;
     
     # get a reference to the preset definitions from the Types class
     my $preset_defs = $_TYPES_CLASS->_presets();
-    
-    # validate the args
-    _force_class($class);
-    unless(ref $preset eq q{}){
-        _error('invalid args - if present, the first argument must be a scalar');
-    }
-    unless(defined $preset_defs->{$preset}){
-        _error("preset '$preset' does not exist");
-    }
     
     # return the description by loading the preset
     return $preset_defs->{$preset}->{description};
@@ -869,15 +760,10 @@ sub preset_description{
 # Purpose    : Return a list of all valid preset names
 # Returns    : An array of preset names as scalars
 # Arguments  : NONE
-# Throws     : Croaks on invalid invocation.
+# Throws     : NOTHING
 # Notes      :
 # See Also   :
 sub defined_presets{
-    my $class = shift;
-    
-    # validate the args
-    _force_class($class);
-    
     # return the preset names
     my @preset_names = sort keys %{$_TYPES_CLASS->_presets()};
     return @preset_names;
@@ -888,15 +774,10 @@ sub defined_presets{
 # Purpose    : Render the defined presets as a string
 # Returns    : A scalar
 # Arguments  : NONE
-# Throws     : Croaks on invalid invocation
+# Throws     : NOTHING
 # Notes      :
 # See Also   :
 sub presets_to_string{
-    my $class = shift;
-    
-    # validate the args
-    _force_class($class);
-    
     # get a reference to the preset definitions from th Types class
     my $preset_defs = $_TYPES_CLASS->_presets();
     
@@ -929,21 +810,13 @@ sub presets_to_string{
 #              single password with a given config.
 # Returns    : An integer
 # Arguments  : 1) a valid config hashref
-#              2) OPTIONAL - a true value to indicate that valiation of the
-#                 config hashref should be skipped.
 # Throws     : Croaks in invalid invocation, or invalid args
 # Notes      :
 # See Also   :
 sub config_random_numbers_required{
-    my $class = shift;
-    my $config = shift;
-    my $skip_validation = shift;
-    
-    # validate the args
+    state $args_check = compile(ClassName, Config);
+    my ($class, $config) = $args_check->(@_);
     _force_class($class);
-    unless(defined $config && ($skip_validation || $_CLASS->is_valid_config($config))){
-        _error('invalid args - a valid config hashref must be passed');
-    }
     
     # calculate the number of random numbers needed to generate the password
     my $num_rand = 0;
@@ -975,11 +848,9 @@ sub config_random_numbers_required{
 #              * 'random_numbers_required' - the number of random numbers needed
 #                to generate a single password using the given config
 # Arguments  : 1. A valid config hashref
-#              2. OPTONAL - a truthy value to suppress warnings if the config
-#                 is such that there are uncertainties in the calculations.
-#                 E.g. the max length is uncertain when the config contains
-#                 a character substitution with a replacement of length greater
-#                 than 1
+#              2. OPTONAL - a named argument 'suppress_warnings' to indicate that
+#                 no warnings should be issued if the config is such that there
+#                 are uncertainties in the calculation.
 # Throws     : Croaks on invalid invocation or args, carps if multi-character
 #              substitutions are in use when not using adapive padding
 # Notes      : This function ignores character replacements, if one or more
@@ -987,15 +858,10 @@ sub config_random_numbers_required{
 #              to adaptive, this function will return an invalid max length.
 # See Also   :
 sub config_stats{
-    my $class = shift;
-    my $config = shift;
-    my $suppres_warnings = shift;
-    
-    # validate the args
+    state $args_check = compile(ClassName, Config, slurpy Dict[suppress_warnings => Optional[TrueFalse]]);
+    my ($class, $config, $options) = $args_check->(@_);
     _force_class($class);
-    unless(defined $config && $_CLASS->is_valid_config($config)){
-        _error('invalid args - a valid config hashref must be passed');
-    }
+    my $suppres_warnings = $options->{suppress_warnings} || 0;
     
     # calculate the lengths
     my $len_min = 0;
@@ -1031,7 +897,7 @@ sub config_stats{
     }
     
     # calculate the number of random numbers needed to generate the password
-    my $num_rand = $_CLASS->config_random_numbers_required($config, 'skip valiation');
+    my $num_rand = $_CLASS->config_random_numbers_required($config);
     
     # detect whether or not we need to carp about multi-character replacements
     if($config->{padding_type} ne 'ADAPTIVE' && !$suppres_warnings){
@@ -2057,7 +1923,7 @@ sub _increment_random_cache{
     _force_instance($self);
     
     # genereate the random numbers
-    my @random_numbers = $self->{_RNG}->random_numbers($_CLASS->config_random_numbers_required($self->{_CONFIG}, 'skip valiation'));
+    my @random_numbers = $self->{_RNG}->random_numbers($_CLASS->config_random_numbers_required($self->{_CONFIG}));
     _debug('generated '.(scalar @random_numbers).' random numbers ('.(join q{, }, @random_numbers).')');
     
     # validate them
@@ -2454,7 +2320,7 @@ sub _calculate_entropy_stats{
     my %ans = ();
     
     # get the password length details for the config
-    my %config_stats = $_CLASS->config_stats($self->{_CONFIG}, 'supress errors');
+    my %config_stats = $_CLASS->config_stats($self->{_CONFIG}, suppress_warnings => 1);
     my $b_length_min = Math::BigInt->new($config_stats{length_min});
     my $b_length_max = Math::BigInt->new($config_stats{length_max});
     
@@ -4434,6 +4300,10 @@ as the hashes returned by the function C<config_key_definition()>.
 =head3 config_stats()
 
     my %stats = Crypt::HSXKPasswd->config_stats($config);
+    my %stats = Crypt::HSXKPasswd->config_stats(
+        $config,
+        suppress_warnings => 1,
+    );
     
 This function requires one argument, a valid config hashref. It returns a hash
 of statistics about a given configuration. The hash is indexed by the
@@ -4465,7 +4335,8 @@ the config passed contains such a character substitution, the length will be
 calculated ignoring the possibility that one or more extra characters could
 be introduced depending on how many, if any, of the long substitutions get
 triggered by the randomly chosen words. If this happens the function will also
-carp with a warning.
+carp with a warning. Such warnings can be suppressed by passing an optional
+named argument C<suppress_warnings> with the value C<1>.
 
 =head3 config_to_json()
 
@@ -4519,17 +4390,25 @@ This function returns the list of defined preset names as an array of strings.
 
 =head3 is_valid_config()
 
+    # determine the validity
     my $is_ok = Crypt::HSXKPasswd->is_valid_config($config);
     
-This function must be passed a hashref to test as the first argument or it will
-croak. The function returns 1 if the passed config is valid, and 0 otherwise.
+    # assert the validity - will croak if the config is invalid
+    Crypt::HSXKPasswd->is_valid_config($config, croak => 1);
+    
+This function must be passed a hashref to test as the first argument. The
+function returns 1 if the passed config is valid, and 0 otherwise.
 
-Optionally, any truthy value can be passed as a second argument to indicate
-that the function should croak on invalid configs rather than returning 0;
+Optionally, a named argument C<croak> can also be passed to control whehther or
+not the function should croak if the config is invalid. The value of this named
+argument should be C<1> or C<0>.
+
+When calling the function with C<croak> set to C<1>, the message thrown by croak
+will explain why the config is invalid.
 
     use English qw( -no_match_vars );
     eval{
-        Crypt::HSXKPasswd->is_valid_config($config, 'do_croak');
+        Crypt::HSXKPasswd->is_valid_config($config, croak => 1);
     }or do{
         print "ERROR - config is invalid because: $EVAL_ERROR\n";
     }
