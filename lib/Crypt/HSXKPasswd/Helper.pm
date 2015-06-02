@@ -43,9 +43,9 @@ my $_CLASS = __PACKAGE__;
 my $BASE_PACKAGE = 'Crypt::HSXKPasswd';
 
 # Debug and logging configuration
-our $LOG_STREAM = *STDERR; # default to logging to STDERR
-our $LOG_ERRORS = 0; # default to not logging errors
-our $DEBUG = 0; # default to not having debugging enabled
+our $_LOG_STREAM = *STDERR; # default to logging to STDERR
+our $_LOG_ERRORS = 0; # default to not logging errors
+our $_DEBUG = 0; # default to not having debugging enabled
 
 # Declare Package-level variable needed to control Carp
 our @CARP_NOT;
@@ -259,12 +259,12 @@ sub __log{
     }
     unless(defined $message && ref $message eq q{}){
         my $output = 'ERROR - '.(caller 0)[3]."(): invoked with severity '$severity' without message at ".(caller 1)[1].q{:}.(caller 1)[2];
-        if($LOG_ERRORS){
+        if($_LOG_ERRORS){
             my $log_output = $output;
             if($_CAN_STACK_TRACE){
                 $log_output .= "\nStack Trace:\n".Devel::StackTrace->new()->as_string();
             }
-            print {$LOG_STREAM} $log_output."\n";
+            print {$_LOG_STREAM} $log_output."\n";
         }
         confess($output);
     }
@@ -281,7 +281,7 @@ sub __log{
     my $caller_index = 2 + $stack_increment;
     my $calling_func = (caller 1)[3];
     unless($calling_func =~ m/^$_CLASS[:]{2}((_debug)|(_warn)|(_error))$/sx){
-        print {$LOG_STREAM} 'WARNING - '.(caller 0)[3].q{(): invoked directly rather than via _debug(), _warn() or _error() - DO NOT DO THIS!};
+        print {$_LOG_STREAM} 'WARNING - '.(caller 0)[3].q{(): invoked directly rather than via _debug(), _warn() or _error() - DO NOT DO THIS!};
         $caller_index++;
     }
 
@@ -320,36 +320,36 @@ sub __log{
     $output .= "(): $message";
     if($severity eq 'DEBUG'){
         # debugging, so always print and do nothing more
-        print {$LOG_STREAM} "$output\n" if $DEBUG;
+        print {$_LOG_STREAM} "$output\n" if $_DEBUG;
     }elsif($severity eq 'WARNING'){
         # warning - always carp, but first print if needed
-        if($LOG_ERRORS){
-            print {$LOG_STREAM} "$output\n";
+        if($_LOG_ERRORS){
+            print {$_LOG_STREAM} "$output\n";
         }
         carp($output);
     }elsif($severity eq 'ERROR'){
         # error - print if needed, then confess or croak depending on whether or not debugging
-        if($LOG_ERRORS){
+        if($_LOG_ERRORS){
             my $log_output = $output;
-            if($DEBUG && $_CAN_STACK_TRACE){
+            if($_DEBUG && $_CAN_STACK_TRACE){
                 $log_output .= "\nStack Trace:\n".Devel::StackTrace->new()->as_string();
-                print {$LOG_STREAM} "$output\n";
+                print {$_LOG_STREAM} "$output\n";
             }
-            print {$LOG_STREAM} "$log_output\n";
+            print {$_LOG_STREAM} "$log_output\n";
         }
-        if($DEBUG){
+        if($_DEBUG){
             confess($output);
         }else{
             croak($output);
         }
     }else{
         # we have an unknown severity, so assume the worst and confess (also log if needed)
-        if($LOG_ERRORS){
+        if($_LOG_ERRORS){
             my $log_output = $output;
             if($_CAN_STACK_TRACE){
                 $log_output .= "\nStack Trace:\n".Devel::StackTrace->new()->as_string();
             }
-            print {$LOG_STREAM} "$log_output\n";
+            print {$_LOG_STREAM} "$log_output\n";
         }
         confess($output);
     }

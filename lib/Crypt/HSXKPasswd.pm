@@ -10,6 +10,7 @@ use English qw( -no_match_vars ); # for more readable code
 use Scalar::Util qw( blessed ); # for checking if a reference is blessed
 use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
+use Type::Tiny; # for generating anonymous type constraints when needed
 use Types::Standard qw( :types ); # for basic type checking (Int Str etc.)
 use Crypt::HSXKPasswd::Types qw( :types :is ); # for custom type checking
 use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
@@ -63,14 +64,9 @@ our @EXPORT = qw( hsxkpasswd );
 use version; our $VERSION = qv('3.1_02');
 
 # acceptable entropy levels
-our $ENTROPY_MIN_BLIND = 78; # 78 bits - equivalent to 12 alpha numeric characters with mixed case and symbols
-our $ENTROPY_MIN_SEEN = 52; # 52 bits - equivalent to 8 alpha numeric characters with mixed case and symbols
-our $SUPRESS_ENTROPY_WARNINGS = 'NONE'; # valid values are 'NONE', 'ALL', 'SEEN', or 'BLIND' (invalid values treated like 'NONE')
-
-# Logging configuration
-our $LOG_STREAM = *STDERR; # default to logging to STDERR
-our $LOG_ERRORS = 0; # default to not logging errors
-our $DEBUG = 0; # default to not having debugging enabled
+my $_ENTROPY_MIN_BLIND = 78; # 78 bits - equivalent to 12 alpha numeric characters with mixed case and symbols
+my $_ENTROPY_MIN_SEEN = 52; # 52 bits - equivalent to 8 alpha numeric characters with mixed case and symbols
+my $_SUPRESS_ENTROPY_WARNINGS = 'NONE'; # valid values are 'NONE', 'ALL', 'SEEN', or 'BLIND' (invalid values treated like 'NONE')
 
 # utility variables
 my $_CLASS = __PACKAGE__;
@@ -288,7 +284,7 @@ sub new{
     _force_class($class);
     
     # before going any further, check the presets if debugging (doing later may cause an error before we test)
-    if($DEBUG){
+    if($_CLASS->module_config('DEBUG')){
         $_CLASS->_check_presets();
     }
     
@@ -359,6 +355,114 @@ sub new{
 #
 # Public Class (Static) functions ---------------------------------------------
 #
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Return or update a module config variable
+# Returns    : The value of the specified module config variable
+# Arguments  : 1) the name of the module config variable
+#              2) OPTIONAL - a new value for the module config variable
+# Throws     : Croaks on invalid invocation, or invalid args
+# Notes      :
+# See Also   :
+sub module_config{
+    my $class = shift;
+    my $config_key = shift;
+    my $new_value = shift;
+    
+    #validate args
+    _force_class($class);
+    unless(defined $config_key && ref $config_key eq q{} && length $config_key){
+        _error('invalid args - must pass the name of a module config variable as the first argument');
+    }
+    
+    # figure out which variable we are accessing
+    if($config_key eq 'LOG_STREAM'){
+        # check if we are a setter
+        if(defined $new_value){
+            # make sure the new value is valid
+            FileHandle->check($new_value) || _error(FileHandle->get_message($new_value));
+            
+            # save the new value
+            $Crypt::HSXKPasswd::Helper::_LOG_STREAM = $new_value;
+        }
+        
+        #return the value
+        return $Crypt::HSXKPasswd::Helper::_LOG_STREAM;
+    }
+    elsif($config_key eq 'LOG_ERRORS'){
+        # check if we are a setter
+        if(defined $new_value){
+            # make sure the new value is valid
+            TrueFalse->check($new_value) || _error(TrueFalse->get_message($new_value));
+            
+            # save the new value
+            $Crypt::HSXKPasswd::Helper::_LOG_ERRORS = $new_value;
+        }
+        
+        #return the value
+        return $Crypt::HSXKPasswd::Helper::_LOG_ERRORS;
+    }
+    elsif($config_key eq 'DEBUG'){
+        # check if we are a setter
+        if(defined $new_value){
+            # make sure the new value is valid
+            TrueFalse->check($new_value) || _error(TrueFalse->get_message($new_value));
+            
+            # save the new value
+            $Crypt::HSXKPasswd::Helper::_DEBUG = $new_value;
+        }
+        
+        #return the value
+        return $Crypt::HSXKPasswd::Helper::_DEBUG;
+    }elsif($config_key eq 'ENTROPY_MIN_BLIND'){
+        # check if we are a setter
+        if(defined $new_value){
+            # make sure the new value is valid
+            PositiveInteger->check($new_value) || _error(PositiveInteger->get_message($new_value));
+            
+            # save the new value
+            $_ENTROPY_MIN_BLIND = $new_value;
+        }
+        
+        #return the value
+        return $_ENTROPY_MIN_BLIND;
+    }elsif($config_key eq 'ENTROPY_MIN_SEEN'){
+        # check if we are a setter
+        if(defined $new_value){
+            # make sure the new value is valid
+            PositiveInteger->check($new_value) || _error(PositiveInteger->get_message($new_value));
+            
+            # save the new value
+            $_ENTROPY_MIN_SEEN = $new_value;
+        }
+        
+        #return the value
+        return $_ENTROPY_MIN_SEEN;
+    }elsif($config_key eq 'SUPRESS_ENTROPY_WARNINGS'){
+        # check if we are a setter
+        if(defined $new_value){
+            # make sure the new value is valid
+            my $enum_type = Type::Tiny->new(
+                parent => Enum[qw( NONE ALL SEEN BLIND )],
+                message => sub{return Crypt::HSXKPasswd::Types::_var_to_string($_).q{ is not a valid value for the module config key 'SUPRESS_ENTROPY_WARNINGS' (must be one of 'NONE', 'ALL', 'SEEN', or 'BLIND')};},
+            );
+            $enum_type->check($new_value) || _error($enum_type->get_message($new_value));
+            
+            # save the new value
+            $_SUPRESS_ENTROPY_WARNINGS = $new_value;
+        }
+        
+        #return the value
+        return $_SUPRESS_ENTROPY_WARNINGS;
+    }else{
+        # the config key was invalid
+        _error(qq{no package variable '$new_value'});
+    }
+    
+    # It's not possible to get here, so return 1 to keep PerlCritic happy
+    return 1;
+}
 
 #####-SUB-######################################################################
 # Type       : CLASS
@@ -2665,18 +2769,18 @@ sub _update_entropystats_cache{
     $self->{_CACHE_ENTROPYSTATS} = \%stats;
     
     # warn if we need to
-    unless(uc $SUPRESS_ENTROPY_WARNINGS eq 'ALL'){
+    unless(uc $_SUPRESS_ENTROPY_WARNINGS eq 'ALL'){
         # blind warning if needed
-        unless(uc $SUPRESS_ENTROPY_WARNINGS eq 'BLIND'){
-            if($self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min} < $ENTROPY_MIN_BLIND){
-                _warn('for brute force attacks, the combination of the loaded config and dictionary produces an entropy of '.$self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min}.'bits, below the minimum recommended '.$ENTROPY_MIN_BLIND.'bits');
+        unless(uc $_SUPRESS_ENTROPY_WARNINGS eq 'BLIND'){
+            if($self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min} < $_ENTROPY_MIN_BLIND){
+                _warn('for brute force attacks, the combination of the loaded config and dictionary produces an entropy of '.$self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min}.'bits, below the minimum recommended '.$_ENTROPY_MIN_BLIND.'bits');
             }
         }
         
         # seen warnings if needed
-        unless(uc $SUPRESS_ENTROPY_WARNINGS eq 'SEEN'){
-            if($self->{_CACHE_ENTROPYSTATS}->{entropy_seen} < $ENTROPY_MIN_SEEN){
-                _warn('for attacks assuming full knowledge, the combination of the loaded config and dictionary produces an entropy of '.$self->{_CACHE_ENTROPYSTATS}->{entropy_seen}.'bits, below the minimum recommended '.$ENTROPY_MIN_SEEN.'bits');
+        unless(uc $_SUPRESS_ENTROPY_WARNINGS eq 'SEEN'){
+            if($self->{_CACHE_ENTROPYSTATS}->{entropy_seen} < $_ENTROPY_MIN_SEEN){
+                _warn('for attacks assuming full knowledge, the combination of the loaded config and dictionary produces an entropy of '.$self->{_CACHE_ENTROPYSTATS}->{entropy_seen}.'bits, below the minimum recommended '.$_ENTROPY_MIN_SEEN.'bits');
             }
         }
     }
@@ -3048,6 +3152,63 @@ math when creating an HSXKPasswd object, and throws a warning if either the
 blind entropy falls below 78bits, or the seen entropy falls below 52 bits.
 
 =head1 SUBROUTINES/METHODS
+
+=head2 MODULE CONFIGURATION
+
+It is possible to tweak the module's behaviour in certain areas by updating the
+values contained within a set of module configuration keys. The values
+associated with these keys can be accessed and updated via the class function
+C<module_config()>.
+
+The following module configuration keys exist within the module:
+
+=over 4
+
+=item *
+
+C<DEBUG> - A True/False value denoting whether or not the module should print
+debug messages. The default is not to print debug messages.
+
+For more details see the DIAGNOSTICS section of this document.
+
+=item *
+
+C<LOG_ERRORS> - A True/False value denoting whether or not errors should be
+logged. The default is not to log.
+
+For more details see the DIAGNOSTICS section of this document.
+
+=item *
+
+C<LOG_STREAM> - the stream to which debug messages should be printed if
+debugging is enbled, and log messages should be printed when error logging is
+enabled. The default is to print to C<STDERR>.
+
+For more details see the DIAGNOSTICS section of this document.
+
+=item *
+
+C<ENTROPY_MIN_BLIND> - the minimum allowable entropy against brute force attacks
+in bits. The default is 78 bits.
+
+For more details see the ENTROPY CHECKING section of this document.
+
+=item *
+
+C<ENTROPY_MIN_SEEN> - the minimum allowable entropy against an attacker with
+full knowledge. The default is 52 bits.
+
+For more details see the ENTROPY CHECKING section of this document.
+
+=item *
+
+C<SUPRESS_ENTROPY_WARNINGS> - control the supression of entropy warnings.
+The value must be one of C<NONE>, C<ALL>, C<SEEN>, or C<BLIND>. The default
+value is C<NONE>.
+
+For more details see the ENTROPY CHECKING section of this document.
+
+=back
 
 =head2 CUSTOM DATA TYPES
 
@@ -3854,58 +4015,57 @@ Preset Definition:
 =head2 ENTROPY CHECKING
 
 For security reasons, this module's default behaviour is to warn (using
-C<carp()>) when ever the loaded combination dictionary file and configuration
+C<carp()>) when ever the loaded combination of word source and configuration
 would result in low-entropy passwords. When the constructor is invoked, or when
-a new dictionary file or new config hashref are loaded into an object (using
-C<dictionary()> or C<config()>) the entropy of the resulting new state of the
-object is calculated and checked against the defined minima.
+an instance's the word source or config are altered (using C<dictionary()> or
+C<config()>), the entropy is re-calculated and re-checked against the defined
+minima.
 
 Entropy is calculated and checked for two scenarios. Firstly, for the best-case
 scenario, when an attacker has no prior knowledge about the password, and must
-resort to brute-force attacks. And secondly, for the worst-case scenario, when
+resort to a brute-force attack. And secondly, for the worst-case scenario, when
 the attacker is assumed to know that this module was used to generate the
-password, and, that the attacker has a copy of the dictionary file and config
+password, and, that the attacker has a copy of the word source and config
 settings used to generate the password.
 
-Entropy checking is controlled via three package variables:
+Entropy checking is controlled via three module configuration variables (which
+can be accessed and updated using the function C<module_config()>):
 
 =over 4
 
 =item *
 
-C<$Crypt::HSXKPasswd::ENTROPY_MIN_BLIND> - the minimum acceptable entropy (in
-bits) for a brute-force attack. The default value for this variable is 78
-(equivalent to a 12 character password consisting of mixed-case letters, digits,
-and symbols).
+C<ENTROPY_MIN_BLIND> - the minimum acceptable entropy in bits for a brute-force
+attack. The default value is 78bits, the equivalent to a 12 character password
+consisting of mixed-case letters, digits, and symbols.
 
 =item *
 
-C<$Crypt::HSXKPasswd::ENTROPY_MIN_SEEN> - the minimum acceptable entropy (in
-bits) for a worst-case attack (where the dictionary and configuration are
-known). The default value for this variable is 52 (equivalent to an 8 character
-password consisting of mixed-case letters, digits, and symbols).
+C<ENTROPY_MIN_SEEN> - the minimum acceptable entropy in bits for a worst-case
+scenario (where the word source and config are known). The default value is
+52bits, equivalent to an 8 character password consisting of mixed-case letters,
+digits, and symbols.
 
 =item *
 
-C<$Crypt::HSXKPasswd::SUPRESS_ENTROPY_WARNINGS> - this variable can be used to
-suppress one or both of the entropy warnings. The following values are valid
-(invalid values are treated as being C<NONE>):
+C<SUPRESS_ENTROPY_WARNINGS> - this variable can be used to suppress one or both
+of the entropy warnings. The following values are valid:
 
 =over 4
 
-=item -
+=item *
 
 C<NONE> - no warnings are suppressed. This is the default value.
 
-=item -
+=item *
 
 C<SEEN> - only warnings for the worst-case scenario are suppressed.
 
-=item -
+=item *
 
 C<BLIND> - only warnings for the best-case scenario are suppressed.
 
-=item -
+=item *
 
 C<ALL> - all entropy warnings are suppressed.
 
@@ -4456,6 +4616,25 @@ that the function should croak on invalid configs rather than returning 0;
     }or do{
         print "ERROR - config is invalid because: $EVAL_ERROR\n";
     }
+    
+=head3 module_config()
+
+    my $debug_val = Crypt::HSXKPasswd->module_config('DEBUG'); # getter
+    Crypt::HSXKPasswd->module_config('DEBUG', 1); # setter
+    
+This function is used to access or alter the value of one of the module
+configuration settings. The first function must always be a valid module
+configuration key name. If no second argument is provided, the value stored
+in the module configuration key will not be updated. To update the stored value,
+pass a new value as a second argument. Regardless of whether or not a second
+argument is passed, the value stored in the module configuration key is always
+returned.
+
+The function will croak if called with an invalid module configuration key name,
+or passed an invalid new value.
+
+For a list of the module configuration keys, see the MODULE CONFIGURATION
+section of this document.
 
 =head3 preset_config()
 
@@ -4798,25 +4977,25 @@ sample status string:
 
     $hsxkpasswd_instance->update_config({separator_character => '+'});
     
-The function updates the config within an HSXKPasswd instance. A hashref with the
-config options to be changed must be passed. The function returns a reference to
-the instance to enable function chaining. The function will croak if the updated
-config would be invalid in some way. Note that if this happens the running
-config will not have been altered in any way.
+The function updates the config within an HSXKPasswd instance. A hashref with
+the config options to be changed must be passed. The function returns a
+reference to the instance to enable function chaining. The function will croak
+if the updated config would be invalid in some way. Note that if this happens
+the running config will not have been altered in any way.
 
 =head1 DIAGNOSTICS
 
 By default this module does all of it's error notification via the functions
 C<carp()>, C<croak()>, and C<confess()> from the C<Carp> module. Optionally,
-all error messages can also be printed. To enable the printing of messages,
-set C<$Crypt::HSXKPasswd::LOG_ERRORS> to a truthy value. All error messages
-will then be printed to the stream at C<$Crypt::HSXKPasswd::LOG_STREAM>, which
-is set to C<STDERR> by default.
+all error messages can also be printed to a stream. To enable the printing of
+messages, set the  C<LOG_ERRORS> module configuration variable to C<1>. All
+error messages will then be printed to the stream defined by the module
+configuration variable C<LOG_STREAM>, which is set to C<STDERR> by default.
 
-Ordinarily this module produces very little output, to enable more verbose
-output C<$Crypt::HSXKPasswd::DEBUG> can be set to a truthy value. If this is
-set, all debug messages will be printed to the stream
-C<$Crypt::HSXKPasswd::LOG_STREAM>.
+Ordinarily this module produces very little output. To enable more verbose
+output the module configuration variable C<DEBUG> can be set to C<1>. Debug
+message are printed to the stream specified by the module variable
+C<LOG_STREAM>.
 
 This module produces output at three severity levels:
 
@@ -4824,28 +5003,30 @@ This module produces output at three severity levels:
 
 =item *
 
-C<DEBUG> - this output is completely suppressed unless
-C<$Crypt::HSXKPasswd::DEBUG> is set to a truthy value. If not suppressed debug
-messages are always printed to C<$Crypt::HSXKPasswd::LOG_STREAM> (regardless of
-the value of C<$Crypt::HSXKPasswd::LOG_ERRORS>).
+C<DEBUG> - this output is completely suppressed unless the module configuration
+varialbe C<DEBUG> is set to C<1>. All debug messages are pritned to the stream
+defined in the module configuration variable C<LOG_STREAM> (regardless of the 
+the value of the module coniguration varuable C<LOG_ERRORS>).
 
 =item *
 
-C<WARNING> - warning messages are always thrown with C<carp()>, and also
-printed to C<$Crypt::HSXKPasswd::LOG_STREAM> if
-C<$Crypt::HSXKPasswd::LOG_ERRORS> evaluates to true.
+C<WARNING> - warning messages are always thrown with C<carp()>, and also printed
+to the stream specified by the module configuration variable C<LOG_STREAM> if
+the module configuration varialbe C<LOG_ERRORS> is set to C<1>.
 
 =item *
 
-C<ERROR> - error messages are usually thrown with C<croak()>, but will be
-thrown with C<confess()> if C<$Crypt::HSXKPasswd::DEBUG> evaluates to true. If
-C<$Crypt::HSXKPasswd::LOG_ERRORS> evaluates to true errors are also printed to
-C<$Crypt::HSXKPasswd::LOG_STREAM>, including a stack trace if
-C<$Crypt::HSXKPasswd::DEBUG> evaluates to true and the module
-C<Devel::StackTrace> is installed.
-
+C<ERROR> - error messages are usually thrown with C<croak()>, but will be thrown
+with C<confess()> if the moule configuration variable C<DEBUG> is set to C<1>.
+If the module configuration variable C<LOG_ERRORS> is set to C<1> errors are
+also printed to the stream defined by the module configuration variable
+C<LOG_STREAM>, including a stack trace if the module configuration variable
+C<DEBUG> is set to C<1> and the module C<Devel::StackTrace> is installed.
 
 =back
+
+The value stored in a module configuration variable can be accessed and updated
+using the function C<module_config()>.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
