@@ -222,7 +222,7 @@ sub new{
 sub module_config{
     state $args_check = compile(
         ClassName,
-        NonEmptyString->plus_coercions(Str, q{uc $_}),
+        NonEmptyString->plus_coercions(Str, q{uc $_}), ## no critic (RequireInterpolationOfMetachars)
         Optional[Value],
     );
     my ($class, $config_key, $new_value) = $args_check->(@_);
@@ -328,7 +328,7 @@ sub module_config{
 # See Also   :
 sub defined_config_keys{
     # gather and return the list of config key names
-    return sort keys %{$_TYPES_CLASS->_config_keys()};
+    return (sort keys %{$_TYPES_CLASS->_config_keys()});
 }
 
 #####-SUB-######################################################################
@@ -343,8 +343,6 @@ sub config_key_definition{
     state $args_check = compile(ClassName, ConfigKeyName);
     my ($class, $key) = $args_check->(@_);
     _force_class($class);
-    
-    say $key;
     
     # get a referece to the keys hashref from the Types class
     my $defined_keys = $_TYPES_CLASS->_config_keys();
@@ -626,7 +624,6 @@ sub clone_config{
 # Notes      : This function needs to be updated each time a new valid config
 #              key is added to the library.
 # See Also   :
-## no critic (ProhibitExcessComplexity);
 sub is_valid_config{
     state $args_check = compile(ClassName, Item, slurpy Dict[croak => Optional[TrueFalse]]);
     my ($class, $config, $options) = $args_check->(@_);
@@ -643,7 +640,6 @@ sub is_valid_config{
     # return the result of the validation
     return $is_valid;
 }
-## use critic
 
 #####-SUB-######################################################################
 # Type       : CLASS
