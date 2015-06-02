@@ -394,6 +394,7 @@ my $CONFIG_KEY_NAME = Type::Tiny->new(
         english => sub {return 'a defined config name - '.$CONFIG_KEY_NAME_ENGLISH;},
     },
 );
+$CONFIG_KEY_NAME->coercion()->add_type_coercions(Str, q{lc $_});
 __PACKAGE__->meta->add_type($CONFIG_KEY_NAME);
 
 # add a type for a config key name-value pair - must be a reference to a
@@ -403,6 +404,7 @@ my $CONFIG_KEY_ASSIGNMENT_ENGLISH = 'a mapping from a valid config key name to a
 my $CONFIG_KEY_ASSIGNMENT = Type::Tiny->new(
     name => 'ConfigKeyAssignment',
     parent => Map[$CONFIG_KEY_NAME, Item],
+    coercion => 1,
     constraint => sub{
         # make sure there is exactly 1 key
         unless(scalar keys %{$_} == 1){
@@ -445,6 +447,7 @@ my $CONFIG_OVERRIDE_ENGLISH = 'a reference to a hash containing one or more Conf
 my $CONFIG_OVERRIDE = Type::Tiny->new(
     name => 'ConfigOverride',
     parent => Map[$CONFIG_KEY_NAME, Item],
+    coercion => 1,
     constraint => sub{
         my %test_hash = %{$_};
         
@@ -513,6 +516,7 @@ my $CONFIG_ENGLISH = 'a reference to a hash indexed only by valid Config Names, 
 my $CONFIG = Type::Tiny->new(
     name => 'Config',
     parent => $CONFIG_OVERRIDE,
+    coercion => 1,
     constraint => sub{
         # check for missing required keys
         my @missing_required_keys = _extract_missing_required_keys($_);
@@ -779,6 +783,7 @@ my $PRESET_NAME = Type::Tiny->new(
         english => sub {return 'a defined preset name - '.$PRESET_NAME_ENGLISH;},
     },
 );
+$PRESET_NAME->coercion()->add_type_coercions(Str, q{uc $_});
 __PACKAGE__->meta->add_type($PRESET_NAME);
 
 #

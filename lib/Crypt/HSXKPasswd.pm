@@ -220,7 +220,11 @@ sub new{
 # Notes      :
 # See Also   :
 sub module_config{
-    state $args_check = compile(ClassName, NonEmptyString, Optional[Value]);
+    state $args_check = compile(
+        ClassName,
+        NonEmptyString->plus_coercions(Str, q{uc $_}),
+        Optional[Value],
+    );
     my ($class, $config_key, $new_value) = $args_check->(@_);
     _force_class($class);
     
@@ -319,20 +323,12 @@ sub module_config{
 # Purpose    : Get a list of defined config keys.
 # Returns    : An array of strings.
 # Arguments  : NONE
-# Throws     : Croaks on invalid invocation
+# Throws     : NOTHING
 # Notes      :
 # See Also   :
 sub defined_config_keys{
-    my $class = shift;
-    
-    # validate args
-    _force_class($class);
-    
-    # gather the list of config key names
-    my @keys = sort keys %{$_TYPES_CLASS->_config_keys()};
-    
-    # return the list
-    return @keys;
+    # gather and return the list of config key names
+    return sort keys %{$_TYPES_CLASS->_config_keys()};
 }
 
 #####-SUB-######################################################################
@@ -344,17 +340,14 @@ sub defined_config_keys{
 # Notes      :
 # See Also   :
 sub config_key_definition{
-    state $args_check = compile(ClassName, NonEmptyString);
+    state $args_check = compile(ClassName, ConfigKeyName);
     my ($class, $key) = $args_check->(@_);
     _force_class($class);
     
+    say $key;
+    
     # get a referece to the keys hashref from the Types class
     my $defined_keys = $_TYPES_CLASS->_config_keys();
-    
-    # make sure the passed key exists
-    unless($key && $defined_keys->{$key}){
-        _error(qq{there is no config key '$key'});
-    }
     
     # assemble the hash
     my %definition = (
@@ -372,15 +365,10 @@ sub config_key_definition{
 # Purpose    : Return a hash of all key definitions indexed by key name.
 # Returns    : A hash of key defintions as returned by config_key_definition().
 # Arguments  : NONE
-# Throws     : Croaks on invalid invocation
+# Throws     : NOTHING
 # Notes      :
 # See Also   : config_key_definition()
 sub config_key_definitions{
-    my $class = shift;
-    
-    # validate arguments
-    _force_class($class);
-    
     # gather the definitions
     my %definitions = ();
     foreach my $key ($_CLASS->defined_config_keys()){
@@ -403,10 +391,8 @@ sub config_key_definitions{
 # Notes      :
 # See Also   :
 sub default_config{
-    my $class = shift;
-    my $overrides = shift;
-    
-    # validate the args
+    state $args_check = compile(ClassName, Optional[ConfigOverride]);
+    my ($class, $overrides) = $args_check->(@_);
     _force_class($class);
 
     # build and return a default config
@@ -417,22 +403,18 @@ sub default_config{
 # Type       : CLASS
 # Purpose    : Return the specification for a given preset.
 # Returns    : A hash indexed by 'description', and 'config'.
-# Arguments  : 1) a valid preset name
+# Arguments  : 1) OPTIONAL - a valid preset name, defaults to 'DEFAULT'
 # Throws     : Croaks on invalid invocation and args
 # Notes      :
 # See Also   :
 sub preset_definition{
-    state $args_check = compile(ClassName, PresetName);
+    state $args_check = compile(ClassName, Optional[PresetName]);
     my ($class, $preset_name) = $args_check->(@_);
     _force_class($class);
+    $preset_name = 'DEFAULT' unless $preset_name;
     
     # get a referece to the presets hashref from the Types class
     my $preset_defs = $_TYPES_CLASS->_presets();
-    
-    # make sure the passed key exists
-    unless($preset_name && $preset_defs->{$preset_name}){
-        _error(qq{there is no preset '$preset_name'});
-    }
     
     # assemble the hash
     my %definition = (
@@ -478,35 +460,18 @@ sub preset_definitions{
 # Notes      :
 # See Also   :
 sub preset_config{
-    my $class = shift;
-    my $preset = shift;
-    my $overrides = shift;
+    state $args_check = compile(ClassName, Optional[PresetName], Optional[ConfigOverride]);
+    my ($class, $preset_name, $overrides) = $args_check->(@_);
+    _force_class($class);
     
-    # default blank presets to 'DEFAULT'
-    $preset = 'DEFAULT' unless defined $preset;
-    
-    # convert preset names to upper case
-    $preset = uc $preset;
+    # default the preset name to 'DEFAULT'
+    $preset_name = 'DEFAULT' unless $preset_name;
     
     # get a reference to the Presets hashref from the Types class
     my $preset_defs = $_TYPES_CLASS->_presets();
     
-    # validate the args
-    _force_class($class);
-    unless(ref $preset eq q{}){
-        _error('invalid args - if present, the first argument must be a scalar');
-    }
-    unless(defined $preset_defs->{$preset}){
-        _error("preset '$preset' does not exist");
-    }
-    if(defined $overrides){
-        unless(ref $overrides eq 'HASH'){
-            _error('invalid args, overrides must be passed as a hashref');
-        }
-    }
-    
     # start by loading the preset
-    my $config = $_CLASS->clone_config($preset_defs->{$preset}->{config});
+    my $config = $_CLASS->clone_config($preset_defs->{$preset_name}->{config});
     
     # get a references to the keys hashref from the types class
     my $key_definitions = $_TYPES_CLASS->_config_keys();
@@ -550,23 +515,17 @@ sub preset_config{
 #              preset identifier, and 'preset_descriptions' contains the a 
 #              hashref of descriptions indexed by preset identifiers
 # Arguments  : NONE
-# Throws     : Croaks on invalid invocation, if the JSON module is not
-#              available, or if there is a problem converting the objects to
-#              JSON
+# Throws     : If the JSON module is not available, or if there is a problem
+#              converting the objects to JSON.
 # Notes      :
 # See Also   :
 sub presets_json{
-    my $class = shift;
-    
-    # validate the args
-    _force_class($class);
-    
     # make sure JSON parsing is available
     unless($_CAN_JSON){
         _error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) to use this function');
     }
     
-    # assemble an object cotaining the presets with any keys that can't be
+    # assemble an object containing the presets with any keys that can't be
     #  converted to JSON removed
     my @defined_presets = $_CLASS->defined_presets();
     my $sanitised_presets = {};
@@ -4616,7 +4575,7 @@ containing keys with values to override the defaults with.
 When overrides are present, the function will carp if an invalid key or value is
 passed, and croak if the resulting merged config is invalid.
 
-=head preset_definition()
+=head3 preset_definition()
 
     my %preset_def = Crypt::HSXKPasswd->preset_definition('XKCD');
     
@@ -4624,11 +4583,15 @@ This function returns a hash defining a preset. The hash contains
 an English description of the preset indexed be C<description> and
 a config hashref indexed by C<config>.
 
-A valid preset name must be passed as the first argument. You can see all the
-defined presets in the PRESETS section of this document, and you can get a list
-of valid preset names programatically with the function C<defined_presets()>.
+The function expects to be called with one argument, a valid preset name, but it
+can be called without arguments, in which case it will return the definition for
+the preset c<DEFAULT>.
 
-=head preset_definitions()
+You can see all the defined presets in the PRESETS section of this document, and
+you can get a list of valid preset names programatically with the function
+C<defined_presets()>.
+
+=head3 preset_definitions()
 
     my %preset_defs = Crypt::HSXKPasswd->preset_definitions();
     
