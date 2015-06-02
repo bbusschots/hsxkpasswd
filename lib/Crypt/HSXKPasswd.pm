@@ -11,7 +11,8 @@ use Scalar::Util qw( blessed ); # for checking if a reference is blessed
 use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
 use Type::Tiny; # for generating anonymous type constraints when needed
-use Types::Standard qw( :types ); # for basic type checking (Int Str etc.)
+use Type::Params qw( compile ); # for parameter validation with Type::Tiny objects
+use Types::Standard qw( slurpy :types ); # for basic type checking (Int Str etc.)
 use Crypt::HSXKPasswd::Types qw( :types :is ); # for custom type checking
 use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 use Crypt::HSXKPasswd::Dictionary::Basic;
@@ -74,154 +75,6 @@ my $_TYPES_CLASS = 'Crypt::HSXKPasswd::Types';
 my $_DICTIONARY_BASE_CLASS = 'Crypt::HSXKPasswd::Dictionary';
 my $_RNG_BASE_CLASS = 'Crypt::HSXKPasswd::RNG';
 
-# preset definitions
-my $_PRESETS = {
-    DEFAULT => {
-        description => 'The default preset resulting in a password consisting of 3 random words of between 4 and 8 letters with alternating case separated by a random character, with two random digits before and after, and padded with two random characters front and back',
-        config => {
-            symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ? / . ;}],
-            word_length_min => 4,
-            word_length_max => 8,
-            num_words => 3,
-            separator_character => 'RANDOM',
-            padding_digits_before => 2,
-            padding_digits_after => 2,
-            padding_type => 'FIXED',
-            padding_character => 'RANDOM',
-            padding_characters_before => 2,
-            padding_characters_after => 2,
-            case_transform => 'ALTERNATE',
-            allow_accents => 0,
-        },
-    },
-    WEB32 => {
-        description => q{A preset for websites that allow passwords up to 32 characteres long.},
-        config => {
-            padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
-            separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
-            word_length_min => 4,
-            word_length_max => 5,
-            num_words => 4,
-            separator_character => 'RANDOM',
-            padding_digits_before => 2,
-            padding_digits_after => 2,
-            padding_type => 'FIXED',
-            padding_character => 'RANDOM',
-            padding_characters_before => 1,
-            padding_characters_after => 1,
-            case_transform => 'ALTERNATE',
-            allow_accents => 0,
-        },
-    },
-    WEB16 => {
-        description => 'A preset for websites that insit passwords not be longer than 16 characters.',
-        config => {
-            padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
-            separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
-            word_length_min => 4,
-            word_length_max => 4,
-            num_words => 3,
-            separator_character => 'RANDOM',
-            padding_digits_before => 0,
-            padding_digits_after => 0,
-            padding_type => 'FIXED',
-            padding_character => 'RANDOM',
-            padding_characters_before => 1,
-            padding_characters_after => 1,
-            case_transform => 'RANDOM',
-            allow_accents => 0,
-        },
-    },
-    WIFI => {
-        description => 'A preset for generating 63 character long WPA2 keys (most routers allow 64 characters, but some only 63, hence the odd length).',
-        config => {
-            padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
-            separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
-            word_length_min => 4,
-            word_length_max => 8,
-            num_words => 6,
-            separator_character => 'RANDOM',
-            padding_digits_before => 4,
-            padding_digits_after => 4,
-            padding_type => 'ADAPTIVE',
-            padding_character => 'RANDOM',
-            pad_to_length => 63,
-            case_transform => 'RANDOM',
-            allow_accents => 0,
-        },
-    },
-    APPLEID => {
-        description => 'A preset respecting the many prerequisites Apple places on Apple ID passwords. The preset also limits itself to symbols found on the iOS letter and number keyboards (i.e. not the awkward to reach symbol keyboard)',
-        config => {
-            padding_alphabet => [qw{! ? @ &}],
-            separator_alphabet => [qw{- : .}, q{,}],
-            word_length_min => 5,
-            word_length_max => 7,
-            num_words => 3,
-            separator_character => 'RANDOM',
-            padding_digits_before => 2,
-            padding_digits_after => 2,
-            padding_type => 'FIXED',
-            padding_character => 'RANDOM',
-            padding_characters_before => 1,
-            padding_characters_after => 1,
-            case_transform => 'RANDOM',
-            allow_accents => 0,
-        },
-    },
-    NTLM => {
-        description => 'A preset for 14 character Windows NTLMv1 password. WARNING - only use this preset if you have to, it is too short to be acceptably secure and will always generate entropy warnings for the case where the config and dictionary are known.',
-        config => {
-            padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
-            separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
-            word_length_min => 5,
-            word_length_max => 5,
-            num_words => 2,
-            separator_character => 'RANDOM',
-            padding_digits_before => 1,
-            padding_digits_after => 0,
-            padding_type => 'FIXED',
-            padding_character => 'RANDOM',
-            padding_characters_before => 0,
-            padding_characters_after => 1,
-            case_transform => 'INVERT',
-            allow_accents => 0,
-        },
-    },
-    SECURITYQ => {
-        description => 'A preset for creating fake answers to security questions.',
-        config => {
-            word_length_min => 4,
-            word_length_max => 8,
-            num_words => 6,
-            separator_character => q{ },
-            padding_digits_before => 0,
-            padding_digits_after => 0,
-            padding_type => 'FIXED',
-            padding_character => 'RANDOM',
-            padding_alphabet => [qw{. ! ?}],
-            padding_characters_before => 0,
-            padding_characters_after => 1,
-            case_transform => 'NONE',
-            allow_accents => 0,
-        },
-    },
-    XKCD => {
-        description => 'A preset for generating passwords similar to the example in the original XKCD cartoon, but with a dash to separate the four random words, and the capitalisation randomised to add sufficient entropy to avoid warnings.',
-        config => {
-            word_length_min => 4,
-            word_length_max => 8,
-            num_words => 4,
-            separator_character => q{-},
-            padding_digits_before => 0,
-            padding_digits_after => 0,
-            padding_type => 'NONE',
-            case_transform => 'RANDOM',
-            allow_accents => 0,
-        },
-    },
-};
-
 #
 # Constructor -----------------------------------------------------------------
 #
@@ -283,8 +136,9 @@ sub new{
     # validate args
     _force_class($class);
     
-    # before going any further, check the presets if debugging (doing later may cause an error before we test)
+    # before going any further, check the presets and key definitions if debugging (doing later may cause an error before we test)
     if($_CLASS->module_config('DEBUG')){
+        $_CLASS->_check_config_key_definitions();
         $_CLASS->_check_presets();
     }
     
@@ -366,17 +220,12 @@ sub new{
 # Notes      :
 # See Also   :
 sub module_config{
-    my $class = shift;
-    my $config_key = shift;
-    my $new_value = shift;
-    
-    #validate args
+    state $args_check = compile(ClassName, NonEmptyString, Optional[Value]);
+    my ($class, $config_key, $new_value) = $args_check->(@_);
     _force_class($class);
-    unless(defined $config_key && ref $config_key eq q{} && length $config_key){
-        _error('invalid args - must pass the name of a module config variable as the first argument');
-    }
     
     # figure out which variable we are accessing
+    ## no critic (ProhibitCascadingIfElse);
     if($config_key eq 'LOG_STREAM'){
         # check if we are a setter
         if(defined $new_value){
@@ -384,11 +233,11 @@ sub module_config{
             FileHandle->check($new_value) || _error(FileHandle->get_message($new_value));
             
             # save the new value
-            $Crypt::HSXKPasswd::Helper::_LOG_STREAM = $new_value;
+            $Crypt::HSXKPasswd::Helper::_LOG_STREAM = $new_value; ## no critic (ProtectPrivateVars)
         }
         
         #return the value
-        return $Crypt::HSXKPasswd::Helper::_LOG_STREAM;
+        return $Crypt::HSXKPasswd::Helper::_LOG_STREAM; ## no critic (ProtectPrivateVars)
     }
     elsif($config_key eq 'LOG_ERRORS'){
         # check if we are a setter
@@ -397,11 +246,11 @@ sub module_config{
             TrueFalse->check($new_value) || _error(TrueFalse->get_message($new_value));
             
             # save the new value
-            $Crypt::HSXKPasswd::Helper::_LOG_ERRORS = $new_value;
+            $Crypt::HSXKPasswd::Helper::_LOG_ERRORS = $new_value; ## no critic (ProtectPrivateVars)
         }
         
         #return the value
-        return $Crypt::HSXKPasswd::Helper::_LOG_ERRORS;
+        return $Crypt::HSXKPasswd::Helper::_LOG_ERRORS; ## no critic (ProtectPrivateVars)
     }
     elsif($config_key eq 'DEBUG'){
         # check if we are a setter
@@ -410,11 +259,11 @@ sub module_config{
             TrueFalse->check($new_value) || _error(TrueFalse->get_message($new_value));
             
             # save the new value
-            $Crypt::HSXKPasswd::Helper::_DEBUG = $new_value;
+            $Crypt::HSXKPasswd::Helper::_DEBUG = $new_value; ## no critic (ProtectPrivateVars)
         }
         
         #return the value
-        return $Crypt::HSXKPasswd::Helper::_DEBUG;
+        return $Crypt::HSXKPasswd::Helper::_DEBUG; ## no critic (ProtectPrivateVars)
     }elsif($config_key eq 'ENTROPY_MIN_BLIND'){
         # check if we are a setter
         if(defined $new_value){
@@ -445,7 +294,7 @@ sub module_config{
             # make sure the new value is valid
             my $enum_type = Type::Tiny->new(
                 parent => Enum[qw( NONE ALL SEEN BLIND )],
-                message => sub{return Crypt::HSXKPasswd::Types::_var_to_string($_).q{ is not a valid value for the module config key 'SUPRESS_ENTROPY_WARNINGS' (must be one of 'NONE', 'ALL', 'SEEN', or 'BLIND')};},
+                message => sub{return Crypt::HSXKPasswd::Types::_var_to_string($_).q{ is not a valid value for the module config key 'SUPRESS_ENTROPY_WARNINGS' (must be one of 'NONE', 'ALL', 'SEEN', or 'BLIND')};}, ## no critic (ProtectPrivateSubs)
             );
             $enum_type->check($new_value) || _error($enum_type->get_message($new_value));
             
@@ -457,8 +306,9 @@ sub module_config{
         return $_SUPRESS_ENTROPY_WARNINGS;
     }else{
         # the config key was invalid
-        _error(qq{no package variable '$new_value'});
+        _error(qq{no package variable '$config_key'});
     }
+    ## use critic
     
     # It's not possible to get here, so return 1 to keep PerlCritic happy
     return 1;
@@ -494,16 +344,16 @@ sub defined_config_keys{
 # Notes      :
 # See Also   :
 sub config_key_definition{
-    my $class = shift;
-    my $key = shift;
+    state $args_check = compile(ClassName, NonEmptyString);
+    my ($class, $key) = $args_check->(@_);
+    _force_class($class);
     
     # get a referece to the keys hashref from the Types class
     my $defined_keys = $_TYPES_CLASS->_config_keys();
     
-    # validate arguments
-    _force_class($class);
+    # make sure the passed key exists
     unless($key && $defined_keys->{$key}){
-        _error("invalid arguments - a valid key must be passed as the first argument");
+        _error(qq{there is no config key '$key'});
     }
     
     # assemble the hash
@@ -565,6 +415,56 @@ sub default_config{
 
 #####-SUB-######################################################################
 # Type       : CLASS
+# Purpose    : Return the specification for a given preset.
+# Returns    : A hash indexed by 'description', and 'config'.
+# Arguments  : 1) a valid preset name
+# Throws     : Croaks on invalid invocation and args
+# Notes      :
+# See Also   :
+sub preset_definition{
+    state $args_check = compile(ClassName, PresetName);
+    my ($class, $preset_name) = $args_check->(@_);
+    _force_class($class);
+    
+    # get a referece to the presets hashref from the Types class
+    my $preset_defs = $_TYPES_CLASS->_presets();
+    
+    # make sure the passed key exists
+    unless($preset_name && $preset_defs->{$preset_name}){
+        _error(qq{there is no preset '$preset_name'});
+    }
+    
+    # assemble the hash
+    my %definition = (
+        description => $preset_defs->{$preset_name}->{description},
+        config => $preset_defs->{$preset_name}->{config},
+    );
+    
+    # return the hash
+    return %definition;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Return a hash of all preset definitions indexed by name.
+# Returns    : A hash of preset defintions as returned by preset_definition().
+# Arguments  : NONE
+# Throws     : NONE
+# Notes      :
+# See Also   : preset_definition()
+sub preset_definitions{
+    # gather the definitions
+    my %definitions = ();
+    foreach my $name ($_CLASS->defined_presets()){
+        $definitions{$name} = $_CLASS->preset_definition($name);
+    }
+    
+    # return the definitions
+    return %definitions;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
 # Purpose    : generate a config hashref populated using a preset
 # Returns    : a hashref
 # Arguments  : 1. OPTIONAL - The name of the preset to assemble the config for
@@ -588,12 +488,15 @@ sub preset_config{
     # convert preset names to upper case
     $preset = uc $preset;
     
+    # get a reference to the Presets hashref from the Types class
+    my $preset_defs = $_TYPES_CLASS->_presets();
+    
     # validate the args
     _force_class($class);
     unless(ref $preset eq q{}){
         _error('invalid args - if present, the first argument must be a scalar');
     }
-    unless(defined $_PRESETS->{$preset}){
+    unless(defined $preset_defs->{$preset}){
         _error("preset '$preset' does not exist");
     }
     if(defined $overrides){
@@ -603,7 +506,7 @@ sub preset_config{
     }
     
     # start by loading the preset
-    my $config = $_CLASS->clone_config($_PRESETS->{$preset}->{config});
+    my $config = $_CLASS->clone_config($preset_defs->{$preset}->{config});
     
     # get a references to the keys hashref from the types class
     my $key_definitions = $_TYPES_CLASS->_config_keys();
@@ -985,17 +888,20 @@ sub preset_description{
     # convert preset names to upper case
     $preset = uc $preset;
     
+    # get a reference to the preset definitions from the Types class
+    my $preset_defs = $_TYPES_CLASS->_presets();
+    
     # validate the args
     _force_class($class);
     unless(ref $preset eq q{}){
         _error('invalid args - if present, the first argument must be a scalar');
     }
-    unless(defined $_PRESETS->{$preset}){
+    unless(defined $preset_defs->{$preset}){
         _error("preset '$preset' does not exist");
     }
     
     # return the description by loading the preset
-    return $_PRESETS->{$preset}->{description};
+    return $preset_defs->{$preset}->{description};
 }
 
 
@@ -1014,7 +920,7 @@ sub defined_presets{
     _force_class($class);
     
     # return the preset names
-    my @preset_names = sort keys %{$_PRESETS};
+    my @preset_names = sort keys %{$_TYPES_CLASS->_presets()};
     return @preset_names;
 }
 
@@ -1032,16 +938,19 @@ sub presets_to_string{
     # validate the args
     _force_class($class);
     
+    # get a reference to the preset definitions from th Types class
+    my $preset_defs = $_TYPES_CLASS->_presets();
+    
     # loop through each preset and assemble the result
     my $ans = q{};
     my @preset_names = $_CLASS->defined_presets();
     foreach my $preset (@preset_names){
         $ans .= $preset."\n===\n";
-        $ans .= $_PRESETS->{$preset}->{description}."\n";
+        $ans .= $preset_defs->{$preset}->{description}."\n";
         $ans .= "\nConfig:\n---\n";
-        $ans .= $_CLASS->config_to_string($_PRESETS->{$preset}->{config});
+        $ans .= $_CLASS->config_to_string($preset_defs->{$preset}->{config});
         $ans .= "\nStatistics:\n---\n";
-        my %stats = $_CLASS->config_stats($_PRESETS->{$preset}->{config});
+        my %stats = $_CLASS->config_stats($preset_defs->{$preset}->{config});
         if($stats{length_min} == $stats{length_max}){
             $ans .= "Length (fixed): $stats{length_min} characters\n";
         }else{
@@ -2326,7 +2235,6 @@ sub _padding_char{
 # Notes      : The transformations applied are controlled by the case_transform
 #              config variable.
 # See Also   :
-## no critic (ProhibitExcessComplexity);
 sub _transform_case{
     my $self = shift;
     my $words_ref = shift;
@@ -2385,7 +2293,6 @@ sub _transform_case{
     
     return 1; # just to to keep PerlCritic happy
 }
-## use critic
 
 #####-SUB-######################################################################
 # Type       : INSTANCE (PRIVATE)
@@ -2428,35 +2335,64 @@ sub _substitute_characters{
 
 #####-SUB-######################################################################
 # Type       : CLASS (PRIVATE)
+# Purpose    : Perform sanity checks on all the config key definitions
+# Returns    : Always returns 1 (to keep PerlCritic happy)
+# Arguments  : NONE
+# Throws     : Croaks if there is a problem with a key definition.
+# Notes      : The function is designed to be called from the constructor when
+#              in debug mode, so it prints information on what it's doing
+#              to STDERR.
+# See Also   :
+sub _check_config_key_definitions{
+    # get a reference to the config key definitions form the Types class
+    my $key_definitions = $_TYPES_CLASS->_config_keys();
+    
+    # loop through each key definition and do some sanity checks
+    my $num_problems = 0;
+    foreach my $key_name ($_CLASS->defined_config_keys()){
+        _debug("checking config key '$key_name'");
+        unless(ConfigKeyDefinition->check($key_definitions->{$key_name})){
+            _warn(ConfigKeyDefinition->get_message($key_definitions->{$key_name}));
+            $num_problems++;
+        }
+    }
+    if($num_problems == 0){
+        _debug('all config key definitions OK');
+    }else{
+        _error("there are errors in $num_problems config key definitions - fix these before continuing");
+    }
+    
+    # to keep perlcritic happy
+    return 1;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS (PRIVATE)
 # Purpose    : Perform sanity checks on all defined presets
 # Returns    : Always returns 1 (to keep perlcritic happy)
 # Arguments  : NONE
-# Throws     : Croaks on invalid input
+# Throws     : Croaks if there is a problem with a preset.
 # Notes      : The function is designed to be called from the constructor when
-#              in debug mode. It prints information on what it's doing and any
-#              errors it finds to STDERR
+#              in debug mode, so it prints information on what it's doing
+#              to STDERR.
 # See Also   :
 sub _check_presets{
-    my $class = shift;
-    
-    # validate the args
-    _force_class($class);
+    # get a reference to the preset definitions from the types class
+    my $preset_defs = $_TYPES_CLASS->_presets();
     
     # loop through all presets and perform sanity checks
-    my @preset_names = $_CLASS->defined_presets();
     my $num_problems = 0;
-    foreach my $preset (@preset_names){
-        # make sure the preset is valid
-        eval{
-            $_CLASS->is_valid_config($_PRESETS->{$preset}->{config}, 1);
-            1; # ensure truthy evaluation on success
-        }or do{
-            _warn("preset $preset has invalid config ($EVAL_ERROR)");
+    foreach my $preset_name (sort keys %{$preset_defs}){
+        _debug("checking preset '$preset_name'");
+        unless(PresetDefinition->check($preset_defs->{$preset_name})){
+            _warn(PresetDefinition->get_message($preset_defs->{$preset_name}));
             $num_problems++;
-        };
+        }
     }
     if($num_problems == 0){
         _debug('all presets OK');
+    }else{
+        _error("there are errors in $num_problems presets - fix these before continuing");
     }
     
     # to keep perlcritic happy
@@ -3226,6 +3162,19 @@ generators by extending C<Crypt::HSXKPasswd::RNG>.
 
 =item *
 
+C<NonEmptyString> - a string containing at least one character.
+
+=item *
+
+C<PositiveInteger> - a whole number greater than or equal to zero.
+
+=item *
+
+C<TrueFalse> - a reasonable boolean value, specifically, C<undef>, and empty
+string, or 0 to indicate false, and a 1 to indicate true.
+
+=item *
+
 C<Letter> - a string containing a single letter. Because this module is
 Unicode-aware, it should be noted that a letter is defined as a single Unicode
 grapheme with the Unicode property C<Letter>. What this means is that accented
@@ -3254,17 +3203,14 @@ that are not symbols.
 
 =item *
 
-C<PositiveInteger> - a whole number greater than or equal to zero.
-
-=item *
-
 C<WordLength> - a valid value when specifying the length of a word,
 specifically, a whole number greater than or equal to four.
 
 =item *
 
-C<TrueFalse> - a reasonable boolean value, specifically, C<undef>, and empty
-string, or 0 to indicate false, and a 1 to indicate true.
+C<ConfigKeyDefinition> - a valid configuration key definition. A reference to a
+hash  mapping C<required> to a true/false value, C<expects> to a non-empty
+string, and C<type> to a C<Type::Tiny> object.
 
 =item *
 
@@ -3294,6 +3240,18 @@ the specified configuration key assignments must be fulfilled.
 
 See the CONFIG section of this document for a detailed description of each of
 the defined configuation keys and their various interdependencies.
+
+=item *
+
+C<PresetDefinition> - a valid preset definition. A reference to a hash  mapping
+C<description> to a non-empty string, and C<config> to a valid Config.
+
+=item *
+
+C<PresetName> - a valid preset name, see the PRESETS section of this document
+for a description of each preset supported by this module. You can get a list of
+valid preset names programatically by calling the function
+C<Crypt::HSXKPasswd->defined_presets()>.
 
 =back
 
@@ -4657,6 +4615,27 @@ containing keys with values to override the defaults with.
     
 When overrides are present, the function will carp if an invalid key or value is
 passed, and croak if the resulting merged config is invalid.
+
+=head preset_definition()
+
+    my %preset_def = Crypt::HSXKPasswd->preset_definition('XKCD');
+    
+This function returns a hash defining a preset. The hash contains
+an English description of the preset indexed be C<description> and
+a config hashref indexed by C<config>.
+
+A valid preset name must be passed as the first argument. You can see all the
+defined presets in the PRESETS section of this document, and you can get a list
+of valid preset names programatically with the function C<defined_presets()>.
+
+=head preset_definitions()
+
+    my %preset_defs = Crypt::HSXKPasswd->preset_definitions();
+    
+This function returns a hash of all defined presets indexed by preset name. Each
+preset definition is a hash as returned by C<preset_definition()>.
+
+This function does not take any arguments.
 
 =head3 presets_json()
 

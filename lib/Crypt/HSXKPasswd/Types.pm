@@ -33,6 +33,40 @@ binmode STDOUT, ':encoding(UTF-8)';
 # === Define The Fundamental Types ============================================#
 #
 
+# add a type for positive integers (including 0)
+my $POSITIVE_INTEGER_ENGLISH = 'an integer greater than or equal to zero';
+my $POSITIVE_INTEGER = Type::Tiny->new(
+    name => 'PositiveInteger',
+    parent => Int,
+    constraint => sub{
+        return $_ >= 0;
+    },
+    message => sub{
+        return _var_to_string($_).qq{ is not $POSITIVE_INTEGER_ENGLISH};
+    },
+    my_methods => {
+        english => sub {return $POSITIVE_INTEGER_ENGLISH;},
+    },
+);
+__PACKAGE__->meta->add_type($POSITIVE_INTEGER);
+
+# add a type for positive integers (including 0)
+my $NON_EMPTY_STRING_ENGLISH = 'a string contianing at least one character';
+my $NON_EMPTY_STRING = Type::Tiny->new(
+    name => 'NonEmptyString',
+    parent => Str,
+    constraint => sub{
+        return length $_ > 0;
+    },
+    message => sub{
+        return _var_to_string($_).qq{ is not $NON_EMPTY_STRING_ENGLISH};
+    },
+    my_methods => {
+        english => sub {return $NON_EMPTY_STRING_ENGLISH;},
+    },
+);
+__PACKAGE__->meta->add_type($NON_EMPTY_STRING);
+
 # add a type for a single letter (a single alpha grapheme)
 my $LETTER_ENGLISH = q{a string containing exactly one letter};
 my $LETTER = Type::Tiny->new(
@@ -104,23 +138,6 @@ my $SYMBOL_ALPHABET = Type::Tiny->new(
 );
 __PACKAGE__->meta->add_type($SYMBOL_ALPHABET);
 
-# add a type for positive integers (including 0)
-my $POSITIVE_INTEGER_ENGLISH = 'an integer greater than or equal to zero';
-my $POSITIVE_INTEGER = Type::Tiny->new(
-    name => 'PositiveInteger',
-    parent => Int,
-    constraint => sub{
-        return $_ >= 0;
-    },
-    message => sub{
-        return _var_to_string($_).qq{ is not $POSITIVE_INTEGER_ENGLISH};
-    },
-    my_methods => {
-        english => sub {return $POSITIVE_INTEGER_ENGLISH;},
-    },
-);
-__PACKAGE__->meta->add_type($POSITIVE_INTEGER);
-
 # add a type for word lengths - integers greater than 3
 my $WORD_LENGTH_ENGLISH = 'an integer greater than 3';
 my $WORD_LENGTH = Type::Tiny->new(
@@ -153,8 +170,22 @@ my $TRUE_FALSE = Type::Tiny->new(
 __PACKAGE__->meta->add_type($TRUE_FALSE);
 
 #
-# === Define the Config Keys and Types ========================================#
+# === Define the Config Keys and related Types ================================#
 #
+
+# add a type for config key definitions - a hashref with the correct indexes and values
+my $CONFIG_KEY_DEFINITION_ENGLISH = q{a reference to a hash  mapping 'required' to a true/false value, 'expects' to a non-empty string, and 'type' to a Type::Tiny object};
+my $CONFIG_KEY_DEFINITION = Type::Tiny->new(
+    name => 'ConfigKeyDefinition',
+    parent => Dict[required => $TRUE_FALSE, expects => $NON_EMPTY_STRING, type => InstanceOf['Type::Tiny']] ,
+    message => sub{
+        return _var_to_string($_).qq{ is not a valid Config Key Definition (must be $CONFIG_KEY_DEFINITION_ENGLISH)};
+    },
+    my_methods => {
+        english => sub {return $CONFIG_KEY_DEFINITION_ENGLISH;},
+    },
+);
+__PACKAGE__->meta->add_type($CONFIG_KEY_DEFINITION);
 
 # define the config keys
 my $_KEYS = {
@@ -562,6 +593,195 @@ my $CONFIG = Type::Tiny->new(
 __PACKAGE__->meta->add_type($CONFIG);
 
 #
+# === Define the Presets and related Types ====================================#
+#
+
+# add a type for preset definitions - a hashref with the correct indexes and values
+my $PRESET_DEFINITION_ENGLISH = q{a reference to a hash  mapping 'description' to a non-empty string, and 'config' to a valid Config};
+my $PRESET_DEFINITION = Type::Tiny->new(
+    name => 'PresetDefinition',
+    parent => Dict[description => $NON_EMPTY_STRING, config => $CONFIG] ,
+    message => sub{
+        return _var_to_string($_).qq{ is not a valid Preset Definition (must be $PRESET_DEFINITION_ENGLISH)};
+    },
+    my_methods => {
+        english => sub {return $PRESET_DEFINITION_ENGLISH;},
+    },
+);
+__PACKAGE__->meta->add_type($PRESET_DEFINITION);
+
+# preset definitions
+my $_PRESETS = {
+    DEFAULT => {
+        description => 'The default preset resulting in a password consisting of 3 random words of between 4 and 8 letters with alternating case separated by a random character, with two random digits before and after, and padded with two random characters front and back',
+        config => {
+            symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ? / . ;}],
+            word_length_min => 4,
+            word_length_max => 8,
+            num_words => 3,
+            separator_character => 'RANDOM',
+            padding_digits_before => 2,
+            padding_digits_after => 2,
+            padding_type => 'FIXED',
+            padding_character => 'RANDOM',
+            padding_characters_before => 2,
+            padding_characters_after => 2,
+            case_transform => 'ALTERNATE',
+            allow_accents => 0,
+        },
+    },
+    WEB32 => {
+        description => q{A preset for websites that allow passwords up to 32 characteres long.},
+        config => {
+            padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+            separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+            word_length_min => 4,
+            word_length_max => 5,
+            num_words => 4,
+            separator_character => 'RANDOM',
+            padding_digits_before => 2,
+            padding_digits_after => 2,
+            padding_type => 'FIXED',
+            padding_character => 'RANDOM',
+            padding_characters_before => 1,
+            padding_characters_after => 1,
+            case_transform => 'ALTERNATE',
+            allow_accents => 0,
+        },
+    },
+    WEB16 => {
+        description => 'A preset for websites that insit passwords not be longer than 16 characters.',
+        config => {
+            padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+            separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+            word_length_min => 4,
+            word_length_max => 4,
+            num_words => 3,
+            separator_character => 'RANDOM',
+            padding_digits_before => 0,
+            padding_digits_after => 0,
+            padding_type => 'FIXED',
+            padding_character => 'RANDOM',
+            padding_characters_before => 1,
+            padding_characters_after => 1,
+            case_transform => 'RANDOM',
+            allow_accents => 0,
+        },
+    },
+    WIFI => {
+        description => 'A preset for generating 63 character long WPA2 keys (most routers allow 64 characters, but some only 63, hence the odd length).',
+        config => {
+            padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+            separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+            word_length_min => 4,
+            word_length_max => 8,
+            num_words => 6,
+            separator_character => 'RANDOM',
+            padding_digits_before => 4,
+            padding_digits_after => 4,
+            padding_type => 'ADAPTIVE',
+            padding_character => 'RANDOM',
+            pad_to_length => 63,
+            case_transform => 'RANDOM',
+            allow_accents => 0,
+        },
+    },
+    APPLEID => {
+        description => 'A preset respecting the many prerequisites Apple places on Apple ID passwords. The preset also limits itself to symbols found on the iOS letter and number keyboards (i.e. not the awkward to reach symbol keyboard)',
+        config => {
+            padding_alphabet => [qw{! ? @ &}],
+            separator_alphabet => [qw{- : .}, q{,}],
+            word_length_min => 5,
+            word_length_max => 7,
+            num_words => 3,
+            separator_character => 'RANDOM',
+            padding_digits_before => 2,
+            padding_digits_after => 2,
+            padding_type => 'FIXED',
+            padding_character => 'RANDOM',
+            padding_characters_before => 1,
+            padding_characters_after => 1,
+            case_transform => 'RANDOM',
+            allow_accents => 0,
+        },
+    },
+    NTLM => {
+        description => 'A preset for 14 character Windows NTLMv1 password. WARNING - only use this preset if you have to, it is too short to be acceptably secure and will always generate entropy warnings for the case where the config and dictionary are known.',
+        config => {
+            padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
+            separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+            word_length_min => 5,
+            word_length_max => 5,
+            num_words => 2,
+            separator_character => 'RANDOM',
+            padding_digits_before => 1,
+            padding_digits_after => 0,
+            padding_type => 'FIXED',
+            padding_character => 'RANDOM',
+            padding_characters_before => 0,
+            padding_characters_after => 1,
+            case_transform => 'INVERT',
+            allow_accents => 0,
+        },
+    },
+    SECURITYQ => {
+        description => 'A preset for creating fake answers to security questions.',
+        config => {
+            word_length_min => 4,
+            word_length_max => 8,
+            num_words => 6,
+            separator_character => q{ },
+            padding_digits_before => 0,
+            padding_digits_after => 0,
+            padding_type => 'FIXED',
+            padding_character => 'RANDOM',
+            padding_alphabet => [qw{. ! ?}],
+            padding_characters_before => 0,
+            padding_characters_after => 1,
+            case_transform => 'NONE',
+            allow_accents => 0,
+        },
+    },
+    XKCD => {
+        description => 'A preset for generating passwords similar to the example in the original XKCD cartoon, but with a dash to separate the four random words, and the capitalisation randomised to add sufficient entropy to avoid warnings.',
+        config => {
+            word_length_min => 4,
+            word_length_max => 8,
+            num_words => 4,
+            separator_character => q{-},
+            padding_digits_before => 0,
+            padding_digits_after => 0,
+            padding_type => 'NONE',
+            case_transform => 'RANDOM',
+            allow_accents => 0,
+        },
+    },
+};
+
+# add a type for config key names
+my $PRESET_NAME_ENGLISH = 'for a list of all defined preset names see the docs, or the output from the function Crypt::HSXKPasswd->defined_presets()';
+my $PRESET_NAME = Type::Tiny->new(
+    name => 'PresetName',
+    parent => Str,
+    constraint => sub{
+        my $test_val = $_;
+        foreach my $preset_name (keys %{$_PRESETS}){
+            if($test_val eq $preset_name){
+                return 1;
+            }
+        }
+        return 0;
+    },
+    message => sub{
+        return _var_to_string($_).qq{ is not a defined Preset Name ($PRESET_NAME_ENGLISH)};
+    },
+    my_methods => {
+        english => sub {return 'a defined preset name - '.$PRESET_NAME_ENGLISH;},
+    },
+);
+__PACKAGE__->meta->add_type($PRESET_NAME);
+
+#
 # === Finalise the Defined Types ==============================================#
 #
 
@@ -593,6 +813,21 @@ sub _config_keys{
 
 #####-SUB-######################################################################
 # Type       : SUBROUTINE
+# Purpose    : Expose direct access to $_PRESETS for classes in the
+#              Crypt::HSXKPasswd package
+# Returns    : A hashref
+# Arguments  : NONE
+# Throws     : NOTHING
+# Notes      : This function is private so it should not be used by any 3rd
+#              party devs - Use the public function
+#              Crypt::HSXKPasswd->preset_definitions() instead!
+# See Also   : Crypt::HSXKPasswd->preset_definitions()
+sub _presets{
+    return $_PRESETS;
+}
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE
 # Purpose    : Stringify any $ variable in a sane way
 # Returns    : A string
 # Arguments  : 1) the variable to render
@@ -612,10 +847,7 @@ sub _var_to_string{
     
     # deal with a non-reference (i.e a plain scalars)
     unless($ref){
-        unless($var){
-            return 'EmptyString';
-        }
-        return "'$var'";
+        return "Value '$var'";
     }
     
     # deal with each possible reference type

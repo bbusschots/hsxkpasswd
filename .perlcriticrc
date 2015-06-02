@@ -59,7 +59,7 @@ severity = 2
 
 
 #
-# Exclude pakages that are not relevant in our environment
+# Exclude pakages that are not relevant for this module
 #
 
 
@@ -71,6 +71,9 @@ severity = 2
 [-RegularExpressions::RequireLineBoundaryMatching]
 [-ValuesAndExpressions::ProhibitMagicNumbers]
 [-InputOutput::RequireCheckedClose]
+
+# not compatible with Type::Params recommended way of doing things
+[-Subroutines::RequireArgUnpacking] 
 
 
 # Excludes from level 1
