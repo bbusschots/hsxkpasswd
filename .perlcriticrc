@@ -6,7 +6,7 @@
 # set the default severity to 1
 severity = 1
 # set the output format so that it shows the package that is generating the error
-verbose = [%p] %m at line %l, column %c.  %e.  (Severity: %s)\n
+verbose = [%p] %m at %F line %l, column %c.  %e.  (Severity: %s)\n
 
 
 #
@@ -24,38 +24,19 @@ allow = if unless
 only_in_void_context = 1
 
 
-# force the output of system calls to be read, except for print and system
-# also promopted from severity 1 to 2
-[InputOutput::RequireCheckedSyscalls]
-severity = 2
-functions = :builtins
-exclude_functions = print system close sleep
-
-
-# allow nesting to 8 levels - consider default of 3 for programs, but often need more for scripts
+# allow nesting to 4 levels
 [ControlStructures::ProhibitDeepNests]
-max_nests = 8
+max_nests = 4
 
 
 # allow the punctuation variable needed for 'good' slurping
 [Variables::ProhibitPunctuationVars]
 allow = $/
 
-
-# allow ony a few select package variables
-[Variables::ProhibitPackageVars]
-packages = DBI
-
-
-#
-# promote the following from severity 1 to 2
-#
-[ValuesAndExpressions::ProhibitInterpolationOfLiterals]
-severity = 2
-[RegularExpressions::ProhibitEscapedMetacharacters]
-severity = 2
-[InputOutput::RequireBracedFileHandleWithPrint]
-severity = 2
+# make this check a little less insane :)
+[InputOutput::RequireCheckedSyscalls]
+functions = :builtins
+exclude_functions = print say
 
 
 #
@@ -64,16 +45,10 @@ severity = 2
 
 
 # Excludes from levels 2-5
-#[-Miscellanea::RequireRcsKeywords]
-[-Modules::ProhibitExcessMainComplexity]
-[-Modules::RequireVersionVar]
 [-ControlStructures::ProhibitUnlessBlocks]
+# I just disagree with Conway about what is 'expected behaviour' in REs
 [-RegularExpressions::RequireLineBoundaryMatching]
 [-ValuesAndExpressions::ProhibitMagicNumbers]
-[-InputOutput::RequireCheckedClose]
-
-# not compatible with Type::Params recommended way of doing things
-[-Subroutines::RequireArgUnpacking] 
 
 
 # Excludes from level 1
@@ -86,6 +61,8 @@ severity = 2
 # Excludes from level 3
 # I just disagree with Conway about the ease of reading if! and unless
 [-ControlStructures::ProhibitNegativeExpressionsInUnlessAndUntilConditions]
+# not compatible with things like Type Libraries
+[-Modules::ProhibitExcessMainComplexity]
 
 
 #

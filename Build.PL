@@ -20,6 +20,7 @@ my $builder = Module::Build->new(
         perl => '5.16.0',
         Carp => 0,
         DateTime => 0,
+        Clone => 0,
         'List::MoreUtils' => 0,
         'Math::BigInt' => 0,
         'Math::Round' => 0,

@@ -10,8 +10,9 @@ use English qw( -no_match_vars ); # for more readable code
 use Scalar::Util qw( blessed ); # for checking if a reference is blessed
 use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
+use Clone qw( clone ); # for cloning nested data structures - exports clone()
 use Type::Tiny; # for generating anonymous type constraints when needed
-use Type::Params qw( compile ); # for parameter validation with Type::Tiny objects
+use Type::Params qw( compile multisig ); # for parameter validation with Type::Tiny objects
 use Types::Standard qw( slurpy :types ); # for basic type checking (Int Str etc.)
 use Crypt::HSXKPasswd::Types qw( :types :is ); # for custom type checking
 use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
@@ -220,13 +221,17 @@ sub new{
 # Notes      :
 # See Also   :
 sub module_config{
-    state $args_check = compile(
-        ClassName,
-        NonEmptyString->plus_coercions(Str, q{uc $_}), ## no critic (RequireInterpolationOfMetachars)
-        Optional[Value],
-    );
-    my ($class, $config_key, $new_value) = $args_check->(@_);
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
+    
+    # validate args
+    state $args_check = compile(
+        NonEmptyString->plus_coercions(Str, q{uc $_}), ## no critic (RequireInterpolationOfMetachars)
+        Optional[Maybe[Value]],
+    );
+    my ($config_key, $new_value) = $args_check->(@args);
+    
     
     # figure out which variable we are accessing
     ## no critic (ProhibitCascadingIfElse);
@@ -340,9 +345,13 @@ sub defined_config_keys{
 # Notes      :
 # See Also   :
 sub config_key_definition{
-    state $args_check = compile(ClassName, ConfigKeyName);
-    my ($class, $key) = $args_check->(@_);
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
+    
+    # validate args
+    state $args_check = compile(ConfigKeyName);
+    my ($key) = $args_check->(@args);
     
     # get a referece to the keys hashref from the Types class
     my $defined_keys = $_TYPES_CLASS->_config_keys();
@@ -389,9 +398,13 @@ sub config_key_definitions{
 # Notes      :
 # See Also   :
 sub default_config{
-    state $args_check = compile(ClassName, Optional[ConfigOverride]);
-    my ($class, $overrides) = $args_check->(@_);
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
+    
+    # validate args
+    state $args_check = compile(Optional[ConfigOverride]);
+    my ($overrides) = $args_check->(@args);
 
     # build and return a default config
     return $_CLASS->preset_config('DEFAULT', $overrides);
@@ -406,9 +419,15 @@ sub default_config{
 # Notes      :
 # See Also   :
 sub preset_definition{
-    state $args_check = compile(ClassName, Optional[PresetName]);
-    my ($class, $preset_name) = $args_check->(@_);
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
+    
+    # validate args
+    state $args_check = compile(Optional[Maybe[PresetName]]);
+    my ($preset_name) = $args_check->(@args);
+    
+    # set defaults
     $preset_name = 'DEFAULT' unless $preset_name;
     
     # get a referece to the presets hashref from the Types class
@@ -429,7 +448,7 @@ sub preset_definition{
 # Purpose    : Return a hash of all preset definitions indexed by name.
 # Returns    : A hash of preset defintions as returned by preset_definition().
 # Arguments  : NONE
-# Throws     : NONE
+# Throws     : NOTHING
 # Notes      :
 # See Also   : preset_definition()
 sub preset_definitions{
@@ -458,9 +477,13 @@ sub preset_definitions{
 # Notes      :
 # See Also   :
 sub preset_config{
-    state $args_check = compile(ClassName, Optional[PresetName], Optional[ConfigOverride]);
-    my ($class, $preset_name, $overrides) = $args_check->(@_);
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
+    
+    # validate args
+    state $args_check = compile(Optional[PresetName], Optional[Maybe[ConfigOverride]]);
+    my ($preset_name, $overrides) = $args_check->(@args);
     
     # default the preset name to 'DEFAULT'
     $preset_name = 'DEFAULT' unless $preset_name;
@@ -561,57 +584,53 @@ sub presets_json{
 #              valid config key is added to the library.
 # See Also   :
 sub clone_config{
-    state $args_check = compile(ClassName, Config);
-    my ($class, $config) = $args_check->(@_);
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
     
-    # get a reference to the key definitions from the types class
-    my $defined_keys = $_TYPES_CLASS->_config_keys();
+    # validate args
+    state $args_check = compile(Config);
+    my ($config) = $args_check->(@args);
     
-    # start with a blank hashref
-    my $clone = {};
+    return clone($config);
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Remove all keys from a hashref that are not valid config keys
+# Returns    : A reference to a hashref
+# Arguments  : 1) a hashref
+#              2) OPTIONAL - a named argument 'suppress_warnings' that is either
+#                 1 or 0. If 1, no warnings will be printed when dropping valid
+#                 keys with invalid values.
+# Throws     : Croaks on invalid args. Unless configured not to, will warn if
+#              a valid key with an invalid value is encountered.
+# Notes      :
+# See Also   :
+sub distil_to_config_keys{
+    my @args = @_;
+    my $class = shift @args;
+    _force_class($class);
     
-    # copy over all the scalar keys
-    KEY_TO_CLONE:
-    foreach my $key (keys %{$defined_keys}){
-        # skip the key if it is not defined in the config to clone
-        next KEY_TO_CLONE unless defined $config->{$key};
-        
-        # skip non-scalar keys
-        next KEY_TO_CLONE unless ref $config->{$key} eq q{};
-        
-        # copy the key to the clone
-        $clone->{$key} = $config->{$key};
-    }
+    # validate args
+    state $args_check = compile(HashRef, slurpy Dict[suppress_warnings => Optional[TrueFalse]]);
+    my ($hashref, $options) = $args_check->(@args);
     
-    # deal with the non-scarlar keys
-    if(defined $config->{symbol_alphabet} && ref $config->{symbol_alphabet} eq 'ARRAY'){
-        $clone->{symbol_alphabet} = [];
-        foreach my $symbol (@{$config->{symbol_alphabet}}){
-            push @{$clone->{symbol_alphabet}}, $symbol;
+    # start with a new blank hashref, and copy across only the valid keys
+    my $distilled = {};
+    foreach my $key ($_CLASS->defined_config_keys()){
+        if(defined $hashref->{$key}){
+            if(ConfigKeyAssignment->check({$key => $hashref->{$key}})){
+                $distilled->{$key} = clone($hashref->{$key});
+            }else{
+                _warn("distilling out valid config key '$key' because of invalid value: ".ConfigKeyAssignment->get_message({$key => $hashref->{$key}})) unless $options->{suppress_warnings};
+            }
         }
     }
-    if(defined $config->{separator_alphabet} && ref $config->{separator_alphabet} eq 'ARRAY'){
-        $clone->{separator_alphabet} = [];
-        foreach my $symbol (@{$config->{separator_alphabet}}){
-            push @{$clone->{separator_alphabet}}, $symbol;
-        }
-    }
-    if(defined $config->{padding_alphabet} && ref $config->{padding_alphabet} eq 'ARRAY'){
-        $clone->{padding_alphabet} = [];
-        foreach my $symbol (@{$config->{padding_alphabet}}){
-            push @{$clone->{padding_alphabet}}, $symbol;
-        }
-    }
-    if(defined $config->{character_substitutions}){
-        $clone->{character_substitutions} = {};
-        foreach my $key (keys %{$config->{character_substitutions}}){
-            $clone->{character_substitutions}->{$key} = $config->{character_substitutions}->{$key};
-        }
-    }
+    _debug('hashref distilled down from '.(scalar keys $hashref).' to '.(scalar keys $distilled).' keys');
     
-    # return the clone
-    return $clone;
+    # return the distilled hashref
+    return $distilled;
 }
 
 #####-SUB-######################################################################
@@ -625,15 +644,19 @@ sub clone_config{
 #              key is added to the library.
 # See Also   :
 sub is_valid_config{
-    state $args_check = compile(ClassName, Item, slurpy Dict[croak => Optional[TrueFalse]]);
-    my ($class, $config, $options) = $args_check->(@_);
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
+    
+    # validate args
+    state $args_check = compile(Item, slurpy Dict[croak => Optional[TrueFalse]]);
+    my ($config, $options) = $args_check->(@args);
     
     # validate the config
     my $is_valid = Config->check($config) || 0;
     
     # croak if appropriate
-    if($options->{croak}){
+    if(!$is_valid && $options->{croak}){
         _error(Config->get_message($config));
     }
     
@@ -651,9 +674,13 @@ sub is_valid_config{
 # Notes      : 
 # See Also   :
 sub config_to_json{
-    state $args_check = compile(ClassName, Config);
-    my ($class, $config) = $args_check->(@_);
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
+    
+    # validate args
+    state $args_check = compile(Config);
+    my ($config) = $args_check->(@args);
     
     # make sure JSON parsing is available
     unless($_CAN_JSON){
@@ -683,9 +710,13 @@ sub config_to_json{
 # Notes      :
 # See Also   :
 sub config_to_string{
-    state $args_check = compile(ClassName, Config);
-    my ($class, $config) = $args_check->(@_);
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
+    
+    # validate args
+    state $args_check = compile(Config);
+    my ($config) = $args_check->(@args);
     
     # get a reference to the key definitions from the types class
     my $defined_keys = $_TYPES_CLASS->_config_keys();
@@ -738,9 +769,15 @@ sub config_to_string{
 # Notes      :
 # See Also   :
 sub preset_description{
-    state $args_check = compile(ClassName, Optional[PresetName]);
-    my ($class, $preset) = $args_check->(@_);
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
+    
+    # validate args
+    state $args_check = compile(Optional[Maybe[PresetName]]);
+    my ($preset) = $args_check->(@args);
+    
+    # set defaults
     $preset = 'DEFAULT' unless $preset;
     
     # get a reference to the preset definitions from the Types class
@@ -810,9 +847,13 @@ sub presets_to_string{
 # Notes      :
 # See Also   :
 sub config_random_numbers_required{
-    state $args_check = compile(ClassName, Config);
-    my ($class, $config) = $args_check->(@_);
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
+    
+    # validate args
+    state $args_check = compile(Config);
+    my ($config) = $args_check->(@args);
     
     # calculate the number of random numbers needed to generate the password
     my $num_rand = 0;
@@ -854,9 +895,13 @@ sub config_random_numbers_required{
 #              to adaptive, this function will return an invalid max length.
 # See Also   :
 sub config_stats{
-    state $args_check = compile(ClassName, Config, slurpy Dict[suppress_warnings => Optional[TrueFalse]]);
-    my ($class, $config, $options) = $args_check->(@_);
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
+    
+    # validate args
+    state $args_check = compile(Config, slurpy Dict[suppress_warnings => Optional[TrueFalse]]);
+    my ($config, $options) = $args_check->(@args);
     my $suppres_warnings = $options->{suppress_warnings} || 0;
     
     # calculate the lengths
@@ -941,60 +986,65 @@ sub config_stats{
 # See Also   : For description of dictionary file format, see POD documentation
 #              below
 sub dictionary{
-    my $self = shift;
-    my $dictionary_source = shift;
-    my $encoding = shift;
+    my @args = @_;
+    my $self = shift @args;
+    _force_instance($self);
     
     # validate args
-    _force_instance($self);
-    unless($encoding){
-        $encoding = 'UTF-8';
-    }
+    state $args_check = multisig(
+        [],
+        [NonEmptyString, Optional[Maybe[NonEmptyString]]],
+        [InstanceOf[$_DICTIONARY_BASE_CLASS]],
+        [ArrayRef[Str]],
+    );
+    my ($dictionary_source, $encoding) = $args_check->(@args);
     
-    # decide if we're a 'getter' or a 'setter'
-    if(!(defined $dictionary_source)){
-        # we are a getter, so just return
+    # set defaults
+    $encoding = 'UTF-8' unless $encoding;
+    
+    # if we're a getter, just get and return
+    unless(defined $dictionary_source){
         return $self->{_DICTIONARY_SOURCE}->clone();
-    }else{
-        # we are a setter, so try load the dictionary
-        
-        # croak if we are called before the config has been loaded into the instance
-        unless(defined $self->{_CONFIG}->{word_length_min} && $self->{_CONFIG}->{word_length_max}){
-            _error('failed to load dictionary file - config has not been loaded yet');
-        }
-        
-        # get a dictionary instance
-        my $new_dict;
-        if($dictionary_source->isa($_DICTIONARY_BASE_CLASS)){
-            $new_dict = $dictionary_source;
-        }elsif(ref $dictionary_source eq q{} || ref $dictionary_source eq 'ARRAY'){
-            $new_dict = Crypt::HSXKPasswd::Dictionary::Basic->new($dictionary_source, $encoding); # could throw an error
-        }else{
-            _error('invalid args - must pass a valid dictinary, hashref, or file path');
-        }
-        
-        # load the dictionary
-        my @cache_full = @{$new_dict->word_list()};
-    
-        # generate the valid word cache - croaks if too few words left after filtering
-        my @cache_limited = $_CLASS->_filter_word_list(\@cache_full, $self->{_CONFIG}->{word_length_min}, $self->{_CONFIG}->{word_length_max}, $self->{_CONFIG}->{allow_accents});
-    
-        # if we got here all is well, so save the new path and caches into the object
-        $self->{_DICTIONARY_SOURCE} = $new_dict;
-        $self->{_CACHE_DICTIONARY_FULL} = [@cache_full];
-        $self->{_CACHE_DICTIONARY_LIMITED} = [@cache_limited];
-        if($self->{_CONFIG}->{allow_accents}){
-            $self->{_CACHE_CONTAINS_ACCENTS} = $_CLASS->_contains_accented_letters(\@cache_limited);
-        }else{
-            $self->{_CACHE_CONTAINS_ACCENTS} = 0;
-        }
-        
-        # update the instance's entropy cache
-        $self->_update_entropystats_cache();
     }
+    
+    # OK, so we're a setter - carry on!
+        
+    # croak if we are called before the config has been loaded into the instance
+    unless(defined $self->{_CONFIG}->{word_length_min} && $self->{_CONFIG}->{word_length_max}){
+        _error('failed to load word source - config has not been loaded yet');
+    }
+    
+    # get a dictionary instance
+    my $new_dict;
+    if(blessed($dictionary_source) && $dictionary_source->isa($_DICTIONARY_BASE_CLASS)){
+        $new_dict = $dictionary_source;
+    }elsif(ref $dictionary_source eq q{} || ref $dictionary_source eq 'ARRAY'){
+        $new_dict = Crypt::HSXKPasswd::Dictionary::Basic->new($dictionary_source, $encoding); # could throw an error
+    }else{
+        _error('invalid word source - must be a dictionary object, hashref, or file path');
+    }
+    
+    # load the dictionary
+    my @cache_full = @{$new_dict->word_list()};
+
+    # generate the valid word cache - croaks if too few words left after filtering
+    my @cache_limited = $_CLASS->_filter_word_list(\@cache_full, $self->{_CONFIG}->{word_length_min}, $self->{_CONFIG}->{word_length_max}, $self->{_CONFIG}->{allow_accents});
+
+    # if we got here all is well, so save the new path and caches into the object
+    $self->{_DICTIONARY_SOURCE} = $new_dict;
+    $self->{_CACHE_DICTIONARY_FULL} = [@cache_full];
+    $self->{_CACHE_DICTIONARY_LIMITED} = [@cache_limited];
+    if($self->{_CONFIG}->{allow_accents}){
+        $self->{_CACHE_CONTAINS_ACCENTS} = $_CLASS->_contains_accented_letters(\@cache_limited);
+    }else{
+        $self->{_CACHE_CONTAINS_ACCENTS} = 0;
+    }
+    
+    # update the instance's entropy cache
+    $self->_update_entropystats_cache();
     
     # return a reference to self
-    return 1;
+    return $self;
 }
 
 #####-SUB-######################################################################
@@ -1013,60 +1063,63 @@ sub dictionary{
 #              JSON module is not installed.
 # See Also   : For valid configuarion options see POD documentation below
 sub config{
-    my $self = shift;
-    my $config_raw = shift;
-    
-    # validate args
+    my @args = @_;
+    my $self = shift @args;
     _force_instance($self);
     
-    # decide if we're a 'getter' or a 'setter'
-    if(!(defined $config_raw)){
-        # we are a getter - simply return a clone of our config
-        return $self._clone_config();
-    }else{
-        # we are a setter
+    # validate args
+    state $args_check = multisig(
+        [],
+        [Config],
+        [NonEmptyString],
+    );
+    my ($config_raw) = $args_check->(@args);
+    
+    # if we're a getter, just get and return
+    unless(defined $config_raw){
+        return $self->_clone_config();
+    }
+    
+    # OK - so we're a setter - carry on!
+    
+    # see what kind of argument we were passed, and behave appropriately
+    my $config = {};
+    if(ref $config_raw eq 'HASH'){
+        # we  received a hashref, so just pass it on
+        $config = $config_raw;
+    }elsif(ref $config_raw eq q{}){
+        # we received as string, so treat it as JSON
         
-        # see what kind of argument we were passed, and behave appropriately
-        my $config = {};
-        if(ref $config_raw eq 'HASH'){
-            # we  received a hashref, so just pass it on
-            $config = $config_raw;
-        }elsif(ref $config_raw eq q{}){
-            # we received as string, so treat it as JSON
-            
-            # make sure JSON parsing is available
-            unless($_CAN_JSON){
-                _error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) before you can pass the config as a JSON stirng');
-            }
-            
-            # try parse the received string as JSON
-            eval{
-                $config = decode_json($config_raw);
-                1; # ensure truthy evaluation on successful execution
-            }or do{
-                _error("Failed to parse JSON config string with error: $EVAL_ERROR");
-            };
-        }else{
-            _error('invalid arguments - the config passed must be a hashref or a JSON string');
+        # make sure JSON parsing is available
+        unless($_CAN_JSON){
+            _error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) before you can pass the config as a JSON stirng');
         }
         
-        # validate the passed config hashref
+        # try parse the received string as JSON
+        my $config_from_json = {};
         eval{
-            $_CLASS->is_valid_config($config, 1); # returns 1 if valid
+            $config_from_json = decode_json($config_raw);
+            1; # ensure truthy evaluation on successful execution
         }or do{
-            my $msg = 'invoked with invalid config';
-            if($self->{debug}){
-                $msg .= " ($EVAL_ERROR)";
-            }
-            _error($msg);
+            _error("Failed to parse JSON config string with error: $EVAL_ERROR");
         };
         
-        # save a clone of the passed config into the instance
-        $self->{_CONFIG} = $_CLASS->clone_config($config);
+        # strip out any extraneous keys found
+        $config = $_CLASS->distil_to_config_keys($config_from_json);
         
-        # update the instance's entropy cache
-        $self->_update_entropystats_cache();
+        # validate the generated config
+        unless(Config->check($config)){
+            _error('Config extracted from JSON string is not valid: '.Config->get_message($config));
+        }
+    }else{
+        _error('the config passed must be a hashref or a JSON string');
     }
+    
+    # save a clone of the passed config into the instance
+    $self->{_CONFIG} = $_CLASS->clone_config($config);
+    
+    # update the instance's entropy cache
+    $self->_update_entropystats_cache();
     
     # return a reference to self to facilitate function chaining
     return $self;
@@ -1082,17 +1135,12 @@ sub config{
 #              type not accounted for in the code.
 # Notes      : This function will carp if the JSON module is not available
 # See Also   :
-sub config_json{
+sub config_as_json{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
-    # assemble the string to return
-    my $ans = $_CLASS->config_to_json($self->{_CONFIG}); # will croak without JSON
-    
-    # return the string
-    return $ans;
+    # assemble and return the JSON string
+    return $_CLASS->config_to_json($self->{_CONFIG}); # will croak without JSON
 }
 
 #####-SUB-#####################################################################
@@ -1104,17 +1152,12 @@ sub config_json{
 #              type not accounted for in the code.
 # Notes      :
 # See Also   :
-sub config_string{
+sub config_as_string{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
-    # assemble the string to return
-    my $ans = $_CLASS->config_to_string($self->{_CONFIG});
-    
-    # return the string
-    return $ans;
+    # assemble and return the string
+    return $_CLASS->config_to_string($self->{_CONFIG});
 }
 
 #####-SUB-######################################################################
@@ -1127,14 +1170,13 @@ sub config_string{
 # Notes      : Invalid keys in the new keys hashref will be silently ignored.
 # See Also   :
 sub update_config{
-    my $self = shift;
-    my $new_keys = shift;
+    my @args = @_;
+    my $self = shift @args;
+    _force_instance($self);
     
     # validate args
-    _force_instance($self);
-    unless(defined $new_keys && ref $new_keys eq 'HASH'){
-        _error('invalid arguments - the new config keys must be passed as a hashref');
-    }
+    state $args_check = compile(ConfigOverride);
+    my ($new_keys) = $args_check->(@args);
     
     # clone the current config as a starting point for the new config
     my $new_config = $self->_clone_config();
@@ -1161,8 +1203,8 @@ sub update_config{
     _debug("updated $num_keys_updated keys");
     
     # validate the merged config
-    unless($_CLASS->is_valid_config($new_config)){
-        _error('updated config is invalid');
+    unless(Config->check($new_config)){
+        _error('the updated config is not valid: '.Config->get_message($new_config));
     }
     
     # re-calculate the dictionary cache if needed
@@ -1194,33 +1236,32 @@ sub update_config{
 # Notes      :
 # See Also   : 
 sub rng{
-    my $self = shift;
-    my $rng = shift;
-    
-    # validate args
+    my @args = @_;
+    my $self = shift @args;
     _force_instance($self);
     
-    # decide if we're a 'getter' or a 'setter'
-    if(!(defined $rng)){
-        # we are a getter, so just return
+    # validate args
+    state $args_check = multisig(
+        [],
+        [InstanceOf[$_RNG_BASE_CLASS]],
+    );
+    my ($rng) = $args_check->(@args);
+    
+    # if we're a getter, just get and return
+    unless(defined $rng){
         return $self->{_RNG};
-    }else{
-        # we are a setter, so try load the RNG
-        
-        # croak if we were not passed a valid RNG
-        unless(defined $rng && blessed($rng) && $rng->isa($_RNG_BASE_CLASS)){
-            _error('failed to set RNG - invalid value passed');
-        }
-        
-        # set the RNG
-        $self->{_RNG} = $rng;
-        
-        # empty the random cache
-        $self->{_CACHE_RANDOM} = [];
     }
     
+    # OK - so we're a getter - carry on!
+        
+    # set the RNG
+    $self->{_RNG} = $rng;
+        
+    # empty the random cache
+    $self->{_CACHE_RANDOM} = [];
+    
     # return a reference to self
-    return 1;
+    return $self;
 }
 
 #####-SUB-######################################################################
@@ -1233,8 +1274,6 @@ sub rng{
 # See Also   :
 sub caches_state{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
 
     # generate the string
@@ -1256,8 +1295,6 @@ sub caches_state{
 # See Also   :
 sub password{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     #
@@ -1344,14 +1381,13 @@ sub password{
 # Notes      :
 # See Also   :
 sub passwords{
-    my $self = shift;
-    my $num_pws = shift;
+    my @args = @_;
+    my $self = shift @args;
+    _force_instance($self);
     
     # validate args
-    _force_instance($self);
-    unless(defined $num_pws && ref $num_pws eq q{} && $num_pws =~ m/^\d+$/sx && $num_pws > 0){
-        _error('invalid args - must specify the number of passwords to generate as a positive integer');
-    }
+    state $args_check = compile(NonZeroPositiveInteger);
+    my ($num_pws) = $args_check->(@args);
     
     # generate the needed passwords
     my @passwords = ();
@@ -1384,14 +1420,13 @@ sub passwords{
 # Notes      : 
 # See Also   :
 sub passwords_json{
-    my $self = shift;
-    my $num_pws = shift;
+    my @args = @_;
+    my $self = shift @args;
+    _force_instance($self);
     
     # validate args
-    _force_instance($self);
-    unless(defined $num_pws && ref $num_pws eq q{} && $num_pws =~ m/^\d+$/sx && $num_pws > 0){
-        _error('invalid args - must specify the number of passwords to generate as a positive integer');
-    }
+    state $args_check = compile(NonZeroPositiveInteger);
+    my ($num_pws) = $args_check->(@args);
     
     # make sure JSON parsing is available
     unless($_CAN_JSON){
@@ -1498,8 +1533,6 @@ sub passwords_json{
 # See Also   : 
 sub stats{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     # create a hash to assemble all the stats into
@@ -1553,8 +1586,6 @@ sub stats{
 # See Also   :
 sub status{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     # assemble the response
@@ -1570,7 +1601,7 @@ sub status{
     
     # the config
     $status .= "\n*CONFIG*\n";
-    $status .= $self->config_string();
+    $status .= $self->config_as_string();
     
     # the random number cache
     $status .= "\n*RANDOM NUMBER CACHE*\n";
@@ -1596,15 +1627,15 @@ sub status{
     $status .= "# Random Numbers needed per-password: $stats{password_random_numbers_required}\n";
     $status .= "Passwords Generated: $stats{passwords_generated}\n";
     
-    # debug-only info - TO FIX LATER
-    #if($DEBUG){
-    #    $status .= "\n*DEBUG INFO*\n";
-    #    if($_CAN_STACK_TRACE){
-    #        $status .= "Devel::StackTrace IS installed\n";
-    #    }else{
-    #        $status .= "Devel::StackTrace is NOT installed\n";
-    #    }
-    #}
+    # debug-only
+    if($_Types_CLASS::_DEBUG){ ## no critic (ProtectPrivateVars)
+        $status .= "\n*DEBUG INFO*\n";
+        if($_Types_CLASS::_CAN_STACK_TRACE){ ## no critic (ProtectPrivateVars)
+            $status .= "Devel::StackTrace IS installed\n";
+        }else{
+            $status .= "Devel::StackTrace is NOT installed\n";
+        }
+    }
     
     # return the status
     return $status;
@@ -1663,7 +1694,7 @@ sub _clone_config{
     # cloning code will trigger an exception
     if($self->{debug}){
         eval{
-            $_CLASS->is_valid_config($clone, 1); # returns 1 if valid
+            $_CLASS->is_valid_config($clone, croak => 1); # returns 1 if valid
         }or do{
             _error('cloning error ('.$EVAL_ERROR.')');
         };
@@ -2988,6 +3019,10 @@ C<NonEmptyString> - a string containing at least one character.
 =item *
 
 C<PositiveInteger> - a whole number greater than or equal to zero.
+
+=item *
+
+C<NonZeroPositiveInteger> - a whole number greater than zero.
 
 =item *
 
@@ -4384,6 +4419,13 @@ This function returns the list of valid config key names as an array of strings.
     
 This function returns the list of defined preset names as an array of strings.
 
+=head3 distil_to_config_keys()
+
+    my $dist_hashref = Crypt::HSXKPasswd->distil_to_config_keys($hashref);
+    
+This function takes a hashref as an argument, and returns a deep clone of that
+hashref with all keys that are not valid config key names removed.
+
 =head3 is_valid_config()
 
     # determine the validity
@@ -4530,9 +4572,9 @@ The function will croak if an invalid config is passed, or, if a string is
 passed while the standard JSON Perl module
 (L<http://search.cpan.org/perldoc?JSON>) is not installed.
 
-=head3 config_json()
+=head3 config_as_json()
 
-    my $config_json_string = $hsxkpasswd_instance->config_json();
+    my $config_json_string = $hsxkpasswd_instance->config_as_json();
     
 This function returns the content of the instance's loaded config hashref as a
 JSON string.
@@ -4543,9 +4585,9 @@ L<https://xkpasswd.net> (using the load/save tab).
 The function will croak if the standard JSON Perl module
 (L<http://search.cpan.org/perldoc?JSON>) is not installed.
 
-=head3 config_string()
+=head3 config_as_string()
 
-    my $config_string = $hsxkpasswd_instance->config_string();
+    my $config_string = $hsxkpasswd_instance->config_as_string();
     
 This function returns the content of the instance's loaded config hashref as a
 scalar string.
@@ -4859,6 +4901,10 @@ This module requires the following Perl modules:
 =item *
 
 C<Carp> - L<http://search.cpan.org/perldoc?Carp>
+
+=item *
+
+C<Clone> - L<http://search.cpan.org/perldoc?Clone>
 
 =item *
 

@@ -21,7 +21,7 @@ our @EXPORT = qw( _debug _warn _error _force_class _force_instance );
 ## use critic
 
 # import (or not) optional modules
-my $_CAN_STACK_TRACE = eval{
+our $_CAN_STACK_TRACE = eval{
     require Devel::StackTrace; # for better error reporting when debugging
 };
 
@@ -37,6 +37,9 @@ my $_CAN_STACK_TRACE = eval{
 #
 # === CONSTANTS ===============================================================#
 #
+
+# version info
+use version; our $VERSION = qv('1.1_01');
 
 # utility variables
 my $_CLASS = __PACKAGE__;
@@ -65,7 +68,7 @@ our @CARP_NOT;
 # Notes      : a wrapper for __log() which invokes that function with a severity
 #              of 'DEBUG'
 # See Also   : __log()
-sub _debug{
+sub _debug{ ## no critic (ProhibitUnusedPrivateSubroutines)
     my $message = shift;
     my $stack_increment = shift;
     
@@ -84,7 +87,7 @@ sub _debug{
 # Notes      : a wrapper for __log() which invokes that function with a severity
 #              of 'WARNING'
 # See Also   : __log()
-sub _warn{
+sub _warn{ ## no critic (ProhibitUnusedPrivateSubroutines)
     my $message = shift;
     my $stack_increment = shift;
     
@@ -120,18 +123,30 @@ sub _error{
 # Throws     : Croaks if $class is not valid
 # Notes      :
 # See Also   :
-sub _force_class{
+sub _force_class{ ## no critic (ProhibitUnusedPrivateSubroutines)
     my $test_class = shift;
     
     # test against the direct caller
     my $required_class = __calling_package();
     unless($required_class){
-        _error(q{failed to determine caller's package});
+        _error(q{failed to determine calling package});
     }
     
     # test the class
     unless(defined $test_class && ref $test_class eq q{} && $test_class eq $required_class){
-        _error("invalid invocation - must be invoked on the package $required_class", 1);
+        # try get a function name
+        my $calling_sub = (caller 1)[3];
+        
+        # strip the package name out of the sub name
+        $calling_sub =~ s/^$required_class[:]{2}//sx;
+        
+        if($calling_sub){
+            # print a nicer error message
+            _error('invalid invocation - must be invoked as '.$required_class.q{->}.$calling_sub, 1);
+        }else{
+            # fall back to the less nice output
+            _error("invalid invocation - must be invoked on the package $required_class", 1);
+        }
     }
     
     return 1;
@@ -146,12 +161,11 @@ sub _force_class{
 # Throws     : Croaks if the $self variable is not an instance of this class.
 # Notes      :
 # See Also   :
-sub _force_instance{
+sub _force_instance{ ## no critic (ProhibitUnusedPrivateSubroutines)
     my $test_self = shift;
     
     # test against the direct caller
     my $required_package = __calling_package();
-    
     unless(defined $test_self && blessed($test_self) && $test_self->isa($required_package)){
         _error("invalid invocation - must be invoked on an instance of $required_package", 1);
     }
@@ -251,7 +265,8 @@ sub __log{
     
     # before doing anything that could invoke a Carp function, get the list of
     # internal referrers, and set up @CARP_NOT
-    local @CARP_NOT = __interal_calling_packages();
+    # NOTE - the use of local is recommended in the Carp docs
+    local @CARP_NOT = __interal_calling_packages(); ## no critic (ProhibitLocalVars);
     
     # validate the args
     unless(defined $severity && ref $severity eq q{} && length $severity > 1){

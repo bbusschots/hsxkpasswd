@@ -182,6 +182,9 @@ sub sanitise_dictionary_file{
     foreach my $word (sort @words){
         print "$word\n";
     }
+    
+    # explicit return
+    return 1;
 }
 
 #####-SUB-#####################################################################

@@ -30,6 +30,13 @@ binmode STDOUT, ':encoding(UTF-8)';
 #==============================================================================#
 
 #
+# === CONSTANTS ===============================================================#
+#
+
+# version info
+use version; our $VERSION = qv('1.1_01');
+
+#
 # === Define The Fundamental Types ============================================#
 #
 
@@ -49,6 +56,23 @@ my $POSITIVE_INTEGER = Type::Tiny->new(
     },
 );
 __PACKAGE__->meta->add_type($POSITIVE_INTEGER);
+
+# add a type for positive integers (including 0)
+my $NON_ZERO_POSITIVE_INTEGER_ENGLISH = 'an integer greater than zero';
+my $NON_ZERO_POSITIVE_INTEGER = Type::Tiny->new(
+    name => 'NonZeroPositiveInteger',
+    parent => Int,
+    constraint => sub{
+        return $_ > 0;
+    },
+    message => sub{
+        return _var_to_string($_).qq{ is not $NON_ZERO_POSITIVE_INTEGER_ENGLISH};
+    },
+    my_methods => {
+        english => sub {return $NON_ZERO_POSITIVE_INTEGER_ENGLISH;},
+    },
+);
+__PACKAGE__->meta->add_type($NON_ZERO_POSITIVE_INTEGER);
 
 # add a type for positive integers (including 0)
 my $NON_EMPTY_STRING_ENGLISH = 'a string contianing at least one character';
@@ -73,7 +97,7 @@ my $LETTER = Type::Tiny->new(
     name => 'Letter',
     parent => Str,
     constraint => sub{
-        return $_ =~ m/^\pL$/sx;
+        return m/^\pL$/sx;
     },
     message => sub{
         return _var_to_string($_).qq{ is not a Letter (must be $LETTER_ENGLISH)};
@@ -91,7 +115,7 @@ my $WORD = Type::Tiny->new(
     name => 'Word',
     parent => Str,
     constraint => sub{
-        return $_ =~ m/^\pL{4,}$/sx;
+        return m/^\pL{4,}$/sx;
     },
     message => sub{
         return _var_to_string($_).qq{ is not a Word (must be $WORD_ENGLISH)};
@@ -108,7 +132,7 @@ my $SYMBOL = Type::Tiny->new(
     name => 'Symbol',
     parent => Str,
     constraint => sub{
-        return $_ =~ m/^\X$/sx && $_ =~ m/^[^\pL]$/sx;
+        return m/^\X$/sx && m/^[^\pL]$/sx;
     },
     message => sub{
         return _var_to_string($_).qq{ is not a Symbol (must be $SYMBOL_ENGLISH)};
@@ -310,7 +334,7 @@ $_KEYS->{separator_character} = {
 $_KEYS->{separator_character}->{type} = Type::Tiny->new(
     parent => Str,
     constraint => sub{
-        return $SYMBOL->check($_) || $_ =~ m/^(NONE)|(RANDOM)$/sx;
+        return $SYMBOL->check($_) || m/^(?:NONE)|(?:RANDOM)$/sx;
     },
     message => sub {
         return _config_key_message($_, 'separator_character', $_KEYS->{separator_character}->{expects});
@@ -346,7 +370,7 @@ $_KEYS->{padding_character} = {
 $_KEYS->{padding_character}->{type} = Type::Tiny->new(
     parent => Str,
     constraint => sub{
-        return $SYMBOL->check($_) || $_ =~ m/^(NONE)|(RANDOM)|(SEPARATOR)$/sx;
+        return $SYMBOL->check($_) || m/^(?:NONE)|(?:RANDOM)|(?:SEPARATOR)$/sx;
     },
     message => sub {
         return _config_key_message($_, 'padding_character', $_KEYS->{padding_character}->{expects});
@@ -394,7 +418,7 @@ my $CONFIG_KEY_NAME = Type::Tiny->new(
         english => sub {return 'a defined config name - '.$CONFIG_KEY_NAME_ENGLISH;},
     },
 );
-$CONFIG_KEY_NAME->coercion()->add_type_coercions(Str, q{lc $_});
+$CONFIG_KEY_NAME->coercion()->add_type_coercions(Str, q{lc $_}); ## no critic (RequireInterpolationOfMetachars)
 __PACKAGE__->meta->add_type($CONFIG_KEY_NAME);
 
 # add a type for a config key name-value pair - must be a reference to a
@@ -783,7 +807,7 @@ my $PRESET_NAME = Type::Tiny->new(
         english => sub {return 'a defined preset name - '.$PRESET_NAME_ENGLISH;},
     },
 );
-$PRESET_NAME->coercion()->add_type_coercions(Str, q{uc $_});
+$PRESET_NAME->coercion()->add_type_coercions(Str, q{uc $_}); ## no critic (RequireInterpolationOfMetachars)
 __PACKAGE__->meta->add_type($PRESET_NAME);
 
 #
@@ -812,7 +836,7 @@ __PACKAGE__->meta->make_immutable;
 #              party devs - Use the public function
 #              Crypt::HSXKPasswd->config_key_definitions() instead!
 # See Also   : Crypt::HSXKPasswd->config_key_definitions()
-sub _config_keys{
+sub _config_keys{ ## no critic (ProhibitUnusedPrivateSubroutines)
     return $_KEYS;
 }
 
@@ -827,7 +851,7 @@ sub _config_keys{
 #              party devs - Use the public function
 #              Crypt::HSXKPasswd->preset_definitions() instead!
 # See Also   : Crypt::HSXKPasswd->preset_definitions()
-sub _presets{
+sub _presets{ ## no critic (ProhibitUnusedPrivateSubroutines)
     return $_PRESETS;
 }
 
@@ -865,13 +889,13 @@ sub _var_to_string{
     }elsif($ref eq 'ARRAY' || $ref eq 'HASH'){
         # use data dumper to stringify the reference
         my $dd = Data::Dumper->new([$var]);
-        $dd->Indent(0)->Useqq(1)->Terse(1)->Sortkeys(1)->Maxdepth(2);
+        $dd->Indent(0)->Useqq(1)->Terse(1)->Sortkeys(1)->Maxdepth(2); ## no critic (ProhibitLongChainsOfMethodCalls)
         my $var_str = $dd->Dump();
         
         # truncate the stringified reference if needed
         my $max_length = 72;
         if(length $var_str > $max_length){
-            $var_str = substr($var_str, 0, $max_length - 12).'...'.substr($var_str, -1, 1);
+            $var_str = (substr $var_str, 0, $max_length - 12).'...'.(substr $var_str, -1, 1);
         }
         
         # return the final string
