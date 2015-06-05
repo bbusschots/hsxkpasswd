@@ -6,12 +6,16 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw( -no_match_vars ); # for more readable code
-use Scalar::Util qw(blessed); # for checking if a reference is blessed
+use Scalar::Util qw( blessed ); # for checking if a reference is blessed
+use List::MoreUtils qw( uniq ); # for array deduplication
+use Types::Standard qw( :types slurpy ); # for data validation
+use Type::Params qw( compile ); # for argument valdiation
+use Crypt::HSXKPasswd::Types qw( :types ); # for data validation
 use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 
 # set things up for using UTF-8
 use 5.016; # min Perl for good UTF-8 support, implies feature 'unicode_strings'
-use Encode qw(encode decode);
+use Encode qw( encode decode );
 use utf8;
 binmode STDOUT, ':encoding(UTF-8)';
 
@@ -120,6 +124,57 @@ sub print_words{
     
     # final truthy return to keep perlcritic happy
     return 1;
+}
+
+#
+# === Public Class Functions ==================================================#
+#
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Distil an array of strings down to a de-duplicated array of only
+#              the valid words.
+# Returns    : An array of words
+# Arguments  : 1) A reference to an array of strings
+#              2) OPTIONAL - a named argument warn with a value of 0 or 1. If 1
+#                 is passed, warnings will be issued each time an invalid string
+#                 is skipped over.
+# Throws     : Croaks on invalid invocation or args, and warns on request when
+#              skipping words.
+# Notes      :
+# See Also   :
+sub distil_to_words{
+    my @args = @_;
+    my $class = shift @args;
+    _force_class($class);
+    
+    # validate args
+    state $args_check = compile(ArrayRef[Str], slurpy Dict[warn => Optional[TrueFalse]]);
+    my ($array_ref, $options) = $args_check->(@args);
+    my $warn = $options->{warn} || 0;
+    
+    # loop through the array and copy all valid words to a new array
+    my @valid_words = ();
+    foreach my $potential_word (@{$array_ref}){
+        if(Word->check($potential_word)){
+            push @valid_words, $potential_word;
+        }else{
+            if($warn || _do_debug()){
+                my $msg = 'skipping invalid word: '.Word->get_message($potential_word);
+                if($warn){
+                    _warn($msg);
+                }else{
+                    _debug($msg);
+                }
+            }
+        }
+    }
+    
+    # de-dupe the valid words
+    my @final_words = uniq(@valid_words);
+    
+    # return the valid words
+    return @final_words;
 }
 
 1; # because Perl is just a little bit odd :)

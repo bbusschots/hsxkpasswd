@@ -7,7 +7,8 @@ use English qw( -no_match_vars );
 use Carp; # for nicer 'exceptions' for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions
 use Scalar::Util qw( blessed ); # for checking if a reference is blessed
-use List::MoreUtils qw(uniq); # for array deduplication
+use List::MoreUtils qw( uniq ); # for array deduplication
+use Types::Standard qw( ClassName ); # needed for _force_class
 
 # set things up for using UTF-8
 use 5.016; # min Perl for good UTF-8 support, implies feature 'unicode_strings'
@@ -17,7 +18,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 
 ## no critic (ProhibitAutomaticExportation);
 use base qw( Exporter );
-our @EXPORT = qw( _debug _warn _error _force_class _force_instance );
+our @EXPORT = qw( _do_debug _debug _warn _error _force_class _force_instance );
 ## use critic
 
 # import (or not) optional modules
@@ -56,6 +57,18 @@ our @CARP_NOT;
 #
 # === 'Private' Functions to be Exported ======================================#
 #
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE (PRIVATE) - EXPORTED
+# Purpose    : Return 1 if we are in debug mode, and 0 otherwise.
+# Returns    : 1 or 0
+# Arguments  : NONE
+# Throws     : NOTHING
+# Notes      :
+# See Also   :
+sub _do_debug{
+    return $_DEBUG ? 1 : 0;
+}
 
 #####-SUB-######################################################################
 # Type       : SUBROUTINE (PRIVATE) - EXPORTED
@@ -126,26 +139,24 @@ sub _error{
 sub _force_class{ ## no critic (ProhibitUnusedPrivateSubroutines)
     my $test_class = shift;
     
-    # test against the direct caller
-    my $required_class = __calling_package();
-    unless($required_class){
-        _error(q{failed to determine calling package});
+    # find the package hosting the call to _force_class
+    my $host_class = __calling_package();
+    unless($host_class){
+        _error(q{failed to determine package hosting the funciton who's invocation should be tested});
     }
     
     # test the class
-    unless(defined $test_class && ref $test_class eq q{} && $test_class eq $required_class){
-        # try get a function name
+    unless(ClassName->check($test_class)){
+        # try get the data needed to get the bare function name
         my $calling_sub = (caller 1)[3];
-        
-        # strip the package name out of the sub name
-        $calling_sub =~ s/^$required_class[:]{2}//sx;
         
         if($calling_sub){
             # print a nicer error message
-            _error('invalid invocation - must be invoked as '.$required_class.q{->}.$calling_sub, 1);
+            $calling_sub =~ s/^$host_class[:]{2}//sx; # strip the package name from the sub
+            _error('invalid invocation - must be invoked on the class, e.g. '.$host_class.q{->}.$calling_sub.q{() - invocation on child classes also OK}, 1);
         }else{
             # fall back to the less nice output
-            _error("invalid invocation - must be invoked on the package $required_class", 1);
+            _error("invalid invocation - must be invoked on the class $host_class (or on a child class)", 1);
         }
     }
     

@@ -8,7 +8,6 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw(-no_match_vars); # for more readable code
-use List::MoreUtils qw(uniq); # for array deduplication
 use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 
 # set things up for using UTF-8
@@ -228,10 +227,10 @@ sub add_words{
     
     # try load the words from the relevant source
     my $valid_word_re = qr/^[[:alpha:]]+$/sx;
-    my @words = ();
+    my @new_words = ();
     if(ref $dict_source eq 'ARRAY'){
         # load valid words from the referenced array
-        @words = @{$dict_source};
+        @new_words = @{$dict_source};
         
         # increase the array source count
         $self->{sources}->{num_arrays}++;
@@ -256,11 +255,11 @@ sub add_words{
             next LINE if $line =~ m/^[#]/sx;
             
             # if we got here, store the word
-            push @words, $line;
+            push @new_words, $line;
         }
         
         # make sure we got at least one word!
-        unless(scalar @words){
+        unless(scalar @new_words){
             _error("file $dict_source contained no valid words");
         }
         
@@ -268,18 +267,9 @@ sub add_words{
         push @{$self->{sources}->{files}}, $dict_source;
     }
     
-    # process the words
-    foreach my $word (@words){
-        if($word && ref $word eq q{} && $word =~ m/$valid_word_re/sx){
-            push @{$self->{words}}, "$word";
-        }else{
-            _warn("Skipping invalid word: $word");
-        }
-    }
-    
-    # de-dupe the word list
-    my @unique_words = uniq(@{$self->{words}});
-    $self->{words} = [@unique_words];
+    # merge with existing words and save into the instance
+    my @updated_words = (@{$self->{words}}, @new_words);
+    $self->{words} = [@updated_words];
     
     # return a reference to self
     return $self;

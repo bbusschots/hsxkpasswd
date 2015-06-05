@@ -11,6 +11,7 @@ use Scalar::Util qw( blessed ); # for checking if a reference is blessed
 use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
 use Clone qw( clone ); # for cloning nested data structures - exports clone()
+use List::MoreUtils qw( uniq ); # for array deduplication
 use Type::Tiny; # for generating anonymous type constraints when needed
 use Type::Params qw( compile multisig ); # for parameter validation with Type::Tiny objects
 use Types::Standard qw( slurpy :types ); # for basic type checking (Int Str etc.)
@@ -494,31 +495,15 @@ sub preset_config{
     # start by loading the preset
     my $config = $_CLASS->clone_config($preset_defs->{$preset_name}->{config});
     
-    # get a references to the keys hashref from the types class
-    my $key_definitions = $_TYPES_CLASS->_config_keys();
-    
     # if overrides were passed, apply them and validate
     if(defined $overrides){
+        # save the keys into the config
         foreach my $key (keys %{$overrides}){
-            # ensure the key is valid - skip it if not
-            unless(defined $key_definitions->{$key}){
-                _warn("Skipping invalid key=$key");
-                next;
-            }
-            
-            # ensure the value is valid
-            eval{
-                $_CLASS->_validate_key($key, $overrides->{$key}, 1); # returns 1 if valid
-            }or do{
-                _warn("Skipping key=$key because of invalid value. Expected: $key_definitions->{$key}->{expects}");
-                next;
-            };
-            
-            # save the key into the config
             $config->{$key} = $overrides->{$key};
         }
-        unless($_CLASS->is_valid_config($config)){
-            _error('The preset combined with the specified overrides has resulted in an inalid config');
+        # validate the resulting config
+        unless(Config->check($config)){
+            _error('The preset combined with the specified overrides produces an invalid config: '.Config->get_message($config));
         }
     }
     
@@ -631,6 +616,75 @@ sub distil_to_config_keys{
     
     # return the distilled hashref
     return $distilled;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Distil an array of strings down to a de-duplicated array of only
+#              symbols.
+# Returns    : An array of strings
+# Arguments  : 1) A reference to an array of strings
+#              2) OPTIONAL - a named argument warn with a value of 0 or 1. If 1
+#                 is passed, warnings will be issued each time an invalid string
+#                 is skipped over.
+# Throws     : Croaks on invalid invocation or args, and warns on request when
+#              skipping words.
+# Notes      :
+# See Also   :
+sub distil_to_symbol_alphabet{
+    my @args = @_;
+    my $class = shift @args;
+    _force_class($class);
+    
+    # validate args
+    state $args_check = compile(ArrayRef[Str], slurpy Dict[warn => Optional[TrueFalse]]);
+    my ($array_ref, $options) = $args_check->(@args);
+    my $warn = $options->{warn} || 0;
+    
+    # loop through the array and copy all valid synbols to a new array
+    my @valid_symbols = ();
+    foreach my $potential_symbol (@{$array_ref}){
+        if(Symbol->check($potential_symbol)){
+            push @valid_symbols, $potential_symbol;
+        }else{
+            if($warn || _do_debug()){
+                my $msg = 'skipping invalid symbol: '.Symbol->get_message($potential_symbol);
+                if($warn){
+                    _warn($msg);
+                }else{
+                    _debug($msg);
+                }
+            }
+        }
+    }
+    
+    # de-dupe the valid symbols
+    my @final_alphabet = uniq(@valid_symbols);
+    
+    # return the valid symbols
+    return @final_alphabet;
+}
+
+#####-SUB-######################################################################
+# Type       : CLASS
+# Purpose    : Distil an array of strings down to a de-duplicated array of only
+#              the valid words.
+# Returns    : An array of words
+# Arguments  : 1) A reference to an array of strings
+#              2) OPTIONAL - a named argument warn with a value of 0 or 1. If 1
+#                 is passed, warnings will be issued each time an invalid string
+#                 is skipped over.
+# Throws     : Croaks on invalid invocation or args, and warns on request when
+#              skipping words.
+# Notes      :
+# See Also   :
+sub distil_to_words{
+    my @args = @_;
+    my $class = shift @args;
+    _force_class($class);
+    
+    # just pass everything through to the dictionary class
+    return $_DICTIONARY_BASE_CLASS->distil_to_words(@args);
 }
 
 #####-SUB-######################################################################
@@ -981,7 +1035,8 @@ sub config_stats{
 #              2. OPTIONAL - the encoding to import the file with. The default
 #                 is UTF-8 (ignored if the first argument is not a file path).
 # Throws     : Croaks on invalid invocation, or, if there is a problem loading
-#              a dictionary file
+#              a dictionary file. While debugging, also warns when skipping
+#              invalid words.
 # Notes      :
 # See Also   : For description of dictionary file format, see POD documentation
 #              below
@@ -1024,11 +1079,16 @@ sub dictionary{
         _error('invalid word source - must be a dictionary object, hashref, or file path');
     }
     
-    # load the dictionary
-    my @cache_full = @{$new_dict->word_list()};
+    # load and sanitise the words from the word source
+    my @cache_full = $_CLASS->distil_to_words(\@{$new_dict->word_list()});
 
-    # generate the valid word cache - croaks if too few words left after filtering
-    my @cache_limited = $_CLASS->_filter_word_list(\@cache_full, $self->{_CONFIG}->{word_length_min}, $self->{_CONFIG}->{word_length_max}, $self->{_CONFIG}->{allow_accents});
+    # generate the cache of appropriate-length words - croaks if too few words left after filtering
+    my @cache_limited = $_CLASS->_filter_word_list(
+        \@cache_full,
+        $self->{_CONFIG}->{word_length_min},
+        $self->{_CONFIG}->{word_length_max},
+        allow_accents => $self->{_CONFIG}->{allow_accents},
+    );
 
     # if we got here all is well, so save the new path and caches into the object
     $self->{_DICTIONARY_SOURCE} = $new_dict;
@@ -1085,7 +1145,7 @@ sub config{
     # see what kind of argument we were passed, and behave appropriately
     my $config = {};
     if(ref $config_raw eq 'HASH'){
-        # we  received a hashref, so just pass it on
+        # we  received a hashref, so just and pass it on
         $config = $config_raw;
     }elsif(ref $config_raw eq q{}){
         # we received as string, so treat it as JSON
@@ -1114,6 +1174,9 @@ sub config{
     }else{
         _error('the config passed must be a hashref or a JSON string');
     }
+    
+    # distil the alphabets in the new config
+    $_CLASS->_distil_alphabets_inplace($config);
     
     # save a clone of the passed config into the instance
     $self->{_CONFIG} = $_CLASS->clone_config($config);
@@ -1186,14 +1249,10 @@ sub update_config{
     
     # merge the new values into the config
     my $num_keys_updated = 0;
-    foreach my $key (sort keys %{$defined_keys}){
+    CONFIG_KEY:
+    foreach my $key ($_CLASS->defined_config_keys()){
         # skip the key if it's not present in the list of new keys
-        next unless defined $new_keys->{$key};
-        
-        #validate the new key value
-        unless($_CLASS->_validate_key($key, $new_keys->{$key})){
-            _error("invalid new value for key=$key");
-        }
+        next CONFIG_KEY unless defined $new_keys->{$key};
         
         # update the key in the new config
         $new_config->{$key} = $new_keys->{$key};
@@ -1201,6 +1260,9 @@ sub update_config{
         _debug("updated $key to new value");
     }
     _debug("updated $num_keys_updated keys");
+    
+    # distil the alphabets in the merged config
+    $_CLASS->_distil_alphabets_inplace($new_config);
     
     # validate the merged config
     unless(Config->check($new_config)){
@@ -1683,8 +1745,6 @@ sub hsxkpasswd{
 # See Also   :
 sub _clone_config{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     # build the clone
@@ -1693,11 +1753,7 @@ sub _clone_config{
     # if, and only if, debugging, validate the cloned config so errors in the
     # cloning code will trigger an exception
     if($self->{debug}){
-        eval{
-            $_CLASS->is_valid_config($clone, croak => 1); # returns 1 if valid
-        }or do{
-            _error('cloning error ('.$EVAL_ERROR.')');
-        };
+        Config->check($clone) || _error('cloning error - clone is invalid: '.Config->get_message($clone));
     }
     
     # return the clone
@@ -1705,44 +1761,34 @@ sub _clone_config{
 }
 
 #####-SUB-######################################################################
-# Type       : CLASS (PRIVATE)
-# Purpose    : validate the value for a single key
-# Returns    : 1 if the key is valid, 0 otherwise
-# Arguments  : 1. the key to validate the value for
-#              2. the value to validate
-#              3. OPTIONAL - a true value to croak on invalid value
-# Throws     : Croaks if invoked invalidly, or on error if arg 3 is truthy.
-#              Also Carps if called with invalid key with a truthy arg 3.
+# Type       : CLASS
+# Purpose    : Distil all alphabets in a config hashref
+# Returns    : always returns 1 (to keep perlcritic happy)
+# Arguments  : 1) a config hashref
+# Throws     : Croaks on invalid invocation or args
 # Notes      :
 # See Also   :
-sub _validate_key{
-    my $class = shift;
-    my $key = shift;
-    my $val = shift;
-    my $croak = shift;
-    
-    # validate the args
+sub _distil_alphabets_inplace{
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
-    unless(defined $key && ref $key eq q{} && defined $val){
-        _error('invoked with invalid args');
+    
+    # validate args
+    state $args_check = compile(Config);
+    my ($config) = $args_check->(@args);
+    
+    # distil all three possible alphabet keys, if pressent
+    if($config->{symbol_alphabet}){
+        $config->{symbol_alphabet} = [$_CLASS->distil_to_symbol_alphabet($config->{symbol_alphabet})];
+    }
+    if($config->{padding_alphabet}){
+        $config->{padding_alphabet} = [$_CLASS->distil_to_symbol_alphabet($config->{padding_alphabet})];
+    }
+    if($config->{separator_alphabet}){
+        $config->{separator_alphabet} = [$_CLASS->distil_to_symbol_alphabet($config->{separator_alphabet})];
     }
     
-    # get a reference to the key definitions
-    my $key_definitions = $_TYPES_CLASS->_config_keys();
-    
-    # make sure the key exists
-    unless(defined $key_definitions->{$key}){
-        carp("'$key' is not a valid config key name") if $croak;
-        return 0;
-    }
-    
-    # make sure the value passes the validation function for the key
-    unless($key_definitions->{$key}->{type}->check($val)){
-        croak("Invalid value specified for config key '$key'. Must be: ".$key_definitions->{$key}->{expects}) if $croak;
-        return 0;
-    }
-    
-    # if we got here, all is well, so return 1
+    # an explicit return
     return 1;
 }
 
@@ -1753,28 +1799,29 @@ sub _validate_key{
 # Arguments  : 1. a reference to the array of words to filter.
 #              2. the minimum allowed word length
 #              3. the maximum allowed word length
-#              4. OPTIONAL - a truthy value to allow accented characters through
+#              4. OPTIONAL - named argument allow_accents with a value of 0 or
+#                 1. If 1 is passed, accents will not be stripped from words,
+#                 otherwise they will.
 # Throws     : Croaks on invalid invocation, or if too few matching words found.
 # Notes      : Unless the fourth argument is a truthy value, accents will be
 #              stripped from the words.
 # See Also   :
 sub _filter_word_list{
-    my $class = shift;
-    my $word_list_ref = shift;
-    my $min_len = shift;
-    my $max_len = shift;
-    my $allow_accents = shift;
-    
-    # validate the args
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
-    unless(defined $word_list_ref && ref $word_list_ref eq q{ARRAY}){
-        _error('invoked with invalid word list');
-    }
-    unless(defined $min_len && ref $min_len eq q{} && $min_len =~ m/^\d+$/sx && $min_len > 3){
-        _error('invoked with invalid minimum word length');
-    }
-    unless(defined $max_len && ref $max_len eq q{} && $max_len =~ m/^\d+$/sx && $max_len >= $min_len){
-        _error('invoked with invalid maximum word length');
+    
+    # validate args
+    state $args_check = compile(
+        ArrayRef[Str],
+        WordLength,
+        WordLength,
+        slurpy Dict[allow_accents => Optional[TrueFalse]]
+    );
+    my ($word_list_ref, $min_len, $max_len, $options) = $args_check->(@args);
+    my $allow_accents = $options->{allow_accents} || 0;
+    unless($max_len >= $min_len){
+        _error("minimum length (recived $min_len) cannot be greater than maximum length (received $max_len)");
     }
     
     #build the array of words of appropriate length
@@ -1813,14 +1860,13 @@ sub _filter_word_list{
 # Notes      :
 # See Also   :
 sub _contains_accented_letters{
-    my $class = shift;
-    my $word_list_ref = shift;
-    
-    # validate the args
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
-    unless(defined $word_list_ref && ref $word_list_ref eq q{ARRAY}){
-        _error('invoked with invalid word list');
-    }
+    
+    # validate args
+    state $args_check = compile(ArrayRef[Str]);
+    my ($word_list_ref) = $args_check->(@args);
     
     # assume no accented characters, test until 1 is found
     my $accent_found = 0;
@@ -1851,14 +1897,13 @@ sub _contains_accented_letters{
 #              random pool is empty, this function will replenish it.
 # See Also   :
 sub _random_int{
-    my $self = shift;
-    my $max = shift;
+    my @args = @_;
+    my $self = shift @args;
+    _force_instance($self);
     
     # validate args
-    _force_instance($self);
-    unless(defined $max && $max =~ m/^\d+$/sx && $max > 0){
-        _error('invoked with invalid random limit');
-    }
+    state $args_check = compile(NonZeroPositiveInteger);
+    my ($max) = $args_check->(@args);
     
     # calculate the random number
     my $ans = ($self->_rand() * 1_000_000) % $max;
@@ -1878,14 +1923,13 @@ sub _random_int{
 # Notes      :
 # See Also   :
 sub _random_digits{
-    my $self = shift;
-    my $num = shift;
+    my @args = @_;
+    my $self = shift @args;
+    _force_instance($self);
     
     # validate args
-    _force_instance($self);
-    unless(defined $num && $num =~ m/^\d+$/sx && $num > 0){
-        _error('invoked with invalid number of digits');
-    }
+    state $args_check = compile(NonZeroPositiveInteger);
+    my ($num) = $args_check->(@args);
     
     # assemble the response
     my $ans = q{};
@@ -1909,8 +1953,6 @@ sub _random_digits{
 # See Also   :
 sub _rand{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     # get the next random number from the cache
@@ -1945,8 +1987,6 @@ sub _rand{
 # See Also   :
 sub _increment_random_cache{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     # genereate the random numbers
@@ -1984,8 +2024,6 @@ sub _increment_random_cache{
 # See Also   :
 sub _random_words{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     # get the random words
@@ -2014,8 +2052,6 @@ sub _random_words{
 # See Also   :
 sub _separator{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     # figure out the separator character
@@ -2046,14 +2082,13 @@ sub _separator{
 #              padding_type & padding_character config variables.
 # See Also   :
 sub _padding_char{
-    my $self = shift;
-    my $sep = shift;
+    my @args = @_;
+    my $self = shift @args;
+    _force_instance($self);
     
     # validate args
-    _force_instance($self);
-    unless(defined $sep){
-        _error('no separator character passed');
-    }
+    state $args_check = compile(Symbol);
+    my ($sep) = $args_check->(@args);
     
     # if there is no padding character needed, return an empty string
     if($self->{_CONFIG}->{padding_type} eq 'NONE'){
@@ -2088,14 +2123,13 @@ sub _padding_char{
 #              config variable.
 # See Also   :
 sub _transform_case{
-    my $self = shift;
-    my $words_ref = shift;
+    my @args = @_;
+    my $self = shift @args;
+    _force_instance($self);
     
     # validate args
-    _force_instance($self);
-    unless(defined $words_ref && ref $words_ref eq 'ARRAY'){
-        _error('no words array reference passed');
-    }
+    state $args_check = compile(ArrayRef[Str]);
+    my ($words_ref) = $args_check->(@args);
     
     # if the transform is set to nothing, then just return
     if($self->{_CONFIG}->{case_transform} eq 'NONE'){
@@ -2157,14 +2191,13 @@ sub _transform_case{
 #              character_substitutions config variable.
 # See Also   :
 sub _substitute_characters{
-    my $self = shift;
-    my $words_ref = shift;
+    my @args = @_;
+    my $self = shift @args;
+    _force_instance($self);
     
     # validate args
-    _force_instance($self);
-    unless(defined $words_ref && ref $words_ref eq 'ARRAY'){
-        _error('no words array reference passed');
-    }
+    state $args_check = compile(ArrayRef[Str]);
+    my ($words_ref) = $args_check->(@args);
     
     # if no substitutions are defined, do nothing
     unless(defined $self->{_CONFIG}->{character_substitutions} && (scalar keys %{$self->{_CONFIG}->{character_substitutions}})){
@@ -2275,11 +2308,6 @@ sub _check_presets{
 #              time perl -MData::Entropy::Algorithms -e "foreach my \$n (0..1000000){Data::Entropy::Algorithms::rand();}"
 # See Also   :
 sub _best_available_rng{
-    my $class = shift;
-    
-    # validate the args
-    _force_class($class);
-    
     # try the good entropy sources in order
     my $rng;
     eval{
@@ -2340,8 +2368,6 @@ sub _best_available_rng{
 # See Also   : config_stats()
 sub _calculate_entropy_stats{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     my %ans = ();
@@ -2442,8 +2468,6 @@ sub _calculate_entropy_stats{
 # See Also   :
 sub _calcualte_dictionary_stats{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     # create a hash to aggregate the stats into
@@ -2476,8 +2500,6 @@ sub _calcualte_dictionary_stats{
 # See Also   : _calculate_entropy_stats()
 sub _passwords_will_contain_symbol{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     # assume no symbol, if we find one, set to 1
@@ -2545,8 +2567,6 @@ sub _passwords_will_contain_symbol{
 # See Also   : _calculate_entropy_stats(), config() & dictionary()
 sub _update_entropystats_cache{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     # do nothing if the dictionary has not been loaded yet (should only happen while the constructor is building an instance)
@@ -2587,14 +2607,13 @@ sub _update_entropystats_cache{
 # Notes      :
 # See Also   :
 sub _render_bigint{
-    my $class = shift;
-    my $bigint = shift;
-    
-    # validate the args
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
-    unless(defined $bigint && $bigint->isa('Math::BigInt')){
-        _error('invalid args, must pass a Math::BigInt object');
-    }
+    
+    # validate args
+    state $args_check = compile(InstanceOf['Math::BigInt']);
+    my ($bigint) = $args_check->(@args);
     
     # convert the bigint to an array of characters
     my @chars = split //sx, "$bigint";
@@ -2629,14 +2648,13 @@ sub _render_bigint{
 #              unacceptably slow.
 # See Also   :
 sub _grapheme_length{
-    my $class = shift;
-    my $string = shift;
+    my @args = @_;
+    my $class = shift @args;
+    _force_class($class);
     
     # validate args
-    _force_class($class);
-    unless(defined $string && ref $string eq q{}){
-        _error('invalid args, must pass a scalar');
-    }
+    state $args_check = compile(Str);
+    my ($string) = $args_check->(@args);
     
     # do the calculation
     my $grapheme_length = 0;
@@ -4425,6 +4443,40 @@ This function returns the list of defined preset names as an array of strings.
     
 This function takes a hashref as an argument, and returns a deep clone of that
 hashref with all keys that are not valid config key names removed.
+
+=head3 distil_to_symbol_alphabet()
+
+    my @unique_syms = Crypt::HSXKPasswd->distil_to_symbol_alphabet($arrayref);
+    my @unique_syms = Crypt::HSXKPasswd->distil_to_symbol_alphabet(
+        $arrayref,
+        warn => 1,
+    );
+    
+This function takes reference to an array of strings and returns a new array
+containing all the valid symbols from the referenced array. The valid symbols
+are de-duplicated before being returned.
+
+By default the function silently skips over strings that are not valid symbols.
+The function can be made issue warnings each time a string is skipped by passing
+a named argument C<warn> with a value of C<1> (C<0> can also be passed to
+explicitly disable warnings).
+
+=head3 distil_to_words()
+
+    my @valid_unique_words = Crypt::HSXKPasswd->distil_to_words($arrayref);
+    my @valid_unique_words = Crypt::HSXKPasswd->distil_to_words(
+        $arrayref,
+        warn => 1,
+    );
+    
+This function takes reference to an array of strings and returns a new array
+containing all the valid words from the referenced array. The valid words are
+de-duplicated before being returned.
+
+By default the function silently skips over strings that are not valid words.
+The function can be made issue warnings each time a string is skipped by passing
+a named argument C<warn> with a value of C<1> (C<0> can also be passed to
+explicitly disable warnings).
 
 =head3 is_valid_config()
 
