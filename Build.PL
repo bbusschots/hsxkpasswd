@@ -21,6 +21,7 @@ my $builder = Module::Build->new(
         Carp => 0,
         DateTime => 0,
         Clone => 0,
+        Readonly => 0,
         'List::MoreUtils' => 0,
         'Math::BigInt' => 0,
         'Math::Round' => 0,

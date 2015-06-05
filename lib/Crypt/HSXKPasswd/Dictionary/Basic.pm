@@ -8,6 +8,7 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw(-no_match_vars); # for more readable code
+use Readonly; # for truly constant constants
 use Type::Params qw( compile multisig ); # for parameter validation with Type::Tiny objects
 use Types::Standard qw( :types ); # for basic type checking (Int Str etc.)
 use Crypt::HSXKPasswd::Types qw( :types ); # for custom type checking
@@ -26,14 +27,14 @@ binmode STDOUT, ':encoding(UTF-8)';
 # HSXKPasswd.pm)
 
 #
-# --- 'Constants' -------------------------------------------------------------
+# --- Constants ---------------------------------------------------------------
 #
 
 # version info
-use version; our $VERSION = qv('1.1_01');
+use version; our $VERSION = qv('1.2');
 
 # utility variables
-my $_CLASS = __PACKAGE__;
+Readonly my $_CLASS => __PACKAGE__;
 
 #
 # --- Constructor -------------------------------------------------------------

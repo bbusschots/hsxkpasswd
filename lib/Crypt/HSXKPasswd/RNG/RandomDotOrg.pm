@@ -8,6 +8,7 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw( -no_match_vars ); # for more readable code
+use Readonly; # for truly constant constants
 use Type::Tiny; # for creating anonymous type definitions
 use Type::Params qw( compile ); # for parameter validation with Type::Tiny objects
 use Types::Standard qw( :types slurpy ); # for standard types like Str and Int etc.
@@ -21,18 +22,18 @@ use utf8;
 binmode STDOUT, ':encoding(UTF-8)';
 
 # import (or not) modules not listed as required by Crypt::HSXKPasswd
-my $_CAN_EMAIL_VALID = eval{
+Readonly my $_CAN_EMAIL_VALID => eval{
     require Email::Valid; # for email address validation
-};
-my $_CAN_URI = eval{
+} || 0;
+Readonly my $_CAN_URI => eval{
     require URI; # for assembling the query to the random.org API
-};
-my $_CAN_LWP_UA = eval{
+} || 0;
+Readonly my $_CAN_LWP_UA => eval{
     require LWP::UserAgent; # for sending HTTP requests to the random.org API (requires Mozilla::CA be installed to work with HTTPS)
-};
-my $_CAN_HTTPS = eval{
+} || 0;
+Readonly my $_CAN_HTTPS => eval{
     require Mozilla::CA; # without this module LWP::UserAgent can't do HTTPS
-};
+} || 0;
 # if all the 'non-standard' modules (for want of a better term) were not loaded, croak
 unless($_CAN_EMAIL_VALID && $_CAN_URI && $_CAN_LWP_UA && $_CAN_HTTPS){
     croak('Crypt::HSXKPasswd::RNG::RandomDotORg requires modules not required by any other classes in Crypt::HSXKPasswd, and one or more of them are not installed: Email::Valid, URI, LWP::UserAgent & Mozilla::CA');
@@ -45,18 +46,18 @@ unless($_CAN_EMAIL_VALID && $_CAN_URI && $_CAN_LWP_UA && $_CAN_HTTPS){
 # HSXKPasswd.pm)
 
 #
-# --- 'Constants' -------------------------------------------------------------
+# --- Constants ---------------------------------------------------------------
 #
 
 # version info
-use version; our $VERSION = qv('1.1_01');
+use version; our $VERSION = qv('1.2');
 
 # utility variables
-my $_CLASS = __PACKAGE__;
+Readonly my $_CLASS => __PACKAGE__;
 
 # Random.org settings
-my $RDO_URL = 'https://www.random.org/integers/';
-my $RDO_MAX_INT = 100_000_000;
+Readonly my $RDO_URL => 'https://www.random.org/integers/';
+Readonly my $RDO_MAX_INT => 100_000_000;
 
 #
 # --- Constructor -------------------------------------------------------------

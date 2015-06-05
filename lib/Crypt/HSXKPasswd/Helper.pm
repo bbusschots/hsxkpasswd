@@ -8,6 +8,7 @@ use Carp; # for nicer 'exceptions' for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions
 use Scalar::Util qw( blessed ); # for checking if a reference is blessed
 use List::MoreUtils qw( uniq ); # for array deduplication
+use Readonly; # for truly constant constants
 use Types::Standard qw( ClassName ); # needed for _force_class
 
 # set things up for using UTF-8
@@ -36,15 +37,15 @@ our $_CAN_STACK_TRACE = eval{
 #==============================================================================#
 
 #
-# === CONSTANTS ===============================================================#
+# === CONSTANTS & Package Vars ================================================#
 #
 
 # version info
-use version; our $VERSION = qv('1.1_01');
+use version; our $VERSION = qv('1.0');
 
 # utility variables
-my $_CLASS = __PACKAGE__;
-my $BASE_PACKAGE = 'Crypt::HSXKPasswd';
+Readonly my $_CLASS => __PACKAGE__;
+Readonly my $BASE_PACKAGE => 'Crypt::HSXKPasswd';
 
 # Debug and logging configuration
 our $_LOG_STREAM = *STDERR; # default to logging to STDERR
@@ -66,7 +67,7 @@ our @CARP_NOT;
 # Throws     : NOTHING
 # Notes      :
 # See Also   :
-sub _do_debug{
+sub _do_debug{ ## no critic (ProhibitUnusedPrivateSubroutines)
     return $_DEBUG ? 1 : 0;
 }
 

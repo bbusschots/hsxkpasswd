@@ -8,6 +8,7 @@ use Fatal qw( :void open close binmode ); # make builtins throw exceptions on fa
 use English qw( -no_match_vars ); # for more readable code
 use Scalar::Util qw( blessed ); # for checking if a reference is blessed
 use List::MoreUtils qw( uniq ); # for array deduplication
+use Readonly; # for truly constant constants
 use Types::Standard qw( :types slurpy ); # for data validation
 use Type::Params qw( compile ); # for argument valdiation
 use Crypt::HSXKPasswd::Types qw( :types ); # for data validation
@@ -26,14 +27,14 @@ binmode STDOUT, ':encoding(UTF-8)';
 # HSXKPasswd.pm)
 
 #
-# --- 'Constants' -------------------------------------------------------------
+# === Constants & Package Vars ================================================#
 #
 
 # version info
-use version; our $VERSION = qv('1.1_01');
+use version; our $VERSION = qv('1.2');
 
 # utility variables
-my $_CLASS = __PACKAGE__;
+Readonly my $_CLASS => __PACKAGE__;
 
 #
 # --- Constructor -------------------------------------------------------------

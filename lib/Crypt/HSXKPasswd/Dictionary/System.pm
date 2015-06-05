@@ -8,6 +8,7 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw( -no_match_vars ); # for more readable code
+use Readonly; # for truly constant constants
 use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 use Crypt::HSXKPasswd::Dictionary::Basic; # used to process the dictionary file
 
@@ -24,17 +25,17 @@ binmode STDOUT, ':encoding(UTF-8)';
 # HSXKPasswd.pm)
 
 #
-# --- 'Constants' -------------------------------------------------------------
+# --- Constants ---------------------------------------------------------------
 #
 
 # version info
-use version; our $VERSION = qv('1.1_01');
+use version; our $VERSION = qv('1.2');
 
 # utility variables
-my $_CLASS = __PACKAGE__;
+Readonly my $_CLASS => __PACKAGE__;
 
 # possible dictionary file locations
-my @_DICTIONARY_PATHS = qw(/usr/share/dict/words /usr/dict/words);
+Readonly my @_DICTIONARY_PATHS => qw(/usr/share/dict/words /usr/dict/words);
 
 #
 # --- Constructor -------------------------------------------------------------

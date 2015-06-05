@@ -34,7 +34,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 #
 
 # version info
-use version; our $VERSION = qv('1.1_01');
+use version; our $VERSION = qv('1.0');
 
 #
 # === Define The Fundamental Types ============================================#

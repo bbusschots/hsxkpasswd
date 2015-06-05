@@ -11,6 +11,7 @@ use Scalar::Util qw( blessed ); # for checking if a reference is blessed
 use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
 use Clone qw( clone ); # for cloning nested data structures - exports clone()
+use Readonly; # for truly constant constants
 use List::MoreUtils qw( uniq ); # for array deduplication
 use Type::Tiny; # for generating anonymous type constraints when needed
 use Type::Params qw( compile multisig ); # for parameter validation with Type::Tiny objects
@@ -31,9 +32,9 @@ use utf8;
 binmode STDOUT, ':encoding(UTF-8)';
 
 # import (or not) optional modules
-my $_CAN_JSON = eval{
+Readonly my $_CAN_JSON => eval{
     require JSON; # for JSON parsing
-};
+} || 0;
 if($_CAN_JSON){
     import JSON; # exports encode_json, decode_json, to_json and from_json
 }
@@ -60,22 +61,22 @@ our @EXPORT = qw( hsxkpasswd );
 #==============================================================================
 
 #
-# 'Constants'------------------------------------------------------------------
+# === Constants and Package Variables =========================================#
 #
 
 # version info
-use version; our $VERSION = qv('3.1_02');
+use version; our $VERSION = qv('3.2');
 
-# acceptable entropy levels
+# entropy control variables
 my $_ENTROPY_MIN_BLIND = 78; # 78 bits - equivalent to 12 alpha numeric characters with mixed case and symbols
 my $_ENTROPY_MIN_SEEN = 52; # 52 bits - equivalent to 8 alpha numeric characters with mixed case and symbols
 my $_SUPRESS_ENTROPY_WARNINGS = 'NONE'; # valid values are 'NONE', 'ALL', 'SEEN', or 'BLIND' (invalid values treated like 'NONE')
 
-# utility variables
-my $_CLASS = __PACKAGE__;
-my $_TYPES_CLASS = 'Crypt::HSXKPasswd::Types';
-my $_DICTIONARY_BASE_CLASS = 'Crypt::HSXKPasswd::Dictionary';
-my $_RNG_BASE_CLASS = 'Crypt::HSXKPasswd::RNG';
+# utility constants
+Readonly my $_CLASS => __PACKAGE__;
+Readonly my $_TYPES_CLASS => 'Crypt::HSXKPasswd::Types';
+Readonly my $_DICTIONARY_BASE_CLASS => 'Crypt::HSXKPasswd::Dictionary';
+Readonly my $_RNG_BASE_CLASS => 'Crypt::HSXKPasswd::RNG';
 
 #
 # Constructor -----------------------------------------------------------------

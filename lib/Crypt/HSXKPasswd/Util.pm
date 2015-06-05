@@ -7,6 +7,7 @@ use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw( -no_match_vars ); # for more readable code
 use DateTime; # for generating timestamps
+use Readonly; # for truly constant constants
 use Scalar::Util qw(blessed); # for checking if a reference is blessed
 use Type::Tiny; # for creating anonymous type constraints
 use Type::Params qw( compile ); # for parameter validation with Type::Tiny objects
@@ -28,15 +29,15 @@ binmode STDOUT, ':encoding(UTF-8)';
 # HSXKPasswd.pm)
 
 #
-# --- 'Constants'--------------------------------------------------------------
+# --- Constants ----------------------------------------------------------------
 #
 
 # version info
-use version; our $VERSION = qv('1.1_01');
+use version; our $VERSION = qv('1.2');
 
 # utility variables
-my $_CLASS = __PACKAGE__;
-my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
+Readonly my $_CLASS => __PACKAGE__;
+Readonly my $_MAIN_CLASS => 'Crypt::HSXKPasswd';
 
 #
 # --- Static Class Functions --------------------------------------------------
@@ -212,7 +213,7 @@ sub dictionary_from_text_file{
     state $args_check = compile(
         Type::Tiny->new(
             parent => Str,
-            constraint => sub{ m/^[a-zA-Z0-9_]+$/sx; },
+            constraint => sub{ m/^[a-zA-Z0-9_]+$/sx; }, ## no critic (ProhibitEnumeratedClasses)
         ),
         Str,
         Optional[Maybe[Str]]
