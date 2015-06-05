@@ -8,7 +8,10 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw( -no_match_vars ); # for more readable code
-use Params::Validate qw(:all); # for argument validation
+use Type::Tiny; # for creating anonymous type definitions
+use Type::Params qw( compile ); # for parameter validation with Type::Tiny objects
+use Types::Standard qw( :types slurpy ); # for standard types like Str and Int etc.
+use Crypt::HSXKPasswd::Types qw( :types ); # for custom type checking
 use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 
 # set things up for using UTF-8
@@ -81,33 +84,40 @@ my $RDO_MAX_INT = 100_000_000;
 sub new{
     my @args = @_;
     my $class = shift @args;
-    my $email = shift @args;
-    
-    # validate the args
     _force_class($class);
-    unless($email && Email::Valid->address($email)){
-        _error('invalid arguments - must supply a valid email address as the first argument');
-    }
-    my %args = validate(@args,
-        {
-            num_passwords => {type => SCALAR, regex => qr/^\d+$/sx, optional => 1, default => 3},
-            num_absolute => {type => SCALAR, regex => qr/^\d+$/sx, optional => 1},
-            timeout => {type => SCALAR, regex => qr/^\d+$/sx, optional => 1, default => 180},
-        }
+    
+    # validate args
+    state $args_check = compile(
+        Type::Tiny->new(
+            display_name => 'Email Address',
+            parent => NonEmptyString,
+            constraint => sub{
+                return Email::Valid->address($_);
+            },
+        ),
+        slurpy Dict[
+            num_passwords => Optional[PositiveInteger],
+            num_absolute => Optional[PositiveInteger],
+            timeout => Optional[PositiveInteger],
+        ],
     );
+    my ($email, $options) = $args_check->(@args);
+    
+    # set defaults
+    my $num_passwords = $options->{num_passwords} || 3;
+    my $num_absolute = $options->{num_absolute} || 0;
+    my $timeout = $options->{timeout} || 180;
+    if($num_absolute){ # allow  num_absolute take prescedence
+        $num_passwords = 0;
+    }
     
     # initialise an object
     my $instance = {
         email => $email,
-        timeout => $args{timeout},
-        num_passwords => 0,
-        num_absolute => 0,
+        timeout => $timeout,
+        num_passwords => $num_passwords,
+        num_absolute => $num_absolute,
     };
-    if($args{num_absolute}){
-        $instance->{num_absolute} = $args{num_absolute};
-    }else{
-        $instance->{num_passwords} = $args{num_passwords};
-    }
     bless $instance, $class;
     
     # return the object
@@ -128,14 +138,13 @@ sub new{
 # Notes      : 
 # See Also   :
 sub random_numbers{
-    my $self = shift;
-    my $num_per_password = shift;
-    
-    # validate the args
+    my @args = @_;
+    my $self = shift @args;
     _force_instance($self);
-    unless(defined $num_per_password && $num_per_password =~ m/^\d+$/sx && $num_per_password >= 1){
-        _error('invalid args - the number of random numbers needed per password must be a positive integer');
-    }
+    
+    # validate args
+    state $args_check = compile(PositiveInteger);
+    my ($num_per_password) = $args_check->(@args);
     
     # figure out how many numbers to request from the web service
     my $num = 0;

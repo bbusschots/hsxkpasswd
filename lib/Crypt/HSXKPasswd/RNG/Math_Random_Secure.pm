@@ -8,6 +8,8 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw( -no_match_vars ); # for more readable code
+use Type::Params qw( compile ); # for parameter validation with Type::Tiny objects
+use Crypt::HSXKPasswd::Types qw( :types ); # for custom type checking
 use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 
 # set things up for using UTF-8
@@ -81,14 +83,13 @@ sub new{
 #              for a single password.
 # See Also   :
 sub random_numbers{
-    my $self = shift;
-    my $num = shift;
-    
-    # validate the args
+    my @args = @_;
+    my $self = shift @args;
     _force_instance($self);
-    unless(defined $num && $num =~ m/^\d+$/sx && $num >= 1){
-        _error('invalid args - the number of random numbers needed per password must be a positive integer');
-    }
+    
+    # validate args
+    state $args_check = compile(PositiveInteger);
+    my ($num) = $args_check->(@args);
     
     # generate the random numbers
     my @ans = ();

@@ -49,7 +49,7 @@ my $POSITIVE_INTEGER = Type::Tiny->new(
         return $_ >= 0;
     },
     message => sub{
-        return _var_to_string($_).qq{ is not $POSITIVE_INTEGER_ENGLISH};
+        return var_to_string($_).qq{ is not $POSITIVE_INTEGER_ENGLISH};
     },
     my_methods => {
         english => sub {return $POSITIVE_INTEGER_ENGLISH;},
@@ -66,7 +66,7 @@ my $NON_ZERO_POSITIVE_INTEGER = Type::Tiny->new(
         return $_ > 0;
     },
     message => sub{
-        return _var_to_string($_).qq{ is not $NON_ZERO_POSITIVE_INTEGER_ENGLISH};
+        return var_to_string($_).qq{ is not $NON_ZERO_POSITIVE_INTEGER_ENGLISH};
     },
     my_methods => {
         english => sub {return $NON_ZERO_POSITIVE_INTEGER_ENGLISH;},
@@ -83,7 +83,7 @@ my $NON_EMPTY_STRING = Type::Tiny->new(
         return length $_ > 0;
     },
     message => sub{
-        return _var_to_string($_).qq{ is not $NON_EMPTY_STRING_ENGLISH};
+        return var_to_string($_).qq{ is not $NON_EMPTY_STRING_ENGLISH};
     },
     my_methods => {
         english => sub {return $NON_EMPTY_STRING_ENGLISH;},
@@ -100,7 +100,7 @@ my $LETTER = Type::Tiny->new(
         return m/^\pL$/sx;
     },
     message => sub{
-        return _var_to_string($_).qq{ is not a Letter (must be $LETTER_ENGLISH)};
+        return var_to_string($_).qq{ is not a Letter (must be $LETTER_ENGLISH)};
     },
     my_methods => {
         english => sub {return $LETTER_ENGLISH;},
@@ -118,7 +118,7 @@ my $WORD = Type::Tiny->new(
         return m/^\pL{4,}$/sx;
     },
     message => sub{
-        return _var_to_string($_).qq{ is not a Word (must be $WORD_ENGLISH)};
+        return var_to_string($_).qq{ is not a Word (must be $WORD_ENGLISH)};
     },
     my_methods => {
         english => sub {return $WORD_ENGLISH;},
@@ -135,7 +135,7 @@ my $SYMBOL = Type::Tiny->new(
         return m/^\X$/sx && m/^[^\pL]$/sx;
     },
     message => sub{
-        return _var_to_string($_).qq{ is not a Symbol (must be $SYMBOL_ENGLISH)};
+        return var_to_string($_).qq{ is not a Symbol (must be $SYMBOL_ENGLISH)};
     },
     my_methods => {
         english => sub {return $SYMBOL_ENGLISH;},
@@ -154,7 +154,7 @@ my $SYMBOL_ALPHABET = Type::Tiny->new(
         return scalar @unique_symbols >= 2;
     },
     message => sub{
-        return _var_to_string($_).qq{ is not a Symbol Alphabet (must be $SYMBOL_ALPHABET_ENGLISH)};
+        return var_to_string($_).qq{ is not a Symbol Alphabet (must be $SYMBOL_ALPHABET_ENGLISH)};
     },
     my_methods => {
         english => sub {return $SYMBOL_ALPHABET_ENGLISH;},
@@ -171,7 +171,7 @@ my $WORD_LENGTH = Type::Tiny->new(
         return $_ > 3;
     },
     message => sub{
-        return _var_to_string($_).qq{ is not a valid Word Length (must be $WORD_LENGTH_ENGLISH)};
+        return var_to_string($_).qq{ is not a valid Word Length (must be $WORD_LENGTH_ENGLISH)};
     },
     my_methods => {
         english => sub {return $WORD_LENGTH_ENGLISH;},
@@ -185,7 +185,7 @@ my $TRUE_FALSE = Type::Tiny->new(
     name => 'TrueFalse',
     parent => Bool,
     message => sub{
-        return _var_to_string($_).qq{ is not a valid True/False value (must be $TRUE_FALSE_ENGLISH)};
+        return var_to_string($_).qq{ is not a valid True/False value (must be $TRUE_FALSE_ENGLISH)};
     },
     my_methods => {
         english => sub {return $TRUE_FALSE_ENGLISH;},
@@ -203,7 +203,7 @@ my $CONFIG_KEY_DEFINITION = Type::Tiny->new(
     name => 'ConfigKeyDefinition',
     parent => Dict[required => $TRUE_FALSE, expects => $NON_EMPTY_STRING, type => InstanceOf['Type::Tiny']] ,
     message => sub{
-        return _var_to_string($_).qq{ is not a valid Config Key Definition (must be $CONFIG_KEY_DEFINITION_ENGLISH)};
+        return var_to_string($_).qq{ is not a valid Config Key Definition (must be $CONFIG_KEY_DEFINITION_ENGLISH)};
     },
     my_methods => {
         english => sub {return $CONFIG_KEY_DEFINITION_ENGLISH;},
@@ -412,7 +412,7 @@ my $CONFIG_KEY_NAME = Type::Tiny->new(
         return 0;
     },
     message => sub{
-        return _var_to_string($_).qq{ is not a defined Config Name ($CONFIG_KEY_NAME_ENGLISH)};
+        return var_to_string($_).qq{ is not a defined Config Name ($CONFIG_KEY_NAME_ENGLISH)};
     },
     my_methods => {
         english => sub {return 'a defined config name - '.$CONFIG_KEY_NAME_ENGLISH;},
@@ -445,7 +445,7 @@ my $CONFIG_KEY_ASSIGNMENT = Type::Tiny->new(
     message => sub{
         # if we were not even passed a single-keyed hash, give the basic error
         unless(HashRef->check($_) && scalar keys %{$_} == 1){
-            return _var_to_string($_).qq{ is not a valid Config Key Assignment (must be $CONFIG_KEY_ASSIGNMENT_ENGLISH)};
+            return var_to_string($_).qq{ is not a valid Config Key Assignment (must be $CONFIG_KEY_ASSIGNMENT_ENGLISH)};
         }
         
         # extract the key and value
@@ -454,11 +454,11 @@ my $CONFIG_KEY_ASSIGNMENT = Type::Tiny->new(
         
         # if the config key is not valid, offer help with that
         unless($CONFIG_KEY_NAME->check($key)){
-            return _var_to_string($_).' is not a valid Config Key Assignment because the specified key name '._var_to_string($key). " is not defined - $CONFIG_KEY_NAME_ENGLISH";
+            return var_to_string($_).' is not a valid Config Key Assignment because the specified key name '.var_to_string($key). " is not defined - $CONFIG_KEY_NAME_ENGLISH";
         }
         
         # if we got here the problem must be with the value, so give useful info about the expected value
-        return _var_to_string($_).' is not a valid Config Key Assignment because '.$_KEYS->{$key}->{type}->get_message($val);
+        return var_to_string($_).' is not a valid Config Key Assignment because '.$_KEYS->{$key}->{type}->get_message($val);
     },
     my_methods => {
         english => sub {return $CONFIG_KEY_ASSIGNMENT_ENGLISH;},
@@ -493,7 +493,7 @@ my $CONFIG_OVERRIDE = Type::Tiny->new(
     message => sub{
         # if we were not even passed a hash, give the basic error
         unless(HashRef->check($_)){
-            return _var_to_string($_).qq{ is not a valid Config Override (must be $CONFIG_OVERRIDE_ENGLISH)};
+            return var_to_string($_).qq{ is not a valid Config Override (must be $CONFIG_OVERRIDE_ENGLISH)};
         }
         
         # get an easy reference to the hash
@@ -501,13 +501,13 @@ my $CONFIG_OVERRIDE = Type::Tiny->new(
         
         # make sure at least one key is present
         unless(scalar keys %overrides){
-            return _var_to_string($_)." is not a valid Config Override because it is empty (must be $CONFIG_OVERRIDE_ENGLISH)";
+            return var_to_string($_)." is not a valid Config Override because it is empty (must be $CONFIG_OVERRIDE_ENGLISH)";
         }
         
         # check for invalid names
         my @invalid_key_names = _extract_invalid_key_names(\%overrides);
         if(scalar @invalid_key_names){
-            my $msg = _var_to_string($_)." is not a valid Config Override because it contains one or more invalid Config Key Names:\n";
+            my $msg = var_to_string($_)." is not a valid Config Override because it contains one or more invalid Config Key Names:\n";
             foreach my $key (sort @invalid_key_names){
                 $msg .= "* '$key'\n";
             }
@@ -518,7 +518,7 @@ my $CONFIG_OVERRIDE = Type::Tiny->new(
         # it must be down to invalid values, find the offending key(s)
         my @invalid_valued_keys = _extract_invalid_valued_keys(\%overrides);
         if(scalar @invalid_valued_keys){
-            my $msg = _var_to_string($_)." is not a valid Config Override because one of more of the config keys specify an invalid value:\n";
+            my $msg = var_to_string($_)." is not a valid Config Override because one of more of the config keys specify an invalid value:\n";
             foreach my $key_name (@invalid_valued_keys){
                 $msg .= '* '.$_KEYS->{$key_name}->{type}->get_message($overrides{$key_name})."\n";
             }
@@ -527,7 +527,7 @@ my $CONFIG_OVERRIDE = Type::Tiny->new(
         }
         
         # it should not be possible to get here, but to be sure to be sure, return a basic message
-        return _var_to_string($_)." is not a valid Config Override for an unexpected reason - (must be $CONFIG_OVERRIDE_ENGLISH)";
+        return var_to_string($_)." is not a valid Config Override for an unexpected reason - (must be $CONFIG_OVERRIDE_ENGLISH)";
     },
     my_methods => {
         english => sub {return $CONFIG_OVERRIDE_ENGLISH;},
@@ -563,7 +563,7 @@ my $CONFIG = Type::Tiny->new(
     message => sub{
         # if we were not even passed a hash, give the basic error
         unless(HashRef->check($_)){
-            return _var_to_string($_).qq{ is not a valid Config (must be $CONFIG_ENGLISH)};
+            return var_to_string($_).qq{ is not a valid Config (must be $CONFIG_ENGLISH)};
         }
         
         # get an easy reference to the hash
@@ -572,7 +572,7 @@ my $CONFIG = Type::Tiny->new(
         # check for invalid names
         my @invalid_key_names = _extract_invalid_key_names($config);
         if(scalar @invalid_key_names){
-            my $msg = _var_to_string($_)." is not a valid Config because it contains one or more invalid Config Key Names:\n";
+            my $msg = var_to_string($_)." is not a valid Config because it contains one or more invalid Config Key Names:\n";
             foreach my $key (sort @invalid_key_names){
                 $msg .= "* '$key'\n";
             }
@@ -583,7 +583,7 @@ my $CONFIG = Type::Tiny->new(
         # check for missing required keys
         my @missing_required_keys = _extract_missing_required_keys($_);
         if(scalar @missing_required_keys){
-            my $msg = _var_to_string($_)." is not a valid Config because one or more required config keys are missing:\n";
+            my $msg = var_to_string($_)." is not a valid Config because one or more required config keys are missing:\n";
             foreach my $key (sort @missing_required_keys){
                 $msg .= "'$key'\n";
             }
@@ -594,7 +594,7 @@ my $CONFIG = Type::Tiny->new(
         # check for invalid values and find the offending key(s)
         my @invalid_valued_keys = _extract_invalid_valued_keys($config);
         if(scalar @invalid_valued_keys){
-            my $msg = _var_to_string($_)." is not a valid Config because one of more of the config keys specify invalid values:\n";
+            my $msg = var_to_string($_)." is not a valid Config because one of more of the config keys specify invalid values:\n";
             foreach my $key_name (@invalid_valued_keys){
                 $msg .= '* '.$_KEYS->{$key_name}->{type}->get_message($config->{$key_name})."\n";
             }
@@ -605,7 +605,7 @@ my $CONFIG = Type::Tiny->new(
         # that means it must be unfulfilled interdependencies
         my @unfulfilled_key_interdependencies = _extract_unfulfilled_key_interdependencies($_);
         if(scalar @unfulfilled_key_interdependencies){
-            my $msg = _var_to_string($_)." is not a valid Config because one of more interdependencies between config keys is not fullfilled:\n";
+            my $msg = var_to_string($_)." is not a valid Config because one of more interdependencies between config keys is not fullfilled:\n";
             foreach my $problem (@unfulfilled_key_interdependencies){
                 $msg .= "* $problem\n";
             }
@@ -615,7 +615,7 @@ my $CONFIG = Type::Tiny->new(
         
         
         # it should not be possible to get here, but to be sure to be sure, return a basic message
-        return _var_to_string($_)." is not a valid Config for an unexpected reason - (must be $CONFIG_ENGLISH)";
+        return var_to_string($_)." is not a valid Config for an unexpected reason - (must be $CONFIG_ENGLISH)";
     },
 );
 __PACKAGE__->meta->add_type($CONFIG);
@@ -630,7 +630,7 @@ my $PRESET_DEFINITION = Type::Tiny->new(
     name => 'PresetDefinition',
     parent => Dict[description => $NON_EMPTY_STRING, config => $CONFIG] ,
     message => sub{
-        return _var_to_string($_).qq{ is not a valid Preset Definition (must be $PRESET_DEFINITION_ENGLISH)};
+        return var_to_string($_).qq{ is not a valid Preset Definition (must be $PRESET_DEFINITION_ENGLISH)};
     },
     my_methods => {
         english => sub {return $PRESET_DEFINITION_ENGLISH;},
@@ -801,7 +801,7 @@ my $PRESET_NAME = Type::Tiny->new(
         return 0;
     },
     message => sub{
-        return _var_to_string($_).qq{ is not a defined Preset Name ($PRESET_NAME_ENGLISH)};
+        return var_to_string($_).qq{ is not a defined Preset Name ($PRESET_NAME_ENGLISH)};
     },
     my_methods => {
         english => sub {return 'a defined preset name - '.$PRESET_NAME_ENGLISH;},
@@ -821,40 +821,6 @@ __PACKAGE__->meta->make_immutable;
 # === Public functions ========================================================#
 #
 
-#
-# === 'Private' helper functions ==============================================#
-#
-
-#####-SUB-######################################################################
-# Type       : SUBROUTINE
-# Purpose    : Expose direct access to $_KEYS for classes in the
-#              Crypt::HSXKPasswd package
-# Returns    : A hashref
-# Arguments  : NONE
-# Throws     : NOTHING
-# Notes      : This function is private so it should not be used by any 3rd
-#              party devs - Use the public function
-#              Crypt::HSXKPasswd->config_key_definitions() instead!
-# See Also   : Crypt::HSXKPasswd->config_key_definitions()
-sub _config_keys{ ## no critic (ProhibitUnusedPrivateSubroutines)
-    return $_KEYS;
-}
-
-#####-SUB-######################################################################
-# Type       : SUBROUTINE
-# Purpose    : Expose direct access to $_PRESETS for classes in the
-#              Crypt::HSXKPasswd package
-# Returns    : A hashref
-# Arguments  : NONE
-# Throws     : NOTHING
-# Notes      : This function is private so it should not be used by any 3rd
-#              party devs - Use the public function
-#              Crypt::HSXKPasswd->preset_definitions() instead!
-# See Also   : Crypt::HSXKPasswd->preset_definitions()
-sub _presets{ ## no critic (ProhibitUnusedPrivateSubroutines)
-    return $_PRESETS;
-}
-
 #####-SUB-######################################################################
 # Type       : SUBROUTINE
 # Purpose    : Stringify any $ variable in a sane way
@@ -863,7 +829,7 @@ sub _presets{ ## no critic (ProhibitUnusedPrivateSubroutines)
 # Throws     : NOTHING
 # Notes      :
 # See Also   :
-sub _var_to_string{
+sub var_to_string{
     my $var = shift;
     
     # deal with undef
@@ -905,6 +871,40 @@ sub _var_to_string{
     }
 }
 
+#
+# === 'Private' helper functions ==============================================#
+#
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE
+# Purpose    : Expose direct access to $_KEYS for classes in the
+#              Crypt::HSXKPasswd package
+# Returns    : A hashref
+# Arguments  : NONE
+# Throws     : NOTHING
+# Notes      : This function is private so it should not be used by any 3rd
+#              party devs - Use the public function
+#              Crypt::HSXKPasswd->config_key_definitions() instead!
+# See Also   : Crypt::HSXKPasswd->config_key_definitions()
+sub _config_keys{ ## no critic (ProhibitUnusedPrivateSubroutines)
+    return $_KEYS;
+}
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE
+# Purpose    : Expose direct access to $_PRESETS for classes in the
+#              Crypt::HSXKPasswd package
+# Returns    : A hashref
+# Arguments  : NONE
+# Throws     : NOTHING
+# Notes      : This function is private so it should not be used by any 3rd
+#              party devs - Use the public function
+#              Crypt::HSXKPasswd->preset_definitions() instead!
+# See Also   : Crypt::HSXKPasswd->preset_definitions()
+sub _presets{ ## no critic (ProhibitUnusedPrivateSubroutines)
+    return $_PRESETS;
+}
+
 #####-SUB-######################################################################
 # Type       : SUBROUTINE (PRIVATE)
 # Purpose    : Generate the error message for a config key
@@ -919,7 +919,7 @@ sub _config_key_message{
     my $val = shift;
     my $key = shift;
     my $exp = shift;
-    return _var_to_string($val).qq{ is not a valid value for the config key '$key' - must be $exp};
+    return var_to_string($val).qq{ is not a valid value for the config key '$key' - must be $exp};
 }
 
 #####-SUB-######################################################################

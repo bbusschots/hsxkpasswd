@@ -50,8 +50,6 @@ my @_DICTIONARY_PATHS = qw(/usr/share/dict/words /usr/dict/words);
 # See Also   : 
 sub new{
     my $class = shift;
-    
-    # validate the args
     _force_class($class);
     
     # try find a dictionary file
@@ -93,8 +91,6 @@ sub new{
 # See Also   :
 sub clone{
     my $self = shift;
-    
-    # validate the args
     _force_instance($self);
     
     # initialise the clone
@@ -121,8 +117,6 @@ sub clone{
 # See Also   :
 sub word_list{
     my $self = shift;
-    
-    # validate the args
     _force_instance($self);
     
     # return a reference to the word list
@@ -140,8 +134,6 @@ sub word_list{
 # See Also   :
 sub source{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     my $source = $self->SUPER::source();

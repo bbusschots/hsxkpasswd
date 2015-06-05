@@ -8,6 +8,10 @@ use Fatal qw( :void open close binmode ); # make builtins throw exceptions on fa
 use English qw( -no_match_vars ); # for more readable code
 use DateTime; # for generating timestamps
 use Scalar::Util qw(blessed); # for checking if a reference is blessed
+use Type::Tiny; # for creating anonymous type constraints
+use Type::Params qw( compile ); # for parameter validation with Type::Tiny objects
+use Types::Standard qw( :types ); # for basic type checking (Int Str etc.)
+use Crypt::HSXKPasswd::Types qw( :types ); # for custom type checking
 use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 use Crypt::HSXKPasswd;
 
@@ -50,14 +54,13 @@ my $_MAIN_CLASS = 'Crypt::HSXKPasswd';
 # Notes      :
 # See Also   :
 sub test_presets{
-    my $class = shift;
-    my $dictionary = shift;
-    
-    # validate the args
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
-    unless(defined $dictionary && blessed($dictionary) && $dictionary->isa('Crypt::HSXKPasswd::Dictionary')){
-        _error('invalid args, must pass a dictionary');
-    }
+    
+    # validate args
+    state $args_check = compile(InstanceOf['Crypt::HSXKPasswd::Dictionary']);
+    my ($dictionary) = $args_check->(@args);
     
     # get the list of config names from the parent
     my @preset_names = $_MAIN_CLASS->defined_presets();
@@ -100,15 +103,15 @@ sub test_presets{
 # Notes      :
 # See Also   :
 sub print_preset_samples{
-    my $class = shift;
-    my $dictionary = shift;
-    
-    # validate the args
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
-    unless(defined $dictionary && blessed($dictionary) && $dictionary->isa('Crypt::HSXKPasswd::Dictionary')){
-        _error('invalid args, must pass a dictionary');
-    }
     
+    # validate args
+    state $args_check = compile(InstanceOf['Crypt::HSXKPasswd::Dictionary']);
+    my ($dictionary) = $args_check->(@args);
+    
+    # loop through each preset and print a sample
     foreach my $preset ($_MAIN_CLASS->defined_presets()){
         print "$preset: ".hsxkpasswd(preset => $preset, dictionary => $dictionary)."\n";
     }
@@ -130,18 +133,16 @@ sub print_preset_samples{
 #              perl -C -Ilib -MCrypt::HSXKPasswd::Util -e 'Crypt::HSXKPasswd::Util->sanitise_dictionary_file("sample_dict_EN.txt")'
 # See Also   :
 sub sanitise_dictionary_file{
-    my $class = shift;
-    my $file_path = shift;
-    my $encoding = shift;
+    my @args = @_;
+    my $class = shift @args;
+    _force_class($class);
     
     # validate args
-    _force_class($class);
-    unless($file_path && -f $file_path){
-        _error('invalid file path');
-    }
-    unless($encoding){
-        $encoding = 'UTF-8';
-    }
+    state $args_check = compile(Str, Optional[Maybe[Str]]);
+    my ($file_path, $encoding) = $args_check->(@args);
+    
+    # set defaults
+    $encoding = 'UTF-8' unless $encoding;
     
     # try load the words from the file
     my @words = ();
@@ -203,24 +204,23 @@ sub sanitise_dictionary_file{
 #              Also note that words shorter than 4 letters are skipped.
 # See Also   :
 sub dictionary_from_text_file{
-    my $class = shift;
-    my $name = shift;
-    my $file_path = shift;
-    my $encoding = shift;
+    my @args = @_;
+    my $class = shift @args;
+    _force_class($class);
     
     # validate args
-    _force_class($class);
-    ## no critic (RegularExpressions::ProhibitEnumeratedClasses);
-    unless($name && $name =~ m/^[a-zA-Z0-9_]+$/sx){
-        _error('invalid module name');
-    }
-    ## use critic
-    unless($file_path && -f $file_path){
-        _error('invalid file path');
-    }
-    unless($encoding){
-        $encoding = 'UTF-8';
-    }
+    state $args_check = compile(
+        Type::Tiny->new(
+            parent => Str,
+            constraint => sub{ m/^[a-zA-Z0-9_]+$/sx; },
+        ),
+        Str,
+        Optional[Maybe[Str]]
+    );
+    my ($name, $file_path, $encoding) = $args_check->(@args);
+    
+    # set defaults
+    $encoding = 'UTF-8' unless $encoding;
     
     # try load the words from the file
     my @words = ();

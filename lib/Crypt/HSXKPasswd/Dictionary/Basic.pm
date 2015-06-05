@@ -8,6 +8,9 @@ use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw(-no_match_vars); # for more readable code
+use Type::Params qw( compile multisig ); # for parameter validation with Type::Tiny objects
+use Types::Standard qw( :types ); # for basic type checking (Int Str etc.)
+use Crypt::HSXKPasswd::Types qw( :types ); # for custom type checking
 use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 
 # set things up for using UTF-8
@@ -48,18 +51,19 @@ my $_CLASS = __PACKAGE__;
 # Notes      : 
 # See Also   : 
 sub new{
-    my $class = shift;
-    my $dict_source = shift;
-    my $encoding = shift;
-    
-    # validate the args
+    my @args = @_;
+    my $class = shift @args;
     _force_class($class);
-    unless(defined $dict_source && (ref $dict_source eq q{} || ref $dict_source eq 'ARRAY')){
-        _error('invalid args - first argument must be a path to a dictionary file or an array ref');
-    }
-    unless($encoding){
-        $encoding = 'UTF-8';
-    }
+    
+    # validate args
+    state $args_check = multisig(
+        [NonEmptyString, Optional[Maybe[NonEmptyString]]],
+        [ArrayRef[Str]],
+    );
+    my ($dict_source, $encoding) = $args_check->(@args);
+    
+    # set defaults
+    $encoding = 'UTF-8' unless $encoding;
     
     # start with a blank object
     my $instance = {
@@ -93,8 +97,6 @@ sub new{
 # See Also   :
 sub clone{
     my $self = shift;
-    
-    # validate the args
     _force_instance($self);
     
     # create an empty object
@@ -133,8 +135,6 @@ sub clone{
 # See Also   :
 sub word_list{
     my $self = shift;
-    
-    # validate the args
     _force_instance($self);
     
     # return a reference to the word list
@@ -152,8 +152,6 @@ sub word_list{
 # See Also   :
 sub source{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     my $source = $self->SUPER::source();
@@ -184,8 +182,6 @@ sub source{
 # See Also   :
 sub empty{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     # blank the word list and sources
@@ -212,21 +208,21 @@ sub empty{
 # Notes      : 
 # See Also   :
 sub add_words{
-    my $self = shift;
-    my $dict_source = shift;
-    my $encoding = shift;
+    my @args = @_;
+    my $self = shift @args;
+    _force_instance($self);
     
     # validate args
-    _force_instance($self);
-    unless(defined $dict_source && (ref $dict_source eq q{} || ref $dict_source eq 'ARRAY')){
-        _error('invalid args - first argument must be a path to a dictionary file or an array ref');
-    }
-    unless($encoding){
-        $encoding = 'UTF-8';
-    }
+    state $args_check = multisig(
+        [NonEmptyString, Optional[Maybe[NonEmptyString]]],
+        [ArrayRef[Str]], Optional[Item],
+    );
+    my ($dict_source, $encoding) = $args_check->(@args);
+    
+    # set defaults
+    $encoding = 'UTF-8' unless $encoding;
     
     # try load the words from the relevant source
-    my $valid_word_re = qr/^[[:alpha:]]+$/sx;
     my @new_words = ();
     if(ref $dict_source eq 'ARRAY'){
         # load valid words from the referenced array

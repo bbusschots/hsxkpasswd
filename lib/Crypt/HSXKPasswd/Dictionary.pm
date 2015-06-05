@@ -97,8 +97,6 @@ sub word_list{
 # See Also   :
 sub source{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     # return the instances class
@@ -115,8 +113,6 @@ sub source{
 # See Also   :
 sub print_words{
     my $self = shift;
-    
-    # validate args
     _force_instance($self);
     
     print join "\n", @{$self->word_list()};

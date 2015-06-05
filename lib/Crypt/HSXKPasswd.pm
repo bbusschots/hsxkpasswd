@@ -15,7 +15,7 @@ use List::MoreUtils qw( uniq ); # for array deduplication
 use Type::Tiny; # for generating anonymous type constraints when needed
 use Type::Params qw( compile multisig ); # for parameter validation with Type::Tiny objects
 use Types::Standard qw( slurpy :types ); # for basic type checking (Int Str etc.)
-use Crypt::HSXKPasswd::Types qw( :types :is ); # for custom type checking
+use Crypt::HSXKPasswd::Types qw( :types ); # for custom type checking
 use Crypt::HSXKPasswd::Helper; # exports utility functions like _error & _warn
 use Crypt::HSXKPasswd::Dictionary::Basic;
 use Crypt::HSXKPasswd::RNG::Math_Random_Secure;
@@ -117,26 +117,25 @@ my $_RNG_BASE_CLASS = 'Crypt::HSXKPasswd::RNG';
 sub new{
     my @args = @_;
     my $class = shift @args;
-    
-    my %args = validate(
-        @args, {
-            dictionary => {isa => $_DICTIONARY_BASE_CLASS, optional => 1},
-            dictionary_list => {type => ARRAYREF, optional => 1},
-            dictionary_file => {type => SCALAR, optional => 1},
-            dictionary_file_encoding => {type => SCALAR, optional => 1, default => 'UTF-8'},
-            config => {type => HASHREF, optional => 1},
-            config_json => {type => SCALAR, optional => 1},
-            preset => {type => SCALAR, optional => 1},
-            preset_overrides => {type => HASHREF, optional => 1},
-            rng => {isa => $_RNG_BASE_CLASS, optional => 1},
-        }
-    );
-    
-    my $preset = shift;
-    my $preset_override = shift;
+    _force_class($class);
     
     # validate args
-    _force_class($class);
+    state $args_check = compile(slurpy Dict[
+        dictionary => Optional[InstanceOf[$_DICTIONARY_BASE_CLASS]],
+        dictionary_list => Optional[ArrayRef[Str]],
+        dictionary_file => Optional[Str],
+        dictionary_file_encoding => Optional[Str],
+        config => Optional[Config],
+        config_json => Optional[Str],
+        preset => Optional[PresetName],
+        preset_overrides => Optional[ConfigOverride],
+        rng => Optional[InstanceOf[$_RNG_BASE_CLASS]],
+    ]);
+    my ($options) = $args_check->(@args);
+    
+    # set defaults
+    $options->{dictionary_file_encoding} = 'UTF-8' unless $options->{dictionary_file_encoding};
+    
     
     # before going any further, check the presets and key definitions if debugging (doing later may cause an error before we test)
     if($_CLASS->module_config('DEBUG')){
@@ -146,32 +145,32 @@ sub new{
     
     # process the word source
     my $dictionary;
-    if($args{dictionary}){
-        $dictionary = $args{dictionary};
-    }elsif($args{dictionary_list}){
-        $dictionary = Crypt::HSXKPasswd::Dictionary::Basic->new($args{dictionary_list});
-    }elsif($args{dictionary_file}){
-        $dictionary = Crypt::HSXKPasswd::Dictionary::Basic->new($args{dictionary_file}, $args{dictionary_file_encoding});
+    if($options->{dictionary}){
+        $dictionary = $options->{dictionary};
+    }elsif($options->{dictionary_list}){
+        $dictionary = Crypt::HSXKPasswd::Dictionary::Basic->new($options->{dictionary_list});
+    }elsif($options->{dictionary_file}){
+        $dictionary = Crypt::HSXKPasswd::Dictionary::Basic->new($options->{dictionary_file}, $options->{dictionary_file_encoding});
     }else{
         $dictionary = Crypt::HSXKPasswd::Dictionary::EN_Default->new();
     }
     
     # process the config source
     my $config = {};
-    if($args{config}){
-        $config = $args{config};
-    }elsif($args{config_json}){
-        $config = $args{config_json}; # pass the string on, config() will deal with it
-    }elsif($args{preset}){
-        $config = $_CLASS->preset_config(uc $args{preset}, $args{preset_overrides});
+    if($options->{config}){
+        $config = $options->{config};
+    }elsif($options->{config_json}){
+        $config = $options->{config_json}; # pass the string on, config() will deal with it
+    }elsif($options->{preset}){
+        $config = $_CLASS->preset_config($options->{preset}, $options->{preset_overrides});
     }else{
         $config = $_CLASS->default_config();
     }
     
     # process the random number source
     my $rng = {};
-    if($args{rng}){
-        $rng = $args{rng};
+    if($options->{rng}){
+        $rng = $options->{rng};
     }else{
         $rng = $_CLASS->_best_available_rng();
     }
@@ -3020,9 +3019,9 @@ For more details see the ENTROPY CHECKING section of this document.
 
 This module uses a custom type library created with C<Type::Library> for data
 validation. It is important to know this for two reasons - fisrtly, these
-custom types are mentioned in many error messages, and these custom types
-are available for developers to use in their own code, either when utilising
-C<Crypt::HSXKPasswd>, or writting custom word sources by extending
+custom types are mentioned in many error messages, and secondly these custom
+types are available for developers to use in their own code, either when
+utilising C<Crypt::HSXKPasswd>, or writting custom word sources by extending
 C<Crypt::HSXKPasswd::Dictionary>, or when writitng custom random number
 generators by extending C<Crypt::HSXKPasswd::RNG>.
 
@@ -3184,9 +3183,16 @@ English description of the values considered valid by the type, e.g.:
 
     print Letter->my_english(); # prints: a string containing exactly one letter
     
-Finally, as well as the named types listed above, there are also anonymous types
-defined for each supported configuration key. These can be accessed using the
-function C<Crypt::HSXKPasswd->config_key_definitions()>.
+As well as the named types listed above, there are also anonymous types defined
+for each supported configuration key. These can be accessed using the function
+C<Crypt::HSXKPasswd->config_key_definitions()>.
+
+If declaring your own C<Type::Tiny> types, you may also find the public
+subroutine C<Crypt::HSXKPasswd::Types::var_to_string()> useful - it will turn
+anything passed as a scalar into a meaninful string, truncating any resuling
+strings longer than 72 characers in nice way. All the custom error messages in
+all the types defined in C<Crypt::HSXKPasswd::Types> make use of this
+subroutine.
 
 =head2 WORD SOURCES (DICTIONARIES)
 
