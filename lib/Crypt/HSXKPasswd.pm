@@ -3129,7 +3129,7 @@ C<Crypt::HSXKPasswd->defined_presets()>.
 
 =back
 
-=head 3 Using the Custom Types
+=head3 Using the Custom Types
 
 The library of custom types is defined in the package
 C<Crypt::HSXKPasswd::Types>, and it is a standard C<Type::Library> type library

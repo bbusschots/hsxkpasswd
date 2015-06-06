@@ -1,5 +1,5 @@
 Build.PL			The build script for the module
-INSTALL
+INSTALL				Installation instructions
 lib/Crypt/HSXKPasswd.pm		The main class for the module
 lib/Crypt/HSXKPasswd/Dictionary.pm	The superclass for all word sources
 lib/Crypt/HSXKPasswd/Dictionary/Basic.pm	A word source that reads from a file and/or an array ref
@@ -11,12 +11,14 @@ lib/Crypt/HSXKPasswd/Dictionary/IT.pm	A source of Italian words
 lib/Crypt/HSXKPasswd/Dictionary/NL.pm	A source of Dutch/Flemish words
 lib/Crypt/HSXKPasswd/Dictionary/PT.pm	A source of Portuguese words
 lib/Crypt/HSXKPasswd/Dictionary/System.pm	A word source that reads from the Unix words file (if present)
+lib/Crypt/HSXKPasswd/Helper.pm	A helper module contianing useful functions for IO and invocation checking
 lib/Crypt/HSXKPasswd/RNG.pm	The superclass for all random number generators (RNGs)
 lib/Crypt/HSXKPasswd/RNG/Basic.pm	An RNG that uses rand()
 lib/Crypt/HSXKPasswd/RNG/Data_Entropy.pm	An RNG that uses Data::Entropy::Algorythms::rand()
 lib/Crypt/HSXKPasswd/RNG/DevUrandom.pm	An RNG that uses /dev/urandom (if present)
 lib/Crypt/HSXKPasswd/RNG/Math_Random_Secure.pm	An RNG that uses Math::Random::Secure::rand()
 lib/Crypt/HSXKPasswd/RNG/RandomDotOrg.pm	An TNG that uses the Random.Org HTTP API
+lib/Crypt/HSXKPasswd/Types.pm	A Type::Library type library of project-specific Type::Tiny type definitions
 lib/Crypt/HSXKPasswd/Util.pm	A colleciton of utility functions
 LICENSE				The License the code is released under
 MANIFEST			This list of files
@@ -33,4 +35,3 @@ share/sample_dict_PT.txt	A sample dictionary file for use with Crypt::HSXKPasswd
 t/00-load.t
 t/manifest.t
 t/pod.t
-Makefile.PL

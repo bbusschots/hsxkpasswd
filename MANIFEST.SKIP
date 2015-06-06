@@ -16,6 +16,7 @@
 ^MANIFEST[.]bak$
 ^Crypt-HSXKPasswd-.*[.]tar[.]gz$
 ^README[.]bak$
+[.]tmp$
 
 # stuff that's for GitHub, but not CPAN
 ^[.]perlcriticrc$
