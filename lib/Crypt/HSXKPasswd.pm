@@ -141,7 +141,7 @@ sub new{
     # before going any further, check the presets and key definitions if debugging (doing later may cause an error before we test)
     if($_CLASS->module_config('DEBUG')){
         $_CLASS->_check_config_key_definitions();
-        $_CLASS->_check_presets();
+        $_CLASS->_check_preset_definitions();
     }
     
     # process the word source
@@ -2261,7 +2261,7 @@ sub _check_config_key_definitions{
 #              in debug mode, so it prints information on what it's doing
 #              to STDERR.
 # See Also   :
-sub _check_presets{
+sub _check_preset_definitions{
     # get a reference to the preset definitions from the types class
     my $preset_defs = $_TYPES_CLASS->_presets();
     
@@ -2965,6 +2965,12 @@ It is possible to tweak the module's behaviour in certain areas by updating the
 values contained within a set of module configuration keys. The values
 associated with these keys can be accessed and updated via the class function
 C<module_config()>.
+
+    # get the debug status
+    my $debug_status = Crypt::HSXKPasswd->module_config('DEBUG');
+    
+    # configure the module to supress all entropy warnings
+    Crypt::HSXKPasswd->module_config('SUPRESS_ENTROPY_WARNINGS', 'ALL');
 
 The following module configuration keys exist within the module:
 

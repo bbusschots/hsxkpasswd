@@ -15,6 +15,7 @@ my $builder = Module::Build->new(
     },
     build_requires => {
         'Test::More' => 0,
+        'File::Share' => 0,
     },
     requires => {
         perl => '5.16.0',
@@ -46,6 +47,7 @@ my $builder = Module::Build->new(
     },
     add_to_cleanup     => [ 'Crypt-HSXKPasswd-*' ],
     create_makefile_pl => 'traditional',
+    share_dir => 'share',
     create_readme => 1,
 );
 

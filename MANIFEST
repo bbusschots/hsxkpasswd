@@ -33,5 +33,7 @@ share/sample_dict_IT.txt	A sample dictionary file for use with Crypt::HSXKPasswd
 share/sample_dict_NL.txt	A sample dictionary file for use with Crypt::HSXKPasswd::Dictionary::Basic containing Dutch/Flemish words
 share/sample_dict_PT.txt	A sample dictionary file for use with Crypt::HSXKPasswd::Dictionary::Basic containing Portuguese words
 t/00-load.t
+t/01-defined-constants.t
+t/02-generate-passwords.t
 t/manifest.t
 t/pod.t
