@@ -23,6 +23,7 @@ my $builder = Module::Build->new(
         DateTime => 0,
         Clone => 0,
         Readonly => 0,
+        'Getopt::Long' => 0,
         'List::MoreUtils' => 0,
         'Math::BigInt' => 0,
         'Math::Round' => 0,
@@ -34,6 +35,7 @@ my $builder = Module::Build->new(
         'Types::Standard' => 0,
         'Type::Params' => 0,
         'Data::Dumper' => 0,
+        'Pod::Usage' => 0,
     },
     recommends => {
         'Data::Entropy::Algorithms' => 0,

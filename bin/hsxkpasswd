@@ -1,0 +1,59 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use English qw( -no_match_vars );
+use Fatal qw( :void open close binmode ); # make builtins throw exceptions
+use Getopt::Long; # for argument processing
+use Pod::Usage; # for help and usage
+
+# set things up for using UTF-8
+use 5.016; # min Perl for good UTF-8 support, implies feature 'unicode_strings'
+use Encode qw(encode decode);
+use utf8;
+binmode STDOUT, ':encoding(UTF-8)';
+
+#
+# === Process Args ============================================================#
+#
+
+# define all the possible arguments, but give them a null value
+my $options = {
+};
+
+# parse the commandline args
+GetOptions(
+    'help|h' => sub{
+        pod2usage(
+            -exitval => 0,
+            -verbose => 2,
+        );
+    },
+    'version|v' => sub{
+        pod2usage(
+            -exitval => 0,
+            -verbose => 99,
+            -sections => 'NAME',
+        );
+    },
+);
+
+
+#
+# === The Documentation =======================================================#
+#
+
+__END__
+
+=head1 NAME
+
+hsxkpasswd (v1.0) - a commandline interface to the Crypt::HSXKPasswd secure
+memorable password generator (L<http://www.bartb.ie/xkpasswd>).
+
+=head1 SYNOPSIS
+
+hsxkpasswd [options] [num_passwords]
+
+Options:
+  --help, -h             show the full documentation
+  --version, -v          show the version information
