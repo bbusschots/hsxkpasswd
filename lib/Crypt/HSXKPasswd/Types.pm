@@ -40,6 +40,21 @@ use version; our $VERSION = qv('1.0');
 # === Define The Fundamental Types ============================================#
 #
 
+# add a type for Perl package names
+my $PERL_PACKAGE_NAME_ENGLISH = q{a valid Perl Package Name like 'Crypt::HSXKPasswd'};
+my $PERL_PACKAGE_NAME = Type::Tiny->new(
+    name => 'PerlPackageName',
+    parent => Str,
+    constraint => sub{ m/^[a-zA-Z_]\w*(?:[:]{2}\w+)*$/sx; },
+    message => sub{
+        return var_to_string($_).qq{ is not $PERL_PACKAGE_NAME_ENGLISH};
+    },
+    my_methods => {
+        english => sub {return $PERL_PACKAGE_NAME_ENGLISH;},
+    },
+);
+__PACKAGE__->meta->add_type($PERL_PACKAGE_NAME);
+
 # add a type for positive integers (including 0)
 my $POSITIVE_INTEGER_ENGLISH = 'an integer greater than or equal to zero';
 my $POSITIVE_INTEGER = Type::Tiny->new(

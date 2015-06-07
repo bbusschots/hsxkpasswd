@@ -5,13 +5,13 @@ use strict;
 use warnings;
 use Carp; # for nicer 'exception' handling for users of the module
 use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
-use Params::Validate qw( :all ); # for argument validation
 use English qw( -no_match_vars ); # for more readable code
 use Scalar::Util qw( blessed ); # for checking if a reference is blessed
 use Math::Round; # for round()
 use Math::BigInt; # for the massive numbers needed to store the permutations
 use Clone qw( clone ); # for cloning nested data structures - exports clone()
 use Readonly; # for truly constant constants
+use JSON; # for dealing with JSON strings
 use List::MoreUtils qw( uniq ); # for array deduplication
 use Type::Tiny; # for generating anonymous type constraints when needed
 use Type::Params qw( compile multisig ); # for parameter validation with Type::Tiny objects
@@ -32,12 +32,6 @@ use utf8;
 binmode STDOUT, ':encoding(UTF-8)';
 
 # import (or not) optional modules
-Readonly my $_CAN_JSON => eval{
-    require JSON; # for JSON parsing
-} || 0;
-if($_CAN_JSON){
-    import JSON; # exports encode_json, decode_json, to_json and from_json
-}
 eval{
     # the default dicrionary may not have been geneated using the Util module
     require Crypt::HSXKPasswd::Dictionary::EN_Default;
@@ -521,16 +515,10 @@ sub preset_config{
 #              preset identifier, and 'preset_descriptions' contains the a 
 #              hashref of descriptions indexed by preset identifiers
 # Arguments  : NONE
-# Throws     : If the JSON module is not available, or if there is a problem
-#              converting the objects to JSON.
+# Throws     : If there is a problem converting the objects to JSON.
 # Notes      :
 # See Also   :
-sub presets_json{
-    # make sure JSON parsing is available
-    unless($_CAN_JSON){
-        _error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) to use this function');
-    }
-    
+sub presets_json{    
     # assemble an object containing the presets with any keys that can't be
     #  converted to JSON removed
     my @defined_presets = $_CLASS->defined_presets();
@@ -585,9 +573,14 @@ sub clone_config{
 # Purpose    : Remove all keys from a hashref that are not valid config keys
 # Returns    : A reference to a hashref
 # Arguments  : 1) a hashref
-#              2) OPTIONAL - a named argument 'suppress_warnings' that is either
-#                 1 or 0. If 1, no warnings will be printed when dropping valid
-#                 keys with invalid values.
+#              2) OPTIONAL - a list of named arguments:
+#                 'warn_invalid_key_names' - must be either 1 or 0. If 1,
+#                     warnings will be issued for any keys containined in the
+#                     test hash that are not valid config keys.
+#                     'suppress_warnings' takes precedence over this argument.
+#                 'suppress_warnings' - must be either 1 or 0. If 1, no warnings
+#                     will be printed when dropping valid keys with invalid
+#                     values, or invalid keys.
 # Throws     : Croaks on invalid args. Unless configured not to, will warn if
 #              a valid key with an invalid value is encountered.
 # Notes      :
@@ -598,12 +591,36 @@ sub distil_to_config_keys{
     _force_class($class);
     
     # validate args
-    state $args_check = compile(HashRef, slurpy Dict[suppress_warnings => Optional[TrueFalse]]);
+    state $args_check = compile(HashRef,
+        slurpy Dict[
+            suppress_warnings => Optional[TrueFalse],
+            warn_invalid_key_names => Optional[TrueFalse],
+        ],
+    );
     my ($hashref, $options) = $args_check->(@args);
+    
+    # get a list of all the defined keys
+    my @defined_keys = $_CLASS->defined_config_keys();
+    
+    # if warnings are not suppressed, and if extra warnings are asked for, check for invalid keys
+    if(!$options->{suppress_warnings} && $options->{warn_invalid_key_names}){
+        # build a lookup table to quickly test if a key exists
+        my %defined_keys_lookup = ();
+        foreach my $key (@defined_keys){
+            $defined_keys_lookup{$key} = 1;
+        }
+        
+        # check each key in the test hash against the lookup table
+        foreach my $test_key (sort keys $hashref){
+            unless($defined_keys_lookup{$test_key}){
+                _warn(qq{distilling out undefined config key '$test_key'});
+            }
+        }
+    }
     
     # start with a new blank hashref, and copy across only the valid keys
     my $distilled = {};
-    foreach my $key ($_CLASS->defined_config_keys()){
+    foreach my $key (@defined_keys){
         if(defined $hashref->{$key}){
             if(ConfigKeyAssignment->check({$key => $hashref->{$key}})){
                 $distilled->{$key} = clone($hashref->{$key});
@@ -735,11 +752,6 @@ sub config_to_json{
     # validate args
     state $args_check = compile(Config);
     my ($config) = $args_check->(@args);
-    
-    # make sure JSON parsing is available
-    unless($_CAN_JSON){
-        _error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) before you can pass the config as a JSON stirng');
-    }
     
     # try render the config to a JSON string
     my $ans = q{};
@@ -1150,11 +1162,6 @@ sub config{
     }elsif(ref $config_raw eq q{}){
         # we received as string, so treat it as JSON
         
-        # make sure JSON parsing is available
-        unless($_CAN_JSON){
-            _error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) before you can pass the config as a JSON stirng');
-        }
-        
         # try parse the received string as JSON
         my $config_from_json = {};
         eval{
@@ -1489,11 +1496,6 @@ sub passwords_json{
     # validate args
     state $args_check = compile(NonZeroPositiveInteger);
     my ($num_pws) = $args_check->(@args);
-    
-    # make sure JSON parsing is available
-    unless($_CAN_JSON){
-        _error('You must install the JSON Perl module (http://search.cpan.org/perldoc?JSON) to use this function');
-    }
     
     # try generate the passwords and stats - could croak
     my @passwords = $self->passwords($num_pws);
@@ -3055,6 +3057,11 @@ string, or 0 to indicate false, and a 1 to indicate true.
 
 =item *
 
+C<PerlPackageName> - string representing a valid Perl package name like
+C<Crypt::HSXKPasswd::Dictionary::NL>.
+
+=item *
+
 C<Letter> - a string containing a single letter. Because this module is
 Unicode-aware, it should be noted that a letter is defined as a single Unicode
 grapheme with the Unicode property C<Letter>. What this means is that accented
@@ -4293,10 +4300,7 @@ C<config> - a valid config hashref.
 
 =item *
 
-C<config_json> - a JSON string representing a valid config hashref. If you use
-this named argument on a system where the standard Perl JSON library
-L<http://search.cpan.org/perldoc?JSON> is not installed, the constructor will
-croak.
+C<config_json> - a JSON string representing a valid config hashref.
 
 This named argument provides a convenient way to use configs generated using
 the web interface at L<https://xkpasswd.net/>. The Save/Load tab in that
@@ -4408,8 +4412,7 @@ This function returns a JSON representation of the passed config hashref as a
 scalar string.
 
 The function must be passed a valid config hashref or it will
-croak. This function will also croak if called without the standard JSON Perl
-module (L<http://search.cpan.org/perldoc?JSON>) installed.
+croak.
 
 =head3 config_to_string()
 
@@ -4455,7 +4458,27 @@ This function returns the list of defined preset names as an array of strings.
     my $dist_hashref = Crypt::HSXKPasswd->distil_to_config_keys($hashref);
     
 This function takes a hashref as an argument, and returns a deep clone of that
-hashref with all keys that are not valid config key names removed.
+hashref contianing only valid config keys with valid values.
+
+By default the function silently drops keys that are not valid config keys, but
+issues a warning when dropping a key that is a valid config key, but contains an
+invalid value. The function can also issue warnings when dropping keys that are
+not valid config keys.
+
+The warnings can be controlled with a pair of optional named arguments that can
+be added as a second argument:
+
+    # suppress all warnings
+    my $dist_hashref = Crypt::HSXKPasswd->distil_to_config_keys(
+        $hashref,
+        suppress_warnings => 1,
+    );
+    
+    # emit warnings when dropping invalidly named keys
+    my $dist_hashref = Crypt::HSXKPasswd->distil_to_config_keys(
+        $hashref,
+        warn_invalid_key_names => 1,
+    );
 
 =head3 distil_to_symbol_alphabet()
 
@@ -4594,9 +4617,6 @@ C<defined_keys> contains an array of preset identifiers, C<presets> contains the
 preset configs indexed by reset identifier, and C<preset_descriptions> contains
 a hashref of descriptions indexed by preset identifiers.
 
-This function requires that the standard Perl JSON module be installed, if not,
-it will croak.
-
 =head3 preset_description()
 
     my $description = Crypt::HSXKPasswd->preset_description('XKCD');
@@ -4633,9 +4653,7 @@ to a clone of the passed config. If present, the argument must be either a
 hashref containing valid config keys and values, or a JSON string representing
 a hashref containing valid config keys and values.
 
-The function will croak if an invalid config is passed, or, if a string is
-passed while the standard JSON Perl module
-(L<http://search.cpan.org/perldoc?JSON>) is not installed.
+The function will croak if an invalid config is passed.
 
 =head3 config_as_json()
 
@@ -4646,9 +4664,6 @@ JSON string.
 
 The output from this function can be loaded into the web interface at
 L<https://xkpasswd.net> (using the load/save tab).
-
-The function will croak if the standard JSON Perl module
-(L<http://search.cpan.org/perldoc?JSON>) is not installed.
 
 =head3 config_as_string()
 
@@ -4714,9 +4729,7 @@ C<password_permutations_blind_max>, C<password_entropy_seen> &
 C<password_permutations_seen>.
 
 The function uses C<passwords()> to generate the passwords, and hence will
-croak if there is an error generating any of the requested passwords. This
-function requires that the standard Perl JSON package be installed, if not, it
-will croak.
+croak if there is an error generating any of the requested passwords.
 
 =head3 rng()
 
@@ -4981,6 +4994,18 @@ C<English> - L<http://search.cpan.org/perldoc?English>
 
 =item *
 
+C<Fatal> - L<http://search.cpan.org/perldoc?Fatal>
+
+=item *
+
+C<Getopt::Long> - L<http://search.cpan.org/perldoc?Getopt%3A%3ALong>
+
+=item *
+
+C<JSON> - L<http://search.cpan.org/perldoc?JSON>
+
+=item *
+
 C<List::MoreUtils> - L<http://search.cpan.org/perldoc?List%3A%3AMoreUtils>
 
 =item *
@@ -4993,7 +5018,15 @@ C<Math::Round> - L<http://search.cpan.org/perldoc?Math%3A%3ARound>
 
 =item *
 
-C<Params::Validate> - L<http://search.cpan.org/perldoc?Params%3A%3AValidate>
+C<Module::Load> - L<http://search.cpan.org/perldoc?Module%3A%3ALoad>
+
+=item *
+
+C<Pod::Usage> - L<http://search.cpan.org/perldoc?Pod%3A%3AUsage>
+
+=item *
+
+C<Readonly> - L<http://search.cpan.org/perldoc?Readonly>
 
 =item *
 
@@ -5010,6 +5043,10 @@ C<Text::Unidecode> - L<http://search.cpan.org/perldoc?Text%3A%3AUnidecode>
 =item *
 
 C<Type::Library> - L<http://search.cpan.org/perldoc?Type%3A%3ALibrary>
+
+=item *
+
+C<Type::Params> - L<http://search.cpan.org/perldoc?Type%3A%3AParams>
 
 =item *
 
@@ -5048,15 +5085,6 @@ module is not installed the stack traces will be omitted from the log messages.
 C<Email::Valid> - L<http://search.cpan.org/perldoc?Email%3A%3AValid>
 
 Used by the Random.Org RNG class C<Crypt::HSXKPasswd::RNG::RandomDotOrg>.
-
-=item *
-
-C<JSON> - L<http://search.cpan.org/perldoc?JSON>
-
-Used for loading and exporting config hashrefs as JSON strings. Needed if the
-named parameter C<config_json> is passed to the constructor or C<hsxkpasswd()>,
-if a string is passed to C<config()>, or if any function contianing the word
-C<json> in the function name is called.
 
 =item *
 

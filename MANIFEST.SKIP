@@ -12,6 +12,7 @@
 ^_build/
 ^blib/
 ^Build$
+^Makefile$
 ^Makefile[.]PL$
 ^MANIFEST[.]bak$
 ^Crypt-HSXKPasswd-.*[.]tar[.]gz$

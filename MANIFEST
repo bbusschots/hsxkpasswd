@@ -1,3 +1,4 @@
+bin/hsxkpasswd			The HSXKPasswd commandline app
 Build.PL			The build script for the module
 INSTALL				Installation instructions
 lib/Crypt/HSXKPasswd.pm		The main class for the module
@@ -37,3 +38,4 @@ t/01-defined-constants.t
 t/02-generate-passwords.t
 t/manifest.t
 t/pod.t
+Makefile.PL
