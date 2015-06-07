@@ -32,7 +32,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 #
 
 # version info
-use version; our $VERSION = qv('1.0');
+use version; our $VERSION = qv('1.0_01');
 
 #
 # === Process Args ============================================================#
@@ -219,7 +219,7 @@ __END__
 
 =head1 NAME
 
-hsxkpasswd (v1.0) - a commandline interface to the Crypt::HSXKPasswd secure
+hsxkpasswd (v1.0) - a command-line interface to the Crypt::HSXKPasswd secure
 memorable password generator (L<http://www.bartb.ie/xkpasswd>).
 
 =head1 SYNOPSIS
@@ -248,7 +248,7 @@ Config files can be tested with either of the commands:
 If the specified config is invalid, the command will try to give useful feedback
 to help debug the config.
 
-It is possible for a config file to contain extraneous configuraiton keys but
+It is possible for a config file to contain extraneous configuration keys but
 still be usable by the command. In this case the command will issue warnings,
 but still evaluate the config as valid.
 
@@ -365,19 +365,19 @@ User Error - there was something wrong with some input form the user.
 
 =item B<2>
 
-System Error - an unexpected error occoured while trying to generate the
+System Error - an unexpected error occurred while trying to generate the
 password(s).
 
 =back
 
 =head1 DESCRIPTION
 
-This is a commandline interface to the Perl module Crypt::HSXKPasswd, a module
+This is a command-line interface to the Perl module Crypt::HSXKPasswd, a module
 designed to generate secure memorable passwords inspired by Steve Gibson's
 Password Hay Stacks (https://www.grc.com/haystack.htm) and the famous 'correct
 horse battery staple' issue of the XKCD web comic (https://xkcd.com/936/).
 
-Passwords are generated using the following algorythm:
+Passwords are generated using the following algorithm:
 
 =over 4
 
@@ -416,18 +416,18 @@ This process can be visualised as follows:
     94-CORRECT-horse-BATTERY-STAPLE-34
     !!94-CORRECT-horse-BATTERY-STAPLE-34!!
     
-Many aspects of this algorythm can be customised, and all steps apart from the
+Many aspects of this algorithm can be customised, and all steps apart from the
 first one are optional. You could use this command to generate a random password
 consisting of only words, with no case transformations, no digits, no separator
 symbol, and no padding symbol.
 
-For ease of use, a number of named prests have been created. See the SYNOPSIS
-OPTIONS section of this document for details on how to use presets.
+For ease of use, a number of named presets have been created. See the SYNOPSIS
+and OPTIONS sections of this document for details on how to use presets.
 
 It is also possible to tweak a preset by overriding one or more configuration
 keys using the B<--overrides> option.
 
-For a more detailed explantion on how to configure this password generator, see
+For a more detailed explanation on how to configure this password generator, see
 the documentation for the Crypt::HSXKPasswd documentation, which can be accessed
 using the perldoc command:
     B<perldoc Crypt::HSXKPasswd>

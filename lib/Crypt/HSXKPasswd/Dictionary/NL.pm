@@ -4,7 +4,7 @@ use parent Crypt::HSXKPasswd::Dictionary;
 
 # NOTE:
 # -----
-# This module was Auto-generated at 2015-06-07T16:45:21Z by
+# This module was Auto-generated at 2015-06-07T19:39:52Z by
 # Crypt::HSXKPasswd::Util->dictionary_from_text_file()
 
 # import required modules
@@ -28,7 +28,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 #
 
 # version info
-use version; our $VERSION = qv('3.002000');
+use version; our $VERSION = qv('3.002_001');
 
 # utility constants
 Readonly my $_CLASS => 'Crypt::HSXKPasswd::Dictionary::NL';

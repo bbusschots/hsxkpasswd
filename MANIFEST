@@ -41,3 +41,4 @@ t/perlcritic.t
 t/perlcriticrc
 t/pod.t
 xscripts/generateDictionaries.pl
+Makefile.PL
