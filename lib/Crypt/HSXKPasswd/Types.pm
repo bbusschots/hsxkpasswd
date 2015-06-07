@@ -45,7 +45,7 @@ my $PERL_PACKAGE_NAME_ENGLISH = q{a valid Perl Package Name like 'Crypt::HSXKPas
 my $PERL_PACKAGE_NAME = Type::Tiny->new(
     name => 'PerlPackageName',
     parent => Str,
-    constraint => sub{ m/^[a-zA-Z_]\w*(?:[:]{2}\w+)*$/sx; },
+    constraint => sub{ m/^[a-zA-Z_]\w*(?:[:]{2}\w+)*$/sx; }, ## no critic (ProhibitEnumeratedClasses)
     message => sub{
         return var_to_string($_).qq{ is not $PERL_PACKAGE_NAME_ENGLISH};
     },

@@ -16,6 +16,7 @@ my $builder = Module::Build->new(
     build_requires => {
         'Test::More' => 0,
         'File::Share' => 0,
+        'File::Spec' => 0,
     },
     requires => {
         perl => '5.16.0',

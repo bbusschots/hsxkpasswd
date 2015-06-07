@@ -192,13 +192,13 @@ sub sanitise_dictionary_file{
 #####-SUB-#####################################################################
 # Type       : CLASS
 # Purpose    : Generate a Dictionary module from a text file. The function
-#              prints the code for the module.The function prints the code for
-#              the module.
-# Returns    : Always returns 1 (to keep PerlCritic happy)
-# Arguments  : 1) the name of the module to generate (not including the
-#                 HSXKPasswd::Dictionary part)
-#              2) the path to the dictionary file
+#              returns the code for the module as a string.
+# Returns    : a string.
+# Arguments  : 1) the full name of the module to generate.
+#              2) the path to the dictionary file.
 #              3) OPTIONAL - the encoding of the text file - defaults to UTF-8
+#              4) OPTIONAL - the version string to include at the top of of the
+#                 generated code - defaults to the same as Crypt::HSXKPasswd.
 # Throws     : Croaks on invalid args or file IO error
 # Notes      : This function can be called as a perl one-liner, e.g.
 #              perl -C -Ilib -MCrypt::HSXKPasswd::Util -e 'Crypt::HSXKPasswd::Util->dictionary_from_text_file("EN_Default", "sample_dict_EN.txt")' > lib/Crypt/HSXKPasswd/Dictionary/EN_Default.pm
@@ -211,17 +211,16 @@ sub dictionary_from_text_file{
     
     # validate args
     state $args_check = compile(
-        Type::Tiny->new(
-            parent => Str,
-            constraint => sub{ m/^[a-zA-Z0-9_]+$/sx; }, ## no critic (ProhibitEnumeratedClasses)
-        ),
+        PerlPackageName,
         Str,
-        Optional[Maybe[Str]]
+        Optional[Maybe[Str]],
+        Optional[Maybe[Str]],
     );
-    my ($name, $file_path, $encoding) = $args_check->(@args);
+    my ($pkg_name, $file_path, $encoding, $version) = $args_check->(@args);
     
     # set defaults
     $encoding = 'UTF-8' unless $encoding;
+    $version = $Crypt::HSXKPasswd::VERSION->numify() unless $version;
     
     # try load the words from the file
     my @words = ();
@@ -232,17 +231,17 @@ sub dictionary_from_text_file{
         close $WORDS_FH;
         
         # process the content
-        my @lines = split /\n/sx, $words_file_contents;
+        my @lines = split /\r?\n/sx, $words_file_contents;
         WORD_FILE_LINE:
         foreach my $line (@lines){
             # skip comment lines
-            next if $line =~ m/^[#]/sx;
+            next WORD_FILE_LINE if $line =~ m/^[#]/sx;
             
-            # skip non-word lines
-            next unless $line =~ m/^[[:alpha:]]+$/sx;
+            # skip invalid words
+            next WORD_FILE_LINE unless Word->check($line);
             
-            # skip words shorter than 4 characters
-            next unless $_MAIN_CLASS->_grapheme_length($line) >= 4;
+            # skip words longer than 12 graphemes
+            next WORD_FILE_LINE if $_MAIN_CLASS->_grapheme_length($line) > 12;
             
             # save work
             push @words, $line;
@@ -263,20 +262,24 @@ sub dictionary_from_text_file{
     
     # generate the code for the class
     my $pkg_code = <<"END_MOD_START";
-package ${_MAIN_CLASS}::Dictionary::$name;
+package $pkg_name;
 
 use parent ${_MAIN_CLASS}::Dictionary;
 
-# NOTE
-# The module was Auto-generated at $iso8601 by
+# NOTE:
+# -----
+# This module was Auto-generated at $iso8601 by
 # ${_MAIN_CLASS}::Util->dictionary_from_text_file()
 
 # import required modules
 use strict;
 use warnings;
-use Carp; # for nicer 'exception' handling for users of the module
-use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
 use English qw( -no_match_vars ); # for more readable code
+use Fatal qw( :void open close binmode ); # make builtins throw exceptions on failure
+use Readonly; # for truly constant constants
+
+# HSXKPasswd stuff
+use ${_MAIN_CLASS}::Helper;
 
 # set things up for using UTF-8
 use 5.016; # min Perl for good UTF-8 support, implies feature 'unicode_strings'
@@ -285,18 +288,17 @@ use utf8;
 binmode STDOUT, ':encoding(UTF-8)';
 
 #
-# --- 'Constants' -------------------------------------------------------------
+# === Constants ===============================================================#
 #
 
 # version info
-use version; our \$VERSION = qv('1.1_01');
+use version; our \$VERSION = qv('$version');
 
-# utility variables
-my \$_CLASS = '${_MAIN_CLASS}::Dictionary::$name';
+# utility constants
+Readonly my \$_CLASS => '$pkg_name';
 
 # the word list
-## no critic (CodeLayout::ProhibitQuotedWordLists);
-my \@_WORDS = (
+my \@_WORDS = ( ## no critic (ProhibitQuotedWordLists)
 END_MOD_START
 
     # print the code for the word list
@@ -308,7 +310,6 @@ WORD_END
 
     $pkg_code .= <<"END_MOD_END";
 );
-## use critic
 
 #
 # --- Constructor -------------------------------------------------------------
@@ -316,14 +317,15 @@ WORD_END
 
 #####-SUB-#####################################################################
 # Type       : CONSTRUCTOR (CLASS)
-# Purpose    : Create a new instance of class ${_MAIN_CLASS}::Dictionary::$name
-# Returns    : An object of class ${_MAIN_CLASS}::Dictionary::$name
+# Purpose    : Create a new instance of class $pkg_name
+# Returns    : An object of class $pkg_name
 # Arguments  : NONE
 # Throws     : NOTHING
 # Notes      :
 # See Also   :
 sub new{
     my \$class = shift;
+    _force_class(\$class);
     my \$instance = {};
     bless \$instance, \$class;
     return \$instance;
@@ -334,23 +336,22 @@ sub new{
 #
 
 #####-SUB-######################################################################
-# Type       : INSTANCE
+# Type       : INSTANCE or CLASS or SUBROUTINE
 # Purpose    : Override clone() from the parent class and return a clone of
 #              self.
-# Returns    : An object of type ${_MAIN_CLASS}::Dictionary::$name
+# Returns    : An object of type $pkg_name
 # Arguments  : NONE
-# Throws     : Croaks on invalid invocation
+# Throws     : NOTHING
 # Notes      :
 # See Also   :
 sub clone{
-    my \$self = shift;
     my \$clone = {};
     bless \$clone, \$_CLASS;
     return \$clone;
 }
 
 #####-SUB-#####################################################################
-# Type       : INSTANCE
+# Type       : INSTANCE or CLASS or SUBROUTINE
 # Purpose    : Return the word list.
 # Returns    : An Array Ref
 # Arguments  : NONE
@@ -358,19 +359,14 @@ sub clone{
 # Notes      :
 # See Also   :
 sub word_list{
-    my \$self = shift;
-    
     return [\@_WORDS];
 }
 
 1; # because Perl is just a little bit odd :)
 END_MOD_END
     
-    # print out the generated code
-    print $pkg_code;
-    
-    # return a truthy value to keep perlcritic happy
-    return 1;
+    # return the generated code
+    return $pkg_code;
 }
 
 1; # because Perl is just a little bit odd :)

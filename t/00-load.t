@@ -8,7 +8,7 @@ plan tests => 3;
 
 BEGIN {
     use_ok( 'Crypt::HSXKPasswd' ) || print "Bail out!\n";
-    use_ok( 'Crypt::HSXKPasswd::Dictionary::EN_Default' ) || print "Bail out!\n";
+    use_ok( 'Crypt::HSXKPasswd::Dictionary::EN' ) || print "Bail out!\n";
     use_ok( 'Crypt::HSXKPasswd::RNG::Basic' ) || print "Bail out!\n";
 }
 

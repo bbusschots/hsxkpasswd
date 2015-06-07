@@ -199,8 +199,7 @@ say join "\n", $hsxkpwd_obj->passwords($num_pwds);
 #####-SUB-######################################################################
 # Type       : SUBROUTINE
 # Purpose    : Whine about bad user input and exit
-# Returns    : explicitly returns 1, but since this function exists the script,
-#              that value is never actually returned to anything.
+# Returns    : nothing, since this function exists the script.
 # Arguments  : 1) the message to depart with
 # Throws     : NOTHING
 # Notes      : Imagine the function name in Queenie from Black Adder's accent :)
@@ -208,12 +207,13 @@ say join "\n", $hsxkpwd_obj->passwords($num_pwds);
 sub byeee{
     say q{ERROR - }.(shift);
     exit 1;
-    return 1;
 }
 
 #
 # === The Documentation =======================================================#
 #
+
+## no critic (RequirePodSections);
 
 __END__
 

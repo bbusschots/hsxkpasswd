@@ -34,9 +34,9 @@ binmode STDOUT, ':encoding(UTF-8)';
 # import (or not) optional modules
 eval{
     # the default dicrionary may not have been geneated using the Util module
-    require Crypt::HSXKPasswd::Dictionary::EN_Default;
+    require Crypt::HSXKPasswd::Dictionary::EN;
 }or do{
-    carp('WARNING - failed to load Crypt::HSXKPasswd::Dictionary::EN_Default');
+    carp('WARNING - failed to load Crypt::HSXKPasswd::Dictionary::EN');
 };
 
 ## no critic (ProhibitAutomaticExportation);
@@ -100,8 +100,8 @@ Readonly my $_RNG_BASE_CLASS => 'Crypt::HSXKPasswd::RNG';
 #              installed.
 # Notes      : The order of preference for word sources is dictionary, then
 #              dictionary_list, then dictionary_file. If none are specified,
-#              then an instance of Crypt::HSXKPasswd::Dictionary::EN_Default
-#              will be used.
+#              then an instance of Crypt::HSXKPasswd::Dictionary::EN will be
+#              used.
 #              The order of preference for the configuration source is config
 #              then config_json, then preset. If no configuration source is
 #              specified, then the preset 'DEFAULT' is used.
@@ -147,7 +147,7 @@ sub new{
     }elsif($options->{dictionary_file}){
         $dictionary = Crypt::HSXKPasswd::Dictionary::Basic->new($options->{dictionary_file}, $options->{dictionary_file_encoding});
     }else{
-        $dictionary = Crypt::HSXKPasswd::Dictionary::EN_Default->new();
+        $dictionary = Crypt::HSXKPasswd::Dictionary::EN->new();
     }
     
     # process the config source
@@ -3229,7 +3229,7 @@ Juergen Vierheilig.
 B<Note:> This module is licensed under the GPL, not the BSD license used for the 
 majority of this project.
 
-=head3 C<Crypt::HSXKPasswd::Dictionary::EN_Default>
+=head3 C<Crypt::HSXKPasswd::Dictionary::EN>
 
 A default word list consisting of English words and place names.
 
@@ -4251,9 +4251,9 @@ each time the function is called.
 The constructor must be called via the package name.
 
 If called with no arguments the constructor will use an instance of
-C<Crypt::HSXKPasswd::Dictionary::EN_Default> as the word source, the preset
-C<DEFAULT>, and an instance of the class C<Crypt::HSXKPasswd::RNG::Basic> to
-generate random numbers.
+C<Crypt::HSXKPasswd::Dictionary::EN> as the word source, the preset C<DEFAULT>,
+and an instance of the class C<Crypt::HSXKPasswd::RNG::Basic> to generate random
+numbers.
 
 The function accepts named arguments to allow for custom specification of the
 word source, config, and random number source.
@@ -4878,7 +4878,7 @@ Generates a string detailing the internal status of the instance. Below is a
 sample status string:
 
     *DICTIONARY*
-    Source: Crypt::HSXKPasswd::Dictionary::EN_Default
+    Source: Crypt::HSXKPasswd::Dictionary::EN
     # words: 1425
     # words of valid length: 1194 (84%)
     

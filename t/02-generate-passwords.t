@@ -5,7 +5,7 @@ use warnings;
 use Test::More;
 use File::Share qw( :all ); # for accessing the dictionary files in share
 use Crypt::HSXKPasswd;
-use Crypt::HSXKPasswd::Dictionary::EN_Default;
+use Crypt::HSXKPasswd::Dictionary::EN;
 use Crypt::HSXKPasswd::RNG::Basic;
 
 plan tests => 10;
@@ -19,7 +19,7 @@ Crypt::HSXKPasswd->module_config('SUPRESS_ENTROPY_WARNINGS', 'ALL');
 ok(eval{hsxkpasswd()}, 'password generation with defaults');
 ok(
     eval{
-        my $dictionary = Crypt::HSXKPasswd::Dictionary::EN_Default->new();
+        my $dictionary = Crypt::HSXKPasswd::Dictionary::EN->new();
         hsxkpasswd(dictionary => $dictionary);
     },
     q{password generation with named argument 'dictionary'},
