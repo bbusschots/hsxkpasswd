@@ -2,7 +2,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-<title>Crypt::HSXKPasswd</title>
+<title>Crypt::HSXKPasswd V3</title>
 <meta http-equiv="content-type" content="text/html; charset=utf-8" />
 <link rev="made" href="mailto:vxd@glow.apple.com" />
 </head>
@@ -18,6 +18,7 @@
   <li><a href="#DESCRIPTION">DESCRIPTION</a>
     <ul>
       <li><a href="#PHILOSOPHY">PHILOSOPHY</a></li>
+      <li><a href="#PASSWORD-GENERATION-ALGORITHM">PASSWORD GENERATION ALGORITHM</a></li>
       <li><a href="#THE-MATHS">THE MATHS</a>
         <ul>
           <li><a href="#Maths-Primer">Maths Primer</a></li>
@@ -28,10 +29,85 @@
   </li>
   <li><a href="#SUBROUTINES-METHODS">SUBROUTINES/METHODS</a>
     <ul>
+      <li><a href="#MODULE-CONFIGURATION">MODULE CONFIGURATION</a></li>
+      <li><a href="#CUSTOM-DATA-TYPES">CUSTOM DATA TYPES</a>
+        <ul>
+          <li><a href="#Defined-Types">Defined Types</a></li>
+          <li><a href="#Using-the-Custom-Types">Using the Custom Types</a></li>
+        </ul>
+      </li>
+      <li><a href="#CONFIGURATION">CONFIGURATION</a>
+        <ul>
+          <li><a href="#Password-Generator-Configuration-Keys">Password Generator Configuration Keys</a></li>
+        </ul>
+      </li>
+      <li><a href="#PRESETS">PRESETS</a></li>
+      <li><a href="#FUNCTIONAL-INTERFACE">FUNCTIONAL INTERFACE</a>
+        <ul>
+          <li><a href="#hsxkpasswd">hsxkpasswd()</a></li>
+        </ul>
+      </li>
+      <li><a href="#CONSTRUCTOR">CONSTRUCTOR</a>
+        <ul>
+          <li><a href="#Specifying-Custom-Word-Sources">Specifying Custom Word Sources</a></li>
+          <li><a href="#Specifying-Custom-Password-Generator-Configurations">Specifying Custom Password Generator Configurations</a></li>
+          <li><a href="#Specifying-Custom-Random-Number-Generators">Specifying Custom Random Number Generators</a></li>
+        </ul>
+      </li>
+      <li><a href="#INSTANCE-METHODS">INSTANCE METHODS</a>
+        <ul>
+          <li><a href="#config">-&gt;config()</a></li>
+          <li><a href="#config_as_json">-&gt;config_as_json()</a></li>
+          <li><a href="#config_as_string">-&gt;config_as_string()</a></li>
+          <li><a href="#dictionary">-&gt;dictionary()</a></li>
+          <li><a href="#password">-&gt;password()</a></li>
+          <li><a href="#passwords">-&gt;passwords()</a></li>
+          <li><a href="#passwords_json">-&gt;passwords_json()</a></li>
+          <li><a href="#rng">-&gt;rng()</a></li>
+          <li><a href="#stats">-&gt;stats()</a></li>
+          <li><a href="#status">-&gt;status()</a></li>
+          <li><a href="#update_config">-&gt;update_config()</a></li>
+        </ul>
+      </li>
+      <li><a href="#CLASS-METHODS">CLASS METHODS</a>
+        <ul>
+          <li><a href="#clone_config">clone_config()</a></li>
+          <li><a href="#config_key_definition">config_key_definition()</a></li>
+          <li><a href="#config_key_definitions">config_key_definitions()</a></li>
+          <li><a href="#config_stats">config_stats()</a></li>
+          <li><a href="#config_to_json">config_to_json()</a></li>
+          <li><a href="#config_to_string">config_to_string()</a></li>
+          <li><a href="#default_config">default_config()</a></li>
+          <li><a href="#defined_config_keys">defined_config_keys()</a></li>
+          <li><a href="#defined_presets">defined_presets()</a></li>
+          <li><a href="#distil_to_config_keys">distil_to_config_keys()</a></li>
+          <li><a href="#distil_to_symbol_alphabet">distil_to_symbol_alphabet()</a></li>
+          <li><a href="#distil_to_words">distil_to_words()</a></li>
+          <li><a href="#is_valid_config">is_valid_config()</a></li>
+          <li><a href="#module_config">module_config()</a></li>
+          <li><a href="#preset_config">preset_config()</a></li>
+          <li><a href="#preset_definition">preset_definition()</a></li>
+          <li><a href="#preset_definitions">preset_definitions()</a></li>
+          <li><a href="#presets_json">presets_json()</a></li>
+          <li><a href="#preset_description">preset_description()</a></li>
+          <li><a href="#presets_to_string">presets_to_string()</a></li>
+        </ul>
+      </li>
+      <li><a href="#COMMANDLINE-INTERFACE">COMMANDLINE INTERFACE</a>
+        <ul>
+          <li><a href="#Examples">Examples</a></li>
+          <li><a href="#Further-Reading">Further Reading</a></li>
+        </ul>
+      </li>
+      <li><a href="#ENTROPY-CHECKING">ENTROPY CHECKING</a>
+        <ul>
+          <li><a href="#Caveats">Caveats</a></li>
+        </ul>
+      </li>
       <li><a href="#WORD-SOURCES-DICTIONARIES">WORD SOURCES (DICTIONARIES)</a>
         <ul>
           <li><a href="#Crypt::HSXKPasswd::Dictionary::DE">Crypt::HSXKPasswd::Dictionary::DE</a></li>
-          <li><a href="#Crypt::HSXKPasswd::Dictionary::EN_Default">Crypt::HSXKPasswd::Dictionary::EN_Default</a></li>
+          <li><a href="#Crypt::HSXKPasswd::Dictionary::EN">Crypt::HSXKPasswd::Dictionary::EN</a></li>
           <li><a href="#Crypt::HSXKPasswd::Dictionary::ES">Crypt::HSXKPasswd::Dictionary::ES</a></li>
           <li><a href="#Crypt::HSXKPasswd::Dictionary::FR">Crypt::HSXKPasswd::Dictionary::FR</a></li>
           <li><a href="#Crypt::HSXKPasswd::Dictionary::IT">Crypt::HSXKPasswd::Dictionary::IT</a></li>
@@ -49,13 +125,6 @@
           </li>
         </ul>
       </li>
-      <li><a href="#CONFIGURATION-HASHREFS">CONFIGURATION HASHREFS</a></li>
-      <li><a href="#PRESETS">PRESETS</a></li>
-      <li><a href="#ENTROPY-CHECKING">ENTROPY CHECKING</a>
-        <ul>
-          <li><a href="#CAVEATS">CAVEATS</a></li>
-        </ul>
-      </li>
       <li><a href="#RANDOM-NUMBER-SOURCES">RANDOM NUMBER SOURCES</a>
         <ul>
           <li><a href="#Crypt::HSXKPasswd::RNG::Math_Random_Secure">Crypt::HSXKPasswd::RNG::Math_Random_Secure</a></li>
@@ -63,48 +132,6 @@
           <li><a href="#Crypt::HSXKPasswd::RNG::DevUrandom">Crypt::HSXKPasswd::RNG::DevUrandom</a></li>
           <li><a href="#Crypt::HSXKPasswd::RNG::Basic">Crypt::HSXKPasswd::RNG::Basic</a></li>
           <li><a href="#Crypt::HSXKPasswd::RNG::RandomDotOrg">Crypt::HSXKPasswd::RNG::RandomDotOrg</a></li>
-        </ul>
-      </li>
-      <li><a href="#FUNCTIONAL-INTERFACE">FUNCTIONAL INTERFACE</a>
-        <ul>
-          <li><a href="#hsxkpasswd">hsxkpasswd()</a></li>
-        </ul>
-      </li>
-      <li><a href="#CONSTRUCTOR">CONSTRUCTOR</a>
-        <ul>
-          <li><a href="#CUSTOM-WORD-SOURCES-IN-CONSTRUCTOR">CUSTOM WORD SOURCES IN CONSTRUCTOR</a></li>
-          <li><a href="#CUSTOM-CONFIGS">CUSTOM CONFIGS</a></li>
-          <li><a href="#CUSTOM-RANDOM-NUMBER-GENERATORS">CUSTOM RANDOM NUMBER GENERATORS</a></li>
-        </ul>
-      </li>
-      <li><a href="#CLASS-METHODS">CLASS METHODS</a>
-        <ul>
-          <li><a href="#clone_config">clone_config()</a></li>
-          <li><a href="#config_stats">config_stats()</a></li>
-          <li><a href="#config_to_json">config_to_json()</a></li>
-          <li><a href="#config_to_string">config_to_string()</a></li>
-          <li><a href="#default_config">default_config()</a></li>
-          <li><a href="#defined_presets">defined_presets()</a></li>
-          <li><a href="#is_valid_config">is_valid_config()</a></li>
-          <li><a href="#preset_config">preset_config()</a></li>
-          <li><a href="#presets_json">presets_json()</a></li>
-          <li><a href="#preset_description">preset_description()</a></li>
-          <li><a href="#presets_to_string">presets_to_string()</a></li>
-        </ul>
-      </li>
-      <li><a href="#METHODS">METHODS</a>
-        <ul>
-          <li><a href="#config">config()</a></li>
-          <li><a href="#config_json">config_json()</a></li>
-          <li><a href="#config_string">config_string()</a></li>
-          <li><a href="#dictionary">dictionary()</a></li>
-          <li><a href="#password">password()</a></li>
-          <li><a href="#passwords">passwords()</a></li>
-          <li><a href="#passwords_json">passwords_json()</a></li>
-          <li><a href="#rng">rng()</a></li>
-          <li><a href="#stats">stats()</a></li>
-          <li><a href="#status">status()</a></li>
-          <li><a href="#update_config">update_config()</a></li>
         </ul>
       </li>
     </ul>
@@ -124,7 +151,7 @@
 
 <h1 id="VERSION">VERSION</h1>
 
-<p>This documentation refers to <code>Crypt::HSXKPasswd</code> version 3.1.1.</p>
+<p>This documentation refers to <code>Crypt::HSXKPasswd</code> version 3.2.1.</p>
 
 <h1 id="SYNOPSIS">SYNOPSIS</h1>
 
@@ -162,7 +189,7 @@
 
 <h1 id="DESCRIPTION">DESCRIPTION</h1>
 
-<p>A secure memorable password generator inspired by the wonderful XKCD webcomic at <a href="http://www.xkcd.com/">http://www.xkcd.com/</a> and Steve Gibson&#39;s Password Haystacks page at <a href="https://www.grc.com/haystack.htm">https://www.grc.com/haystack.htm</a>. This is the Perl library that powers <a href="https://www.xkpasswd.net">https://www.xkpasswd.net</a>.</p>
+<p>A secure memorable password generator inspired by the wonderful XKCD webcomic at <a href="http://www.xkcd.com/">http://www.xkcd.com/</a> and Steve Gibson&#39;s Password Haystacks page at <a href="https://www.grc.com/haystack.htm">https://www.grc.com/haystack.htm</a>. This is the Perl module that powers <a href="https://www.xkpasswd.net">https://www.xkpasswd.net</a>.</p>
 
 <h2 id="PHILOSOPHY">PHILOSOPHY</h2>
 
@@ -176,7 +203,7 @@
 
 <p>Rather than randomly choosing many letters, digits, and symbols from a fairly small alphabet of possible characters, this library chooses a small number of words from a large <i>alphabet</i> of possible words as the basis for passwords. Words are easy to remember, easy to read from a screen, easy to type, and easy to communicate over the telephone.</p>
 
-<p>This module uses words to make up the bulk of the passwords it generates, but it also adds carefully placed random symbols and digits to add more security without the passwords difficult to remember, read, type, or speak.</p>
+<p>This module uses words to make up the bulk of the passwords it generates, but it also adds carefully placed symbols and digits to add security without making the passwords difficult to remember, read, type, and speak.</p>
 
 <p>In shot, this module is for people who prefer passwords that look like this:</p>
 
@@ -184,7 +211,71 @@
 
 <p>to passwords that look like this:</p>
 
-<pre><code>    eB8.GJXa@TuM</code></pre>
+<pre><code>    eB8.GJXa@TuM
+    </code></pre>
+
+<h2 id="PASSWORD-GENERATION-ALGORITHM">PASSWORD GENERATION ALGORITHM</h2>
+
+<p>This module always uses a simple five-step algorithm to generate passwords, but each step can be customised, and many steps can be skipped completely.</p>
+
+<p>It&#39;s important to understand the algorithm before trying to create your own custom configurations for this module.</p>
+
+<p>The algorithm is broken in to the following steps:</p>
+
+<ol>
+
+<li><p>Pick random words from the dictionary.</p>
+
+</li>
+<li><p>Apply transformations to the words.</p>
+
+</li>
+<li><p>Create pseudo-words made up for randomly chosen digits and add them as the first and last words.</p>
+
+</li>
+<li><p>Insert a copy of the same symbol between each of the words and pseudo-words. This symbol is referred to as the <i>separator character</i>.</p>
+
+</li>
+<li><p>Pad the password with multiple instances of the same symbol front and/or back. This symbol is referred to as the <i>padding character</i>.</p>
+
+</li>
+</ol>
+
+<p>You can visualise this process as follows:</p>
+
+<pre><code>    correct horse batter staple
+    correct HORSE battery staple
+    25 correct HORSE battery staple 83
+    25*correct*HORSE*battery*staple*83
+    ++25*correct*HORSE*battery*staple*83++
+    </code></pre>
+
+<p>Each of these steps can be customised in the following ways:</p>
+
+<ol>
+
+<li><p>The number of words to be used, and the minimum and maximum lengths of the words can be configured.</p>
+
+</li>
+<li><p>The case of the words can be modified in a number of ways, including randomly choosing the case for each word.</p>
+
+<p>It is also possible to specify so-called <i>133t-style</i> character substitutions, e.g. replacing all occurrences of the letter <code>e</code> with the digit <code>3</code>, or all occurrences of the letter <code>s</code> with the symbol <code>$</code>.</p>
+
+</li>
+<li><p>The number of digits to add as pseudo words to the front and back of the password can be configured. A length of zero can be specified for both to generate passwords without any randomly chosen digits.</p>
+
+</li>
+<li><p>The separator character can be specified directly, or it can be randomly chosen from a list of symbols. It is also possible to specify that no separator should be used.</p>
+
+</li>
+<li><p>The padding character can also be specified directly, or remotely chosen from a list of possible symbols. Padding can also be disabled completely. If padding is to be used it can be applied in two modes - fixed, and adaptive.</p>
+
+<p>With fixed padding a specified number of copies of the separator character are added to the front and back of the password. The fixed padding does not have to be symmetric.</p>
+
+<p>With adaptive padding the required number of copies of the separator character are added to the back of the password until it reaches a specified length.</p>
+
+</li>
+</ol>
 
 <h2 id="THE-MATHS">THE MATHS</h2>
 
@@ -282,434 +373,564 @@
 
 <h1 id="SUBROUTINES-METHODS">SUBROUTINES/METHODS</h1>
 
-<h2 id="WORD-SOURCES-DICTIONARIES">WORD SOURCES (DICTIONARIES)</h2>
+<h2 id="MODULE-CONFIGURATION">MODULE CONFIGURATION</h2>
 
-<p>The abstract class <code>Crypt::HSXKPasswd::Dictionary</code> acts as a base class for sources of words for use by this module. Word sources should extend this base class and implement the function <code>word_list()</code>, which should return an array of words.</p>
+<p>It is possible to tweak the module&#39;s behaviour in certain areas by updating the values contained within a set of module configuration keys. The values associated with these keys can be accessed and updated via the class function <code>module_config()</code>.</p>
 
-<p>In order to produce secure passwords it&#39;s important to use a word source that contains a large selection of words with a good mix of different lengths of words.</p>
+<pre><code>    # get the current debug status
+    my $debug_status = Crypt::HSXKPasswd-&gt;module_config(&#39;DEBUG&#39;);
+    
+    # configure the module to suppress all entropy warnings
+    Crypt::HSXKPasswd-&gt;module_config(&#39;SUPPRESS_ENTROPY_WARNINGS&#39;, &#39;ALL&#39;);</code></pre>
 
-<p>The module ships with a number of pre-defined word sources:</p>
-
-<h3 id="Crypt::HSXKPasswd::Dictionary::DE"><code>Crypt::HSXKPasswd::Dictionary::DE</code></h3>
-
-<p>A German word list based on the GPL-licensed German dictionary for WinEdit by Juergen Vierheilig.</p>
-
-<p><b>Note:</b> This module is licensed under the GPL, not the BSD license used for the majority of this project.</p>
-
-<h3 id="Crypt::HSXKPasswd::Dictionary::EN_Default"><code>Crypt::HSXKPasswd::Dictionary::EN_Default</code></h3>
-
-<p>A default word list consisting of English words and place names.</p>
-
-<h3 id="Crypt::HSXKPasswd::Dictionary::ES"><code>Crypt::HSXKPasswd::Dictionary::ES</code></h3>
-
-<p>A Spanish word list based on the BSD-licensed Spanish dictionary for WinEdit by Juan L. Varona from the Universidad de La Rioja.</p>
-
-<h3 id="Crypt::HSXKPasswd::Dictionary::FR"><code>Crypt::HSXKPasswd::Dictionary::FR</code></h3>
-
-<p>A French word list based on the GPL-licensed French dictionary for WinEdit.</p>
-
-<p><b>Note:</b> This module is licensed under GPL V2, not the BSD license used for the majority of this project.</p>
-
-<h3 id="Crypt::HSXKPasswd::Dictionary::IT"><code>Crypt::HSXKPasswd::Dictionary::IT</code></h3>
-
-<p>An Italian word list based on the free-for-non-commerical-use Italian dictionary for WinEdit by Karl Koeller.</p>
-
-<p><b>Note:</b> This module is licensed under GPL V2, not the BSD license used for the majority of this project.</p>
-
-<h3 id="Crypt::HSXKPasswd::Dictionary::NL"><code>Crypt::HSXKPasswd::Dictionary::NL</code></h3>
-
-<p>A Dutch/Flemish word list based on the GPL-licensed Dutch dictionary for WinEdit.</p>
-
-<p><b>Note:</b> This module is licensed under GPL V2, not the BSD license used for the majority of this project.</p>
-
-<h3 id="Crypt::HSXKPasswd::Dictionary::PT"><code>Crypt::HSXKPasswd::Dictionary::PT</code></h3>
-
-<p>A Portuguese word list based on the GPL-licensed Portuguese dictionary for WinEdit compiled by Bernhard Enders (building on work by Raimundo Santos Moura &amp; Ricardo Ueda Karpischek).</p>
-
-<p><b>Note:</b> This module is licensed under GPL V2.1, not the BSD license used for the majority of this project.</p>
-
-<h3 id="Crypt::HSXKPasswd::Dictionary::System"><code>Crypt::HSXKPasswd::Dictionary::System</code></h3>
-
-<p>This class tries to find and use a Unix words file on the system.</p>
-
-<p>The constructor croaks if no system words file can be found.</p>
-
-<h4 id="Usage">Usage</h4>
-
-<pre><code>    my $word_source = Crypt::HSXKPasswd::Dictionary::System-&gt;new();</code></pre>
-
-<h3 id="Crypt::HSXKPasswd::Dictionary::Basic"><code>Crypt::HSXKPasswd::Dictionary::Basic</code></h3>
-
-<p>This class can be initialised from a words file, or from an array ref containing words.</p>
-
-<h4 id="Usage1">Usage</h4>
-
-<pre><code>    my $word_source = Crypt::HSXKPasswd::Dictionary::Basic-&gt;new(&#39;file_path&#39;);
-    my $word_source = Crypt::HSXKPasswd::Dictionary::Basic-&gt;new(&#39;file_path&#39;, &#39;Latin1&#39;);
-    my $word_source = Crypt::HSXKPasswd::Dictionary::Basic-&gt;new($array_ref);</code></pre>
-
-<p>The rules for the formatting of dictionary files are simple. Dictionary files must contain one word per line. Words shorter than four letters will be ignored, as will all lines starting with the # symbol. Files are assumed to be UTF-8 encoded, but an optional second argument can be passed specifying a different file encoding.</p>
-
-<p>This format is the same as that of the standard Unix Words file, usually found at <code>/usr/share/dict/words</code> on Unix and Linux operating systems (including OS X).</p>
-
-<h2 id="CONFIGURATION-HASHREFS">CONFIGURATION HASHREFS</h2>
-
-<p>A number of subroutines require a configuration hashref as an argument. The following are the valid keys for that hashref, what they mean, and what values are valid for each.</p>
+<p>The following module configuration keys exist within the module:</p>
 
 <ul>
 
-<li><p><code>allow_accents</code> - a truthy value to signify that any accented characters in the dictionary should be preserved when filtering to the sub-set of valid words. If not specified, or if a falsy value is passed, accented letters will have their accents stripped off, e.g. <code>&eacute;</code> becomes <code>e</code>.</p>
+<li><p><code>DEBUG</code> - A True/False value denoting whether or not the module should print debug messages. The default is not to print debug messages.</p>
+
+<p>For more details see the DIAGNOSTICS section of this document.</p>
 
 </li>
-<li><p><code>case_transform</code> - the alterations that should be made to the case of the letters in the randomly chosen words that make up the bulk of the randomly generated passwords. Must be a scalar, and the only valid values for this key are:</p>
+<li><p><code>LOG_ERRORS</code> - A True/False value denoting whether or not errors should be logged. The default is not to log.</p>
 
-<dl>
-
-<dt id="pod">-</dt>
-<dd>
-
-<p><code>ALTERNATE</code> - each alternate word will be converted to all upper case and all lower case.</p>
-
-</dd>
-<dt id="pod1">-</dt>
-<dd>
-
-<p><code>CAPITALISE</code> - the first letter in every word will be converted to upper case, all other letters will be converted to lower case.</p>
-
-</dd>
-<dt id="pod2">-</dt>
-<dd>
-
-<p><code>INVERT</code> - the first letter in every word will be converted to lower case, all other letters will be converted to upper case.</p>
-
-</dd>
-<dt id="pod3">-</dt>
-<dd>
-
-<p><code>LOWER</code> - all letters in all the words will be converted to lower case. <b>Use of this option is strongly discouraged for security reasons.</b></p>
-
-</dd>
-<dt id="pod4">-</dt>
-<dd>
-
-<p><code>NONE</code> - the capitalisation used in the randomly generated password will be the same as it is in the dictionary file.</p>
-
-</dd>
-<dt id="pod5">-</dt>
-<dd>
-
-<p><code>RANDOM</code> - each word will be randomly converted to all upper case or all lower case.</p>
-
-</dd>
-<dt id="pod6">-</dt>
-<dd>
-
-<p><code>UPPER</code> - all letters in all the words will be converted to upper case. <b>Use of this option is strongly discouraged for security reasons.</b></p>
-
-</dd>
-</dl>
-
-<p>The default value returned by <code>default_config()</code> is <code>CAPITALISE</code>.</p>
+<p>For more details see the DIAGNOSTICS section of this document.</p>
 
 </li>
-<li><p><code>character_substitutions</code> - a hashref containing zero or more character substitutions to be applied to the words that make up the bulk of the generated passwords. The keys in the hashref are the characters to be replaced, and must be single alpha numeric characters, while the values in the hashrefs are the replacements, and can be longer.</p>
+<li><p><code>LOG_STREAM</code> - the stream to which debug messages should be printed if debugging is enabled, and log messages should be printed when error logging is enabled. The default is to print to <code>STDERR</code>.</p>
+
+<p>For more details see the DIAGNOSTICS section of this document.</p>
 
 </li>
-<li><p><code>num_words</code> - the number of randomly chosen words use as the basis for the generated passwords. The default value is four. For security reasons, at least two words must be used.</p>
+<li><p><code>ENTROPY_MIN_BLIND</code> - the minimum allowable entropy against brute force attacks in bits. The default is 78 bits.</p>
+
+<p>For more details see the ENTROPY CHECKING section of this document.</p>
 
 </li>
-<li><p><code>pad_to_length</code> - the total desired length of the password when using adaptive padding (<code>padding_type</code> set to <code>ADAPTIVE</code>). Must be a scalar with an integer values greater than or equal to 12 (for security reasons).</p>
+<li><p><code>ENTROPY_MIN_SEEN</code> - the minimum allowable entropy against an attacker with full knowledge. The default is 52 bits.</p>
+
+<p>For more details see the ENTROPY CHECKING section of this document.</p>
 
 </li>
-<li><p><code>padding_alphabet</code> - this key is optional. It can be used to override the contents of <code>symbol_alphabet</code> when <code>padding_character</code> is set to <code>RANDOM</code>. If present this key must contain an arrayref containing at least two single characters as scalars.</p>
+<li><p><code>SUPPRESS_ENTROPY_WARNINGS</code> - control the suppression of entropy warnings. The value must be one of <code>NONE</code>, <code>ALL</code>, <code>SEEN</code>, or <code>BLIND</code>. The default value is <code>NONE</code>.</p>
+
+<p>For more details see the ENTROPY CHECKING section of this document.</p>
 
 </li>
-<li><p><code>padding_character</code> - the character to use when padding the front and/or back of the randomly generated password. Must be a scalar containing either a single character or one of the special values <code>RANDOM</code> (indicating that a character should be chosen at random from the <code>symbol_alphabet</code>), or <code>SEPARATOR</code> (use the same character used to separate the words). This key is only needed if <code>padding_type</code> is set to <code>FIXED</code> or <code>ADAPTIVE</code>. The default value returned by <code>default_config</code> is <code>RANDOM</code>.</p>
+</ul>
+
+<h2 id="CUSTOM-DATA-TYPES">CUSTOM DATA TYPES</h2>
+
+<p>This module uses a custom type library created with <code>Type::Library</code> for data validation. It is important to know this for two reasons - firstly, these custom types are mentioned in many error messages, and secondly these custom types are available for developers to use in their own code, either when utilising <code>Crypt::HSXKPasswd</code>, or writing custom word sources by extending <code>Crypt::HSXKPasswd::Dictionary</code>, or when writing custom random number generators by extending <code>Crypt::HSXKPasswd::RNG</code>.</p>
+
+<h3 id="Defined-Types">Defined Types</h3>
+
+<ul>
+
+<li><p><code>NonEmptyString</code> - a string containing at least one character.</p>
 
 </li>
-<li><p><code>padding_characters_before</code> &amp; <code>padding_characters_after</code> - the number of symbols to pad the front and end of the randomly generated password with. Must be a scalar with an integer value greater than or equal to zero. These keys are only needed if <code>padding_type</code> is set to <code>FIXED</code>. The default value returned by <code>default_config()</code> for both these keys is 2.</p>
+<li><p><code>PositiveInteger</code> - a whole number greater than or equal to zero.</p>
 
 </li>
-<li><p><code>padding_digits_before</code> &amp; <code>padding_digits_after</code> - the number of random digits to include before and after the randomly chosen words making up the bulk of the randomly generated password. Must be scalars containing integer values greater than or equal to zero. The default value returned by <code>default_config()</code> for both these keys is 2.</p>
+<li><p><code>NonZeroPositiveInteger</code> - a whole number greater than zero.</p>
 
 </li>
-<li><p><code>padding_type</code> - the type of symbol padding to be added at the start and/or end of the randomly generated password. Must be a scalar with one of the following values:</p>
-
-<dl>
-
-<dt id="pod7">-</dt>
-<dd>
-
-<p><code>NONE</code> - do not pad the generated password with any symbol characters.</p>
-
-</dd>
-<dt id="pod8">-</dt>
-<dd>
-
-<p><code>FIXED</code> - a specified number of symbols will be added to the front and/or back of the randomly generated password. If this option is chosen, you must also specify the keys <code>padding_character</code>, <code>padding_characters_before</code> &amp; <code>padding_characters_after</code>.</p>
-
-</dd>
-<dt id="pod9">-</dt>
-<dd>
-
-<p><code>ADAPTIVE</code> - no symbols will be added to the start of the randomly generated password, and the appropriate number of symbols will be added to the end to make the generated password exactly a certain length. The desired length is specified with the key <code>pad_to_length</code>, which is required if this padding type is specified.</p>
-
-</dd>
-</dl>
-
-<p>The default value returned by <code>default_config()</code> is <code>FIXED</code>.</p>
+<li><p><code>TrueFalse</code> - a reasonable boolean value, specifically, <code>undef</code>, and empty string, or 0 to indicate false, and a 1 to indicate true.</p>
 
 </li>
-<li><p><code>separator_alphabet</code> - this key is optional. It can be used to override the contents of <code>symbol_alphabet</code> when <code>separator_character</code> is set to <code>RANDOM</code>. If present this key must contain an arrayref containing at least two single characters as scalars.</p>
+<li><p><code>PerlPackageName</code> - string representing a valid Perl package name like <code>Crypt::HSXKPasswd::Dictionary::NL</code>.</p>
 
 </li>
-<li><p><code>separator_character</code> - the character to use to separate the words in the generated password. Must be a scalar, and acceptable values are a single character, or, the special values <code>NONE</code> (indicating that no separator should be used), or <code>RANDOM</code>, indicating that a character should be chosen at random from the <code>symbol_alphabet</code>. The default value returned by <code>default_config()</code> is <code>RANDOM</code>.</p>
+<li><p><code>Letter</code> - a string containing a single letter. Because this module is Unicode-aware, it should be noted that a letter is defined as a single Unicode grapheme with the Unicode property <code>Letter</code>. What this means is that accented letters like <code>&eacute;</code> are considered valid, as are ligatures like <code>&aelig;</code>.</p>
 
 </li>
-<li><p><code>symbol_alphabet</code> - an arrayref containing at least two single characters as scalars. This alphabet will be used when selecting random characters to act as the separator between words, or the padding at the start and/or end of generated passwords. Note that this key can be overridden by setting either or both <code>padding_alphabet</code> and <code>separator_alphabet</code>. The default value returned by <code>default_config()</code> is <code>[qw{! @ $ % ^ &amp; * - _ + = : | ~ ?}]</code></p>
+<li><p><code>Symbol</code> - a string containing a single non-letter character. Because this module is Unicode-aware, should be noted that a non-letter character is defined as a single Unicode grapheme that does not have the Unicode property <code>Letter</code>. What this means is that neither letters, accented characters, nor ligatures can be used as symbols, but just about every other Unicode character can, including punctuation symbols, mathematical symbols, and even emoji!</p>
 
 </li>
-<li><p><code>word_length_min</code> &amp; <code>word_length_max</code> - the minimum and maximum length of the words that will make up the generated password. The two keys must be scalars, and can hold equal values, but <code>word_length_max</code> may not be smaller than <code>word_length_min</code>. For security reasons, both values must be greater than 3. The default values returned by <code>default_config()</code> is are 4 &amp; 8.</p>
+<li><p><code>Word</code> - a string containing only letters (as defined by the type <code>Letter</code>), and at least four long.</p>
+
+</li>
+<li><p><code>SymbolAlphabet</code> - a symbol alphabet is a reference to an array that contains at least two distinct symbols (as defined by the type <code>Symbol</code>), and no values that are not symbols.</p>
+
+</li>
+<li><p><code>WordLength</code> - a valid value when specifying the length of a word, specifically, a whole number greater than or equal to four.</p>
+
+</li>
+<li><p><code>ConfigKeyDefinition</code> - a valid configuration key definition. A reference to a hash mapping <code>required</code> to a true/false value, <code>expects</code> to a non-empty string, and <code>type</code> to a <code>Type::Tiny</code> object.</p>
+
+</li>
+<li><p><code>ConfigKeyName</code> - a valid configuration key name, see the CONFIGURATION section of this document for a description of each configuration key supported by this module. You can get a list of valid configuration key names programatically by calling the function <code>Crypt::HSXKPasswd-</code>defined_config_keys()&gt;.</p>
+
+</li>
+<li><p><code>ConfigKeyAssignment</code> - a mapping between a valid configuration key name and a valid value for that configuration key.</p>
+
+</li>
+<li><p><code>ConfigOverride</code> - a reference to hash containing one or more configuration key assignments as defined by the type <code>ConfigKeyAssignment</code>.</p>
+
+</li>
+<li><p><code>Config</code> - a reference to a hash that contains a complete and valid set of mappings between configuration key names and values. For a config to be considered valid it must contain only valid valid configuration key assignments as defined by the type <code>ConfigKeyAssignment</code>, must contain a configuration key assignment for each required configuration key and all interdependencies between the specified configuration key assignments must be fulfilled.</p>
+
+<p>See the CONFIG section of this document for a detailed description of each of the defined configuration keys and their various interdependencies.</p>
+
+</li>
+<li><p><code>PresetDefinition</code> - a valid preset definition. A reference to a hash mapping <code>description</code> to a non-empty string, and <code>config</code> to a valid Config.</p>
+
+</li>
+<li><p><code>PresetName</code> - a valid preset name, see the PRESETS section of this document for a description of each preset supported by this module. You can get a list of valid preset names programatically by calling the function <code>Crypt::HSXKPasswd-</code>defined_presets()&gt;.</p>
+
+</li>
+</ul>
+
+<h3 id="Using-the-Custom-Types">Using the Custom Types</h3>
+
+<p>The library of custom types is defined in the package <code>Crypt::HSXKPasswd::Types</code>, and it is a standard <code>Type::Library</code> type library containing <code>Type::Tiny</code> type definitions.</p>
+
+<p>Useful Links:</p>
+
+<ul>
+
+<li><p>The documentation for <code>Type::Tiny</code> - <a href="http://search.cpan.org/perldoc?Type%3A%3ATiny">http://search.cpan.org/perldoc?Type%3A%3ATiny</a></p>
+
+</li>
+<li><p>The documentation for <code>Type::Library</code> - <a href="http://search.cpan.org/perldoc?Type%3A%3ALibrary">http://search.cpan.org/perldoc?Type%3A%3ALibrary</a></p>
+
+</li>
+</ul>
+
+<p>To use the bare type definitions listed above, import the module as follows:</p>
+
+<pre><code>    use Crypt::HSXKPasswd::Types qw( :types );
+    </code></pre>
+
+<p>Each type listed above will now be imported, and become available as a bare word. The <code>Type::Tiny</code> documentation provides a full list of available functions, but the examples below illustrate some of the more useful ones:</p>
+
+<pre><code>    $is_valid = Letter-&gt;check(&#39;e&#39;); # $is_valid = 1
+    $is_valid = Letter-&gt;check(&#39;-&#39;); # $is_valid = undef
+    $err_msg = Letter-&gt;validate(&#39;e&#39;); # $err_msg = undef
+    $err_msg = Letter-&gt;validate(&#39;-&#39;); # $err_msg = &quot;&#39;-&#39; is not a Letter ...
+                    # ... (must be a string containing exactly one letter)&quot;</code></pre>
+
+<p><code>Type::Library</code> automatically creates an <code>is_TypeName</code> function for each type defined in the library. These are not imported by default. To import them add the export tag <code>:is</code> to the <code>use</code> line. I would recommend the following <code>use</code> line:</p>
+
+<pre><code>    use Crypt::HSXKPasswd::Types qw( :types :is );
+    </code></pre>
+
+<p>You can now do things like the following:</p>
+
+<pre><code>    $is_valid = is_Letter(&#39;e&#39;); # $is_valid = 1
+    $is_valid = is_Letter(&#39;-&#39;); # $is_valid = undef
+    </code></pre>
+
+<p>Each of the types listed above also contains a custom function using <code>Type::Tiny</code>&#39;s new, and still officially experimental, <code>my_methods</code> feature. The custom function is called <code>my_english</code>, and can be used to return an English description of the values considered valid by the type, e.g.:</p>
+
+<pre><code>    print Letter-&gt;my_english(); # prints: a string containing exactly one letter
+    </code></pre>
+
+<p>As well as the named types listed above, there are also anonymous types defined for each supported configuration key. These can be accessed using the function <code>Crypt::HSXKPasswd-</code>config_key_definitions()&gt;.</p>
+
+<p>If declaring your own <code>Type::Tiny</code> types, you may also find the public subroutine <code>Crypt::HSXKPasswd::Types::var_to_string()</code> useful - it will turn anything passed as a scalar into a meaningful string, truncating any resulting strings longer than 72 characters in nice way. All the custom error messages in all the types defined in <code>Crypt::HSXKPasswd::Types</code> make use of this subroutine.</p>
+
+<h2 id="CONFIGURATION">CONFIGURATION</h2>
+
+<p>The module builds passwords using the following process.</p>
+
+<p>First, a set of words are randomly chosen from the word source. Then, two pseudo-words made of one or more digits may added before and/or after the words from. Next, a separator character may be placed between all the words (including the groups of digits), and one or more occurrences of a padding symbol may be added front and/or back.</p>
+
+<p>You can envisage the process as follows:</p>
+
+<pre><code>    correct HORSE BATTERY staple
+    34 correct HORSE BATTERY staple 56
+    34-correct-HORSE-BATTERY-staple-56
+    !!34-correct-HORSE-BATTERY-staple-56!!
+    </code></pre>
+
+<p>Many aspects of this password generation process are configurable. You can control the length and number of words chosen, and what, if any, case transformations should be applied to those words, and how accented characters should be treated. How many, if any, digits should be added front and back. What symbol, if any, should be used as a separator. And finally how the password should be padded, if at all, and with what symbol. Passwords can be padded to a given length, or by a given number of symbols front and back.</p>
+
+<p>The symbols used as the separator and for padding can be explicitly specified, or the they can be randomly chosen from a given alphabet of possible symbols. Both symbols can be randomly chosen from the same alphabet, or from two separately specified alphabets.</p>
+
+<p>Every instance of an HSXKPasswd password generator stores its configuration as a set of name-value pairs, referred to as <i>configuration keys</i> throughout this documentation.</p>
+
+<p>Configurations can be specified either as a complete set of configuration keys with values that together form a valid configuration, as a named preset, or, as a named preset accompanied by a list of one or more configuration keys with new values to override those specified by the preset.</p>
+
+<p>The module contains a preset called <code>DEFAULT</code>, and this preset is used if no configuration is specified. The function <code>default_config()</code> will return a copy of this configuration as a reference to a hashtable.</p>
+
+<p>For more details on how to specify configurations, see the documentation for the constructor (the function <code>new()</code>) below.</p>
+
+<h3 id="Password-Generator-Configuration-Keys">Password Generator Configuration Keys</h3>
+
+<p>Below is a list of all the configuration keys that can be used to customise the password generation algorithm. Each configuration key is accompanied by a description of what aspect of the algorithm they control, and any validation rules that apply to the key.</p>
+
+<p>Note that some keys are always required, and that there are dependencies between keys. For examples, if you specify that the separator symbol should be chosen at random, you must also specify an alphabet from which the symbol should be randomly chosen.</p>
+
+<ul>
+
+<li><p><code>allow_accents</code> (optional) - if not specified, or if a falsy value is specified, accents will be removed from letters in the generated passwords. E.g. <code>&eacute;</code> becomes <code>e</code>. If a truthy value is specified, accents will be preserved, and appear in the generated passwords.</p>
+
+</li>
+<li><p><code>case_transform</code> (required) - the transformations, if any, that should be applied to the words that appear in the generated passwords. The value specified must be one of the following:</p>
+
+<ul>
+
+<li><p><code>ALTERNATE</code> - each alternate word will be converted to all upper case and all lower case.</p>
+
+</li>
+<li><p><code>CAPITALISE</code> - the first letter in every word will be converted to upper case, all other letters will be converted to lower case.</p>
+
+</li>
+<li><p><code>INVERT</code> - the first letter in every word will be converted to lower case, all other letters will be converted to upper case.</p>
+
+</li>
+<li><p><code>LOWER</code> - all letters in all the words will be converted to lower case. <b>Use of this option is strongly discouraged for security reasons.</b></p>
+
+</li>
+<li><p><code>NONE</code> - the case of the letters that make up the words will not be altered from how they were specified in the original word source.</p>
+
+</li>
+<li><p><code>RANDOM</code> - each word will be randomly converted to all upper case or all lower case.</p>
+
+</li>
+<li><p><code>UPPER</code> - all letters in all the words will be converted to upper case. <b>Use of this option is strongly discouraged for security reasons.</b></p>
+
+</li>
+</ul>
+
+<p>The function <code>default_config()</code> returns a value of <code>CAPITALISE</code> for this key.</p>
+
+</li>
+<li><p><code>character_substitutions</code> (optional) - a reference to a hashtable containing containing zero or more character substitutions to be applied to the randomly chosen words when generating passwords. The keys in the hashtable must be single letters. The substitutions can contain multiple characters. Specifying one or more substitutions with a length greater than one could lead to passwords being longer than expected, and to entropy calculations being under estimated. The module will issue a warning when such a config is loaded.</p>
+
+</li>
+<li><p><code>num_words</code> (required) - the number of words to randomly choose from the word source as the basis for the generated passwords.</p>
+
+<p>The function <code>default_config()</code> returns a value of <code>3</code> for this key.</p>
+
+</li>
+<li><p><code>pad_to_length</code> (conditionally required) - the length generated passwords must be padded to when using adaptive padding, i.e. when <code>padding_type</code> is set to <code>ADAPTIVE</code>). The value must be an integer greater than or equal to 12. Lengths of less than 12 are not permitted for security reasons.</p>
+
+</li>
+<li><p><code>padding_alphabet</code> (optional) - this key is ignored unless the configuration specifies that the padding character should be randomly chosen, i.e. unless <code>padding_character</code> is set to <code>RANDOM</code>.</p>
+
+<p>When the padding character is set to be randomly chosen, the module will check for the presence of this key. If it is specified, the padding character will be randomly chosen from the set of symbols defined by this key. If this key is not set, the module will use the set of symbols specified by the key <code>symbol_alphabet</code>. If neither this key nor <code>symbol_alphabet</code> are specified, then the configuration will be considered invalid.</p>
+
+<p>If specified, this key must be a reference to an array of single-character strings.</p>
+
+</li>
+<li><p><code>padding_character</code> (conditionally required) - this key is unless the key <code>padding_type</code> is set to <code>NONE</code>. It specifies the padding symbol to be used when generating passwords.</p>
+
+<p>If specified, they key&#39;s value must be a single character string, or one of the following special values:</p>
+
+<ul>
+
+<li><p><code>RANDOM</code> - the character should be randomly chosen from the set of characters specified by the key <code>padding_alphabet</code> or <code>symbol_alphabet</code>. If specified, <code>padding_alphabet</code> takes precedence over <code>symbol_alphabet</code>. If this value is specified for <code>padding_character</code>, and neither <code>padding_alphabet</code> nor <code>symbol_alphabet</code> are specified, the configuration will be considered invalid.</p>
+
+</li>
+<li><p><code>SEPARATOR</code> - pad the password with the same symbol that is used to separate the words. The key <code>padding_character</code> cannot be set to <code>SEPARATOR</code> when the key <code>separator_character</code> is set to <code>NONE</code>.</p>
+
+</li>
+</ul>
+
+<p>The function <code>default_config</code> return the value <code>RANDOM</code> for this key.</p>
+
+</li>
+<li><p><code>padding_characters_before</code> &amp; <code>padding_characters_after</code> (conditionally required) - both of these keys are required if the key <code>padding_type</code> is set to <code>FIXED</code>.</p>
+
+<p>These keys specify the number of padding symbols that should be added to the front and back of the password.</p>
+
+<p>Both keys require that the specified value be an integer greater than or equal to zero.</p>
+
+<p>The function <code>default_config()</code> returns a value of <code>2</code> for both of these keys.</p>
+
+</li>
+<li><p><code>padding_digits_before</code> &amp; <code>padding_digits_after</code> (required) - the number of random digits to include before and after the randomly chosen words when generating passwords.</p>
+
+<p>Both keys require that the specified value be an integer greater than or equal to zero.</p>
+
+<p>The function <code>default_config()</code> returns a value of <code>2</code> for both of these keys.</p>
+
+</li>
+<li><p><code>padding_type</code> (required) - the way in which padding symbols should be added when generating passwords.</p>
+
+<p>Only the following values are valid for this key:</p>
+
+<ul>
+
+<li><p><code>NONE</code> - do not add any padding symbols when generating passwords.</p>
+
+</li>
+<li><p><code>FIXED</code> - add an exactly specified number of copies of the padding symbol to the front and back of generated passwords.</p>
+
+<p>When they key <code>padding_type</code> is set to <code>FIXED</code>, the three keys <code>padding_character</code>, <code>padding_characters_before</code> &amp; <code>padding_characters_after</code> become required.</p>
+
+</li>
+<li><p><code>ADAPTIVE</code> - add no copies of the padding symbol will be added to the front of the generated passwords, and copies of the padding character will be added to the end of the generated passwords until the total length of the password is equal to the value specified for the key <code>pad_to_length</code>.</p>
+
+<p>Note that If the password is longer than the value specified by the key <code>pad_to_length</code> before any copies of the padding symbol are added, the password will be truncated to the length specified by the key <code>pad_to_length</code>.</p>
+
+<p>When they key <code>padding_type</code> is set to <code>ADAPTIVE</code>, the three keys <code>padding_character</code>, <code>padding_characters_before</code> &amp; <code>padding_characters_after</code> become required.</p>
+
+</li>
+</ul>
+
+<p>The function <code>default_config()</code> returns a value of <code>FIXED</code> for this key.</p>
+
+</li>
+<li><p><code>separator_alphabet</code> (optional) - this key is ignored unless the configuration specifies that the separator character should be randomly chosen, i.e. unless <code>separator_character</code> is set to <code>RANDOM</code>.</p>
+
+<p>When the separator character is set to be randomly chosen, the module will check for the presence of this key. If it is specified, the separator character will be randomly chosen from the set of symbols defined by this key. If this key is not set, the module will use the set of symbols specified by the key <code>symbol_alphabet</code>. If neither this key nor <code>symbol_alphabet</code> are specified, then the configuration will be considered invalid.</p>
+
+<p>If specified, this key must be a reference to an array of single-character strings.</p>
+
+</li>
+<li><p><code>separator_character</code> (required) - the symbol to use to separate the words when generating passwords.</p>
+
+<p>The value specified for this key must be a single-character string, or one of the following special values:</p>
+
+<ul>
+
+<li><p><code>NONE</code> - no separator character will be used. I.e. the words, and the groups of digits before and after the words, if any, will be directly joined together.</p>
+
+<p><code>RANDOM</code> - a single character will be randomly chosen from the list of symbols specified by one of the keys <code>separator_alphabet</code> or <code>symbol_alphabet</code>. If both keys are set, <code>separator_alphabet</code> takes precedence.</p>
+
+</li>
+</ul>
+
+<p>The function <code>default_config()</code> returns a value of <code>RANDOM</code> for this key.</p>
+
+</li>
+<li><p><code>symbol_alphabet</code> (optional) - this key specifies a default alphabet of symbols that can be used when either or both the separator character and the padding character are set to be chosen at random. I.e. when either or both of the keys <code>separator_character</code> and <code>padding_character</code> are set to <code>RANDOM</code>.</p>
+
+<p>Note that the keys <code>separator_alphabet</code> and <code>padding_alphabet</code> take precedence over this key if specified.</p>
+
+<p>The value specified for this key must be a reference to an array of single-character strings.</p>
+
+<p>The function <code>default_config()</code> returns a value of <code>[&#39;!&#39;, &#39;@&#39;, &#39;$&#39;, &#39;%&#39;, &#39;^&#39;, &#39;&amp;&#39;, &#39;*&#39;, &#39;-&#39;, &#39;_&#39;, &#39;+&#39;, &#39;=&#39;, &#39;:&#39;, &#39;|&#39;, &#39;~&#39;, &#39;?&#39;, &#39;/&#39;, &#39;.&#39;, &#39;;&#39;]</code> for this key.</p>
+
+</li>
+<li><p><code>word_length_min</code> &amp; <code>word_length_max</code> (required) - the minimum and maximum length of the words that will form the basis of the generated passwords.</p>
+
+<p>The values specified for both keys must be integers greater than three, and the value specified for <code>word_length_max</code> must be greater than or equal to the value specified for <code>word_length_min</code>.</p>
+
+<p>The function <code>default_config()</code> returns values of <code>4</code> and <code>8</code> for these keys.</p>
 
 </li>
 </ul>
 
 <h2 id="PRESETS">PRESETS</h2>
 
-<p>For ease of use, this module comes with a set of pre-defined presets which can be passed by name to the functional interface, and the constructor.</p>
+<p>Below is a list of all the presets defined by this module.</p>
 
-<p>Presets can be used as-is, or, they can be used as a starting point for creating your own config hashref, as demonstrated by the following example:</p>
-
-<pre><code>    my $config = Crypt::HSXKPasswd-&gt;preset_config(&#39;XKCD&#39;);
-    $config-&gt;{separator_character} = q{ }; # change the separator to a space
-    my $hsxkpasswd = Crypt::HSXKPasswd-&gt;new(config =&gt; $config);
-    </code></pre>
-
-<p>If you only wish to alter a small number of config settings, the following two shortcuts might be of interest (both produce the same result as the example above):</p>
-
-<pre><code>    my $config = Crypt::HSXKPasswd-&gt;preset_config(&#39;XKCD&#39;, {separator_character =&gt; q{ }});
-    my $hsxkpasswd = Crypt::HSXKPasswd-&gt;new(config =&gt; $config);
-    </code></pre>
-
-<p>or</p>
-
-<pre><code>    my $hsxkpasswd = Crypt::HSXKPasswd-&gt;new(
-        preset =&gt; &#39;XKCD&#39;,
-        preset_overrides =&gt; {separator_character =&gt; q{ }}
-    );</code></pre>
-
-<p>For more see the definitions for the class functions <code>defined_presets()</code>, <code>presets_to_string()</code>, <code>preset_description()</code>, and <code>preset_config()</code>.</p>
-
-<p>The following presets are defined:</p>
+<p>This information can be accessed programatically using the functions <code>defined_presets()</code>, <code>presets_to_string()</code>, <code>preset_description()</code>, and <code>preset_config()</code>.</p>
 
 <ul>
 
-<li><p><code>APPLEID</code> - a preset respecting the many prerequisites Apple places on Apple ID passwords. Apple&#39;s official password policy is located here: <a href="http://support.apple.com/kb/ht4232">http://support.apple.com/kb/ht4232</a>. Note that Apple&#39;s knowledge base article omits to mention that passwords can&#39;t be longer than 32 characters. This preset is also configured to use only characters that are easy to type on the standard iOS keyboard, i.e. those appearing on the letters keyboard (<code>ABC</code>) or the numbers keyboard <code>.?123</code>, and not those on the harder to reach symbols keyboard <code>#+=</code>. Below is a sample password generated with this preset:</p>
+<li><p><code>APPLEID</code> - a preset respecting the many prerequisites Apple places on Apple ID passwords. Apple&#39;s official password policy cam be found at the following URL: <a href="http://support.apple.com/kb/ht4232">http://support.apple.com/kb/ht4232</a>. Note that Apple&#39;s knowledge base article omits to mention that passwords can&#39;t be longer than 32 characters. This preset is also configured to use only characters that are easy to type on the standard iOS keyboard, i.e. those appearing on the letters keyboard (<code>ABC</code>) or the numbers keyboard <code>.?123</code>, and not those on the harder to reach symbols keyboard <code>#+=</code>.</p>
 
-<pre><code>    @60:london:TAUGHT:forget:70@</code></pre>
+<p>Sample Password:</p>
+
+<pre><code>    @60:london:TAUGHT:forget:70@
+    </code></pre>
+
+<p>Preset Definition:</p>
+
+<pre><code>    {
+        padding_alphabet =&gt; [qw{! ? @ &amp;}],
+        separator_alphabet =&gt; [qw{- : .}, q{,}],
+        word_length_min =&gt; 5,
+        word_length_max =&gt; 7,
+        num_words =&gt; 3,
+        separator_character =&gt; &#39;RANDOM&#39;,
+        padding_digits_before =&gt; 2,
+        padding_digits_after =&gt; 2,
+        padding_type =&gt; &#39;FIXED&#39;,
+        padding_character =&gt; &#39;RANDOM&#39;,
+        padding_characters_before =&gt; 1,
+        padding_characters_after =&gt; 1,
+        case_transform =&gt; &#39;RANDOM&#39;,
+        allow_accents =&gt; 0,
+    }</code></pre>
 
 </li>
-<li><p><code>DEFAULT</code> - the default configuration. Below is a sample password generated with this preset:</p>
+<li><p><code>DEFAULT</code> - the default configuration.</p>
 
-<pre><code>    ~~12:settle:SUCCEED:summer:48~~</code></pre>
+<p>Sample Password:</p>
+
+<pre><code>    ~~12:settle:SUCCEED:summer:48~~
+    </code></pre>
+
+<p>Preset Definition:</p>
+
+<pre><code>    {
+        symbol_alphabet =&gt; [qw{! @ $ % ^ &amp; * - _ + = : | ~ ? / . ;}],
+        word_length_min =&gt; 4,
+        word_length_max =&gt; 8,
+        num_words =&gt; 3,
+        separator_character =&gt; &#39;RANDOM&#39;,
+        padding_digits_before =&gt; 2,
+        padding_digits_after =&gt; 2,
+        padding_type =&gt; &#39;FIXED&#39;,
+        padding_character =&gt; &#39;RANDOM&#39;,
+        padding_characters_before =&gt; 2,
+        padding_characters_after =&gt; 2,
+        case_transform =&gt; &#39;ALTERNATE&#39;,
+        allow_accents =&gt; 0,
+    }</code></pre>
 
 </li>
-<li><p><code>NTLM</code> - a preset for 14 character NTMLv1 (NTLM Version 1) passwords. ONLY USE THIS PRESET IF YOU MUST! The 14 character limit does not allow for sufficient entropy in the case where the attacker knows the dictionary and config used to generate the password, hence this preset will generate low entropy warnings. Below is a sample password generated with this preset:</p>
+<li><p><code>NTLM</code> - a preset for 14 character NTMLv1 (NTLM Version 1) passwords. <b>ONLY USE THIS PRESET IF YOU MUST!</b> The 14 character limit does not allow for sufficient entropy in scenarios where the attacker knows the dictionary and config used to generate the password. Use of this preset will generate a low entropy warning.</p>
 
-<pre><code>    0=mAYAN=sCART@</code></pre>
+<p>Sample Password:</p>
+
+<pre><code>    0=mAYAN=sCART@
+    </code></pre>
+
+<p>Preset Definition:</p>
+
+<pre><code>    {
+        padding_alphabet =&gt; [qw{! @ $ % ^ &amp; * + = : | ~ ?}],
+        separator_alphabet =&gt; [qw{- + = . * _ | ~}, q{,}],
+        word_length_min =&gt; 5,
+        word_length_max =&gt; 5,
+        num_words =&gt; 2,
+        separator_character =&gt; &#39;RANDOM&#39;,
+        padding_digits_before =&gt; 1,
+        padding_digits_after =&gt; 0,
+        padding_type =&gt; &#39;FIXED&#39;,
+        padding_character =&gt; &#39;RANDOM&#39;,
+        padding_characters_before =&gt; 0,
+        padding_characters_after =&gt; 1,
+        case_transform =&gt; &#39;INVERT&#39;,
+        allow_accents =&gt; 0,
+    }</code></pre>
 
 </li>
-<li><p><code>SECURITYQ</code> - a preset for creating fake answers to security questions. It generates long nonsense sentences ending in <code>.</code> <code>!</code> or <code>?</code>, for example:</p>
+<li><p><code>SECURITYQ</code> - a preset for creating fake answers to security questions. This preset generates long nonsense sentences ending in <code>.</code> <code>!</code> or <code>?</code>.</p>
 
-<pre><code>    Wales outside full month minutes gentle?</code></pre>
+<p>Sample &#39;Password&#39;:</p>
+
+<pre><code>    Wales outside full month minutes gentle?
+    </code></pre>
+
+<p>Preset Definition:</p>
+
+<pre><code>    {
+        word_length_min =&gt; 4,
+        word_length_max =&gt; 8,
+        num_words =&gt; 6,
+        separator_character =&gt; q{ },
+        padding_digits_before =&gt; 0,
+        padding_digits_after =&gt; 0,
+        padding_type =&gt; &#39;FIXED&#39;,
+        padding_character =&gt; &#39;RANDOM&#39;,
+        padding_alphabet =&gt; [qw{. ! ?}],
+        padding_characters_before =&gt; 0,
+        padding_characters_after =&gt; 1,
+        case_transform =&gt; &#39;NONE&#39;,
+        allow_accents =&gt; 0,
+    }</code></pre>
 
 </li>
-<li><p><code>WEB16</code> - a preset for websites that don&#39;t allow more than 16 character long passwords. Because 16 characters is not very long, a large set of symbols are chosen from for the padding and separator. Below is a sample password generated with this preset:</p>
+<li><p><code>WEB16</code> - a preset for websites that don&#39;t allow passwords to be longer than 16 characters. Because 16 characters is not very long, a large symbol alphabet had to be used to provide sufficient entropy.</p>
+
+<p>Sample Password:</p>
 
 <pre><code>    :baby.ohio.DEAR:
     </code></pre>
 
-</li>
-<li><p><code>WEB32</code> - a preset for websites that don&#39;t allow more than 32 character long passwords. Below is a sample password generated with this preset:</p>
+<p>Preset Definition:</p>
 
-<pre><code>    +93-took-CASE-money-AHEAD-31+</code></pre>
-
-</li>
-<li><p><code>WIFI</code> - a preset for generating 63 character long WPA2 keys (most routers allow 64 characters, but some only 63, hence the odd length). Below is a sample password generated with this preset:</p>
-
-<pre><code>    2736_ITSELF_PARTIAL_QUICKLY_SCOTLAND_wild_people_7441!!!!!!!!!!</code></pre>
-
-</li>
-<li><p><code>XKCD</code> - a preset inspired by the original XKCD comic (<a href="http://xkcd.com/936/">http://xkcd.com/936/</a>), but with some alterations to provide sufficient entropy to avoid low entropy warnings. Below is a sample password generated with this preset:</p>
-
-<pre><code>    KING-madrid-exercise-BELGIUM</code></pre>
-
-</li>
-</ul>
-
-<h2 id="ENTROPY-CHECKING">ENTROPY CHECKING</h2>
-
-<p>For security reasons, this module&#39;s default behaviour is to warn (using <code>carp()</code>) when ever the loaded combination dictionary file and configuration would result in low-entropy passwords. When the constructor is invoked, or when a new dictionary file or new config hashref are loaded into an object (using <code>dictionary()</code> or <code>config()</code>) the entropy of the resulting new state of the object is calculated and checked against the defined minima.</p>
-
-<p>Entropy is calculated and checked for two scenarios. Firstly, for the best-case scenario, when an attacker has no prior knowledge about the password, and must resort to brute-force attacks. And secondly, for the worst-case scenario, when the attacker is assumed to know that this module was used to generate the password, and, that the attacker has a copy of the dictionary file and config settings used to generate the password.</p>
-
-<p>Entropy checking is controlled via three package variables:</p>
-
-<ul>
-
-<li><p><code>$Crypt::HSXKPasswd::ENTROPY_MIN_BLIND</code> - the minimum acceptable entropy (in bits) for a brute-force attack. The default value for this variable is 78 (equivalent to a 12 character password consisting of mixed-case letters, digits, and symbols).</p>
-
-</li>
-<li><p><code>$Crypt::HSXKPasswd::ENTROPY_MIN_SEEN</code> - the minimum acceptable entropy (in bits) for a worst-case attack (where the dictionary and configuration are known). The default value for this variable is 52 (equivalent to an 8 character password consisting of mixed-case letters, digits, and symbols).</p>
-
-</li>
-<li><p><code>$Crypt::HSXKPasswd::SUPRESS_ENTROPY_WARNINGS</code> - this variable can be used to suppress one or both of the entropy warnings. The following values are valid (invalid values are treated as being <code>NONE</code>):</p>
-
-<dl>
-
-<dt id="pod10">-</dt>
-<dd>
-
-<p><code>NONE</code> - no warnings are suppressed. This is the default value.</p>
-
-</dd>
-<dt id="pod11">-</dt>
-<dd>
-
-<p><code>SEEN</code> - only warnings for the worst-case scenario are suppressed.</p>
-
-</dd>
-<dt id="pod12">-</dt>
-<dd>
-
-<p><code>BLIND</code> - only warnings for the best-case scenario are suppressed.</p>
-
-</dd>
-<dt id="pod13">-</dt>
-<dd>
-
-<p><code>ALL</code> - all entropy warnings are suppressed.</p>
-
-</dd>
-</dl>
-
-</li>
-</ul>
-
-<h3 id="CAVEATS">CAVEATS</h3>
-
-<p>The entropy calculations make some assumptions which may in some cases lead to the results being inaccurate. In general, an attempt has been made to always round down, meaning that in reality the entropy of the produced passwords may be higher than the values calculated by the package.</p>
-
-<p>When calculating the entropy for brute force attacks on configurations that can result in variable length passwords, the shortest possible password is assumed.</p>
-
-<p>When calculating the entropy for brute force attacks on configurations that contain at least one symbol, it is assumed that an attacker would have to brute-force-check 33 symbols. This is the same value used by Steve Gibson&#39;s <i>Password Haystacks</i> calculator (<a href="https://www.grc.com/haystack.htm">https://www.grc.com/haystack.htm</a>).</p>
-
-<p>When calculating the entropy for worst-case attacks on configurations that contain symbol substitutions where the replacement is more than 1 character long the possible extra length is ignored.</p>
-
-<h2 id="RANDOM-NUMBER-SOURCES">RANDOM NUMBER SOURCES</h2>
-
-<p>In order to minimise the number of non-standard modules this module requires, the default source of randomness is Perl&#39;s built-in <code>rand()</code> function. This provides a reasonable level of randomness, and should suffice for most users, however, some users will prefer to make use of one of the many advanced randomisation modules in CPAN, or, reach out to a web service like <a href="http://random.org">http://random.org</a> for their random numbers. To facilitate both of these options, this module uses a cache of randomness, and provides an abstract Random Number Generator (RNG) class that can be extended.</p>
-
-<p>The module can use an instance of any class that extends <code>Crypt::HSXKPasswd::RNG</code> as it&#39;s source of randomness. Custom RNG classes must implement the method <code>random_numbers()</code> which will be invoked on an instance of the class and passed one argument, the number of random numbers required to generate a single password. The function must return an array of random numbers between 0 and 1. The number of random numbers returned is entirely up to the module to decide. The number required for a single password is passed purely as a guide. The function must always return at least one random number.</p>
-
-<p>The module ships with five standard RNGs (described below).</p>
-
-<p>By default, the module will try to use one of the following four RNGs, listed from most to least preferred, depending on what is available on the system:</p>
-
-<ol>
-
-<li><p><code>Crypt::HSXKPasswd::RNG::Math_Random_Secure</code> (only available if <code>Math::Random::Secure</code> is installed on the system).</p>
-
-</li>
-<li><p><code>Crypt::HSXKPasswd::RNG::Data_Entropy</code> (only available if <code>Data::Entropy::Algorithms</code> is installed on the system).</p>
-
-</li>
-<li><p><code>Crypt::HSXKPasswd::RNG::DevUrandom</code> (only available on Linux/Unix systems with a <code>/dev/urandom</code>).</p>
-
-</li>
-<li><p><code>Crypt::HSXKPasswd::RNG::Basic</code> (available on all systems because it uses Perl&#39;s built-in <code>rand()</code> function).</p>
-
-</li>
-</ol>
-
-<p>If the constructor is called without specifying an RNG, and if the only available RNG is <code>Crypt::HSXKPasswd::RNG::Basic</code>, a warning will be thrown suggesting installing <code>Math::Random::Secure</code> or <code>Data::Entropy::Algorithms</code>.</p>
-
-<p>The module also ships with a fifth RNG, <code>Crypt::HSXKPasswd::RNG::RandomDotOrg</code>, but this one must be explicitly used, the constructor will never used it by default. As its name suggests, this class uses <a href="http://Random.Org/">http://Random.Org/</a>&#39;s HTTP API to generate random numbers.</p>
-
-<p>To explicitly use any particular RNG, create an instance of it, and either pass that instance to the constructor with the named argument <code>rng</code>, or, set the RNG after instantiating the object using the <code>rng()</code> function.</p>
-
-<h3 id="Crypt::HSXKPasswd::RNG::Math_Random_Secure">Crypt::HSXKPasswd::RNG::Math_Random_Secure</h3>
-
-<pre><code>    my $rng = Crypt::HSXKPasswd::RNG::Math_Random_Secure-&gt;new();</code></pre>
-
-<p>This is the preferred RNG because it is both fast and secure, but, it requires the non-standard module <code>Math::Random::Secure</code> (<a href="http://search.cpan.org/perldoc?Math%3A%3ARandom%3A%3ASecure">http://search.cpan.org/perldoc?Math%3A%3ARandom%3A%3ASecure</a>) be installed.</p>
-
-<h3 id="Crypt::HSXKPasswd::RNG::Data_Entropy">Crypt::HSXKPasswd::RNG::Data_Entropy</h3>
-
-<pre><code>    my $rng = Crypt::HSXKPasswd::RNG::Data_Entropy-&gt;new();</code></pre>
-
-<p>This RNG is secure, but it is quite slow (about six times slower than <code>Crypt::HSXKPasswd::RNG::Math_Random_Secure</code>), and it requires the non-standard module <code>Data::Entropy::Algorithms</code> (<a href="http://search.cpan.org/perldoc?Data%3A%3AEntropy%3A%3AAlgorithms">http://search.cpan.org/perldoc?Data%3A%3AEntropy%3A%3AAlgorithms</a>) be installed.</p>
-
-<h3 id="Crypt::HSXKPasswd::RNG::DevUrandom">Crypt::HSXKPasswd::RNG::DevUrandom</h3>
-
-<pre><code>    my $rng = Crypt::HSXKPasswd::RNG::DevUrandom-&gt;new();
+<pre><code>    {
+        padding_alphabet =&gt; [qw{! @ $ % ^ &amp; * + = : | ~ ?}],
+        separator_alphabet =&gt; [qw{- + = . * _ | ~}, q{,}],
+        word_length_min =&gt; 4,
+        word_length_max =&gt; 4,
+        num_words =&gt; 3,
+        separator_character =&gt; &#39;RANDOM&#39;,
+        padding_digits_before =&gt; 0,
+        padding_digits_after =&gt; 0,
+        padding_type =&gt; &#39;FIXED&#39;,
+        padding_character =&gt; &#39;RANDOM&#39;,
+        padding_characters_before =&gt; 1,
+        padding_characters_after =&gt; 1,
+        case_transform =&gt; &#39;RANDOM&#39;,
+        allow_accents =&gt; 0,
+    }
     </code></pre>
 
-<p>This RNG is secure and relatively fast (faster than <code>Crypt::HSXKPasswd::RNG::Data_Entropy</code> but slower than <code>Crypt::HSXKPasswd::RNG::Math_Random_Secure</code>), but is only available on Linux/Unix systems with a <code>/dev/urandom</code> special file.</p>
+</li>
+<li><p><code>WEB32</code> - a preset for websites that don&#39;t allow passwords to be longer than 32 characters.</p>
 
-<h3 id="Crypt::HSXKPasswd::RNG::Basic">Crypt::HSXKPasswd::RNG::Basic</h3>
+<p>Sample Password:</p>
 
-<pre><code>    my $rng = Crypt::HSXKPasswd::RNG::Basic-&gt;new();
+<pre><code>    +93-took-CASE-money-AHEAD-31+
     </code></pre>
 
-<p>This RNG uses Perl&#39;s built-in <code>rand()</code> function as its source of randomness, and this is sub-optimal. The Perl docs warn that <code>rand()</code> is not a particularly good source of random numbers, and advises against its use for cryptography.</p>
+<p>Preset Definition:</p>
 
-<p>This RNG provides a base-line, and should only be used if none of the better RNGs are available. While it is sub-optimal, it will still generate passwords with sufficient entropy in most situations. Ultimately, even using this imperfect RNG, this module will still produce passwords that are much better than those produced by the human imagination!</p>
-
-<h3 id="Crypt::HSXKPasswd::RNG::RandomDotOrg">Crypt::HSXKPasswd::RNG::RandomDotOrg</h3>
-
-<pre><code>    my $rng = Crypt::HSXKPasswd::RNG::RandomDotOrg-&gt;new(&#39;my.address@my.dom&#39;);
-    my $rng = Crypt::HSXKPasswd::RNG::RandomDotOrg-&gt;new(&#39;my.address@my.dom&#39;,
-        timeout =&gt; 180,
-        num_passwords =&gt; 3,
-    );</code></pre>
-
-<p>This RNG serves as a usable example of an RNG that queries a web service. As its name suggests, this class uses <a href="http://Random.Org/">http://Random.Org/</a>&#39;s HTTP API to generate random numbers.</p>
-
-<p>In order to comply with Random.Org&#39;s client guidelines (<a href="https://www.random.org/clients/">https://www.random.org/clients/</a>), this module requires that a valid email address be passed as the first argument.</p>
-
-<p>The client guidelines also request that clients use long timeouts, and batch their requests. They prefer to be asked for more number less frequently than less numbers more frequently. For this reason the class&#39;s default behaviour is to use a timeout of 180 seconds, and to request enough random numbers to generate three passwords at a time.</p>
-
-<p>These defaults can be overridden by passing named arguments to the constructor after the email address. The following named arguments are supported:</p>
-
-<ul>
-
-<li><p><code>timeout</code> - the timeout to use when making HTTP requests to Random.Org in seconds (the default is 180).</p>
+<pre><code>    {
+        padding_alphabet =&gt; [qw{! @ $ % ^ &amp; * + = : | ~ ?}],
+        separator_alphabet =&gt; [qw{- + = . * _ | ~}, q{,}],
+        word_length_min =&gt; 4,
+        word_length_max =&gt; 5,
+        num_words =&gt; 4,
+        separator_character =&gt; &#39;RANDOM&#39;,
+        padding_digits_before =&gt; 2,
+        padding_digits_after =&gt; 2,
+        padding_type =&gt; &#39;FIXED&#39;,
+        padding_character =&gt; &#39;RANDOM&#39;,
+        padding_characters_before =&gt; 1,
+        padding_characters_after =&gt; 1,
+        case_transform =&gt; &#39;ALTERNATE&#39;,
+        allow_accents =&gt; 0,
+    }</code></pre>
 
 </li>
-<li><p><code>num_passwords</code> - the number of password generations to fetch random numbers for per request from Random.org. This value is in effect a multiplier for the value passed to the <code>random_numbers()</code> function by <code>Crypt::HSXKPasswd</code>.</p>
+<li><p><code>WIFI</code> - a preset for generating 63 character long WPA2 keys (most routers allow 64 characters, but some only allow 63, hence the somewhat unexpected length).</p>
 
-<p><code>num_absolute</code> - the absolute number of random numbers to fetch per request to Random.Org. This argument takes precedence over <code>num_passwords</code>.</p>
+<p>Sample Password:</p>
+
+<pre><code>    2736_ITSELF_PARTIAL_QUICKLY_SCOTLAND_wild_people_7441!!!!!!!!!!
+    </code></pre>
+
+<p>Preset Definition:</p>
+
+<pre><code>    {
+        padding_alphabet =&gt; [qw{! @ $ % ^ &amp; * + = : | ~ ?}],
+        separator_alphabet =&gt; [qw{- + = . * _ | ~}, q{,}],
+        word_length_min =&gt; 4,
+        word_length_max =&gt; 8,
+        num_words =&gt; 6,
+        separator_character =&gt; &#39;RANDOM&#39;,
+        padding_digits_before =&gt; 4,
+        padding_digits_after =&gt; 4,
+        padding_type =&gt; &#39;ADAPTIVE&#39;,
+        padding_character =&gt; &#39;RANDOM&#39;,
+        pad_to_length =&gt; 63,
+        case_transform =&gt; &#39;RANDOM&#39;,
+        allow_accents =&gt; 0,
+    }</code></pre>
 
 </li>
-</ul>
+<li><p><code>XKCD</code> - a preset inspired by the original XKCD comic (<a href="http://xkcd.com/936/">http://xkcd.com/936/</a>), but with some alterations to provide sufficient entropy to avoid low entropy warnings.</p>
 
-<p><code>num_passwords</code> and <code>num_absolute</code> should not be used together, but if they are, <code>num_absolute</code> use used, and <code>num_passwords</code> is ignored.</p>
+<p>Sample Password:</p>
 
-<p>This class requires a number of modules not used by any other classes under <code>Crypt::HSXKPasswd</code>, and not listed in that module&#39;s requirements. If all of the following modules are not installed, the constructor will croak:</p>
+<pre><code>    KING-madrid-exercise-BELGIUM
+    </code></pre>
 
-<ul>
+<p>Preset Definition:</p>
 
-<li><p><code>Email::Valid</code></p>
-
-</li>
-<li><p><code>LWP::UserAgent</code></p>
-
-</li>
-<li><p><code>Mozilla::CA</code></p>
-
-</li>
-<li><p><code>URI</code></p>
+<pre><code>    {
+        word_length_min =&gt; 4,
+        word_length_max =&gt; 8,
+        num_words =&gt; 4,
+        separator_character =&gt; q{-},
+        padding_digits_before =&gt; 0,
+        padding_digits_after =&gt; 0,
+        padding_type =&gt; &#39;NONE&#39;,
+        case_transform =&gt; &#39;RANDOM&#39;,
+        allow_accents =&gt; 0,
+    }</code></pre>
 
 </li>
 </ul>
@@ -840,13 +1061,13 @@
 
 <p>The constructor must be called via the package name.</p>
 
-<p>If called with no arguments the constructor will use an instance of <code>Crypt::HSXKPasswd::Dictionary::EN_Default</code> as the word source, the preset <code>DEFAULT</code>, and an instance of the class <code>Crypt::HSXKPasswd::RNG::Basic</code> to generate random numbers.</p>
+<p>If called with no arguments the constructor will use an instance of <code>Crypt::HSXKPasswd::Dictionary::EN</code> as the word source, the preset <code>DEFAULT</code>, and an instance of the class <code>Crypt::HSXKPasswd::RNG::Basic</code> to generate random numbers.</p>
 
 <p>The function accepts named arguments to allow for custom specification of the word source, config, and random number source.</p>
 
-<h3 id="CUSTOM-WORD-SOURCES-IN-CONSTRUCTOR">CUSTOM WORD SOURCES IN CONSTRUCTOR</h3>
+<h3 id="Specifying-Custom-Word-Sources">Specifying Custom Word Sources</h3>
 
-<p>Three named arguments can be used to specify a word source, but only one should be specified at a time. If multiple are specified, the one with the highest priority will be used, and the rest ignored. The variables are listd below in descending order of priority:</p>
+<p>Three named arguments can be used to specify a word source, but only one should be specified at a time. If multiple are specified, the one with the highest priority will be used, and the rest ignored. The variables are listed below in descending order of priority:</p>
 
 <ul>
 
@@ -861,16 +1082,16 @@
 </li>
 </ul>
 
-<h3 id="CUSTOM-CONFIGS">CUSTOM CONFIGS</h3>
+<h3 id="Specifying-Custom-Password-Generator-Configurations">Specifying Custom Password Generator Configurations</h3>
 
-<p>Two primary named arguments can be used to specify the config the instance should use to generate passwords. Only one should be specified at a time. If multiple are specified, the one with the highest priority will be used, and the rest ignored. The variables are listd below in descending order of priority:</p>
+<p>Two primary named arguments can be used to specify the config the instance should use to generate passwords. Only one should be specified at a time. If multiple are specified, the one with the highest priority will be used, and the rest ignored. The variables are listed below in descending order of priority:</p>
 
 <ul>
 
 <li><p><code>config</code> - a valid config hashref.</p>
 
 </li>
-<li><p><code>config_json</code> - a JSON string representing a valid config hashref. If you use this named argument on a system where the standard Perl JSON library <a href="http://search.cpan.org/perldoc?JSON">http://search.cpan.org/perldoc?JSON</a> is not installed, the constructor will croak.</p>
+<li><p><code>config_json</code> - a JSON string representing a valid config hashref.</p>
 
 <p>This named argument provides a convenient way to use configs generated using the web interface at <a href="https://xkpasswd.net/">https://xkpasswd.net/</a>. The Save/Load tab in that interface saves and loads configs in JSON format.</p>
 
@@ -880,148 +1101,15 @@
 </li>
 </ul>
 
-<h3 id="CUSTOM-RANDOM-NUMBER-GENERATORS">CUSTOM RANDOM NUMBER GENERATORS</h3>
+<h3 id="Specifying-Custom-Random-Number-Generators">Specifying Custom Random Number Generators</h3>
 
 <p>A custom RNG can be specified using the named argument <code>rng</code>. The passed value must be an instance of a class that extends <code>Crypt::HSXKPasswd::RNG</code> and overrides the function <code>random_numbers()</code>.</p>
 
-<h2 id="CLASS-METHODS">CLASS METHODS</h2>
+<h2 id="INSTANCE-METHODS">INSTANCE METHODS</h2>
 
-<p><b>NOTE</b> - All class methods must be invoked via the package name, or they will croak.</p>
+<p><b>NOTE</b> - all instance methods must be invoked on a Crypt::HSXKPasswd object or they will croak.</p>
 
-<h3 id="clone_config">clone_config()</h3>
-
-<pre><code>    my $clone = Crypt::HSXKPasswd-&gt;clone_config($config);
-    </code></pre>
-
-<p>This function must be passed a valid config hashref as the first argument or it will croak. The function returns a hashref.</p>
-
-<h3 id="config_stats">config_stats()</h3>
-
-<pre><code>    my %stats = Crypt::HSXKPasswd-&gt;config_stats($config);
-    </code></pre>
-
-<p>This function requires one argument, a valid config hashref. It returns a hash of statistics about a given configuration. The hash is indexed by the following:</p>
-
-<ul>
-
-<li><p><code>length_min</code> - the minimum length a password generated with the given config could be.</p>
-
-</li>
-<li><p><code>length_max</code> - the maximum length a password generated with the given config could be. (see caveat below)</p>
-
-</li>
-<li><p><code>random_numbers_required</code> - the amount of random numbers needed to generate a password using the given config.</p>
-
-</li>
-</ul>
-
-<p>There is one scenario in which the calculated maximum length will not be reliably accurate, and that&#39;s when a character substitution with a length greater than 1 is specified, and <code>padding_type</code> is not set to <code>ADAPTIVE</code>. If the config passed contains such a character substitution, the length will be calculated ignoring the possibility that one or more extra characters could be introduced depending on how many, if any, of the long substitutions get triggered by the randomly chosen words. If this happens the function will also carp with a warning.</p>
-
-<h3 id="config_to_json">config_to_json()</h3>
-
-<pre><code>    my $config_json_string = Crypt::HSXKPasswd-&gt;config_to_json($config);
-    </code></pre>
-
-<p>This function returns a JSON representation of the passed config hashref as a scalar string.</p>
-
-<p>The function must be passed a valid config hashref or it will croak. This function will also croak if called without the standard JSON Perl module (<a href="http://search.cpan.org/perldoc?JSON">http://search.cpan.org/perldoc?JSON</a>) installed.</p>
-
-<h3 id="config_to_string">config_to_string()</h3>
-
-<pre><code>    my $config_string = Crypt::HSXKPasswd-&gt;config_to_string($config);
-    </code></pre>
-
-<p>This function returns the content of the passed config hashref as a scalar string. The function must be passed a valid config hashref or it will croak.</p>
-
-<h3 id="default_config">default_config()</h3>
-
-<pre><code>    my $config = Crypt::HSXKPasswd-&gt;default_config();</code></pre>
-
-<p>This function returns a hashref containing a config with default values.</p>
-
-<p>This function can optionally be called with a single argument, a hashref containing keys with values to override the defaults with.</p>
-
-<pre><code>    my $config = Crypt::HSXKPasswd-&gt;default_config({num_words =&gt; 3});
-    </code></pre>
-
-<p>When overrides are present, the function will carp if an invalid key or value is passed, and croak if the resulting merged config is invalid.</p>
-
-<p>This function is a shortcut for <code>preset_config()</code>, and the two examples above are equivalent to the following:</p>
-
-<pre><code>    my $config = Crypt::HSXKPasswd-&gt;preset_config(&#39;DEFAULT&#39;);
-    my $config = Crypt::HSXKPasswd-&gt;preset_config(&#39;DEFAULT&#39;, {num_words =&gt; 3});</code></pre>
-
-<h3 id="defined_presets">defined_presets()</h3>
-
-<pre><code>    my @preset_names = Crypt::HSXKPasswd-&gt;defined_presets();
-    </code></pre>
-
-<p>This function returns the list of defined preset names as an array of scalars.</p>
-
-<h3 id="is_valid_config">is_valid_config()</h3>
-
-<pre><code>    my $is_ok = Crypt::HSXKPasswd-&gt;is_valid_config($config);
-    </code></pre>
-
-<p>This function must be passed a hashref to test as the first argument or it will croak. The function returns 1 if the passed config is valid, and 0 otherwise.</p>
-
-<p>Optionally, any truthy value can be passed as a second argument to indicate that the function should croak on invalid configs rather than returning 0;</p>
-
-<pre><code>    use English qw( -no_match_vars );
-    eval{
-        Crypt::HSXKPasswd-&gt;is_valid_config($config, &#39;do_croak&#39;);
-    }or do{
-        print &quot;ERROR - config is invalid because: $EVAL_ERROR\n&quot;;
-    }</code></pre>
-
-<h3 id="preset_config">preset_config()</h3>
-
-<pre><code>    my $config = Crypt::HSXKPasswd-&gt;preset_config(&#39;XKCD&#39;);
-    </code></pre>
-
-<p>This function returns the config hashref for a given preset. See above for the list of available presets.</p>
-
-<p>The first argument this function accepts is the name of the desired preset as a scalar. If an invalid name is passed, the function will carp. If no preset is passed the preset <code>DEFAULT</code> is assumed.</p>
-
-<p>This function can optionally accept a second argument, a hashref containing keys with values to override the defaults with.</p>
-
-<pre><code>    my $config = Crypt::HSXKPasswd-&gt;preset_config(&#39;XKCD&#39;, {case_transform =&gt; &#39;INVERT&#39;});
-    </code></pre>
-
-<p>When overrides are present, the function will carp if an invalid key or value is passed, and croak if the resulting merged config is invalid.</p>
-
-<h3 id="presets_json">presets_json()</h3>
-
-<pre><code>    my $json_string = Crypt::HSXKPasswd-&gt;presets_json();
-    </code></pre>
-
-<p>This function returns a JSON string representing all the defined configs, including their descriptions.</p>
-
-<p>The returned JSON string represents a hashref indexed by three keys: <code>defined_keys</code> contains an array of preset identifiers, <code>presets</code> contains the preset configs indexed by reset identifier, and <code>preset_descriptions</code> contains a hashref of descriptions indexed by preset identifiers.</p>
-
-<p>This function requires that the standard Perl JSON module be installed, if not, it will croak.</p>
-
-<h3 id="preset_description">preset_description()</h3>
-
-<pre><code>    my $description = Crypt::HSXKPasswd-&gt;preset_description(&#39;XKCD&#39;);
-    </code></pre>
-
-<p>This function returns the description for a given preset. See above for the list of available presets.</p>
-
-<p>The first argument this function accepts is the name of the desired preset as a scalar. If an invalid name is passed, the function will carp. If no preset is passed the preset <code>DEFAULT</code> is assumed.</p>
-
-<h3 id="presets_to_string">presets_to_string()</h3>
-
-<pre><code>    print Crypt::HSXKPasswd-&gt;presets_to_string();
-    </code></pre>
-
-<p>This function returns a string containing a description of each defined preset and the configs associated with the presets.</p>
-
-<h2 id="METHODS">METHODS</h2>
-
-<p><b>NOTE</b> - all methods must be invoked on an XKPasswd object or they will croak.</p>
-
-<h3 id="config">config()</h3>
+<h3 id="config">-&gt;config()</h3>
 
 <pre><code>    my $config = $hsxkpasswd_instance-&gt;config(); # getter
     $hsxkpasswd_instance-&gt;config($config_hashref); # setter
@@ -1031,27 +1119,25 @@
 
 <p>When called with a single argument the function sets the config of the instance to a clone of the passed config. If present, the argument must be either a hashref containing valid config keys and values, or a JSON string representing a hashref containing valid config keys and values.</p>
 
-<p>The function will croak if an invalid config is passed, or, if a string is passed while the standard JSON Perl module (<a href="http://search.cpan.org/perldoc?JSON">http://search.cpan.org/perldoc?JSON</a>) is not installed.</p>
+<p>The function will croak if an invalid config is passed.</p>
 
-<h3 id="config_json">config_json()</h3>
+<h3 id="config_as_json">-&gt;config_as_json()</h3>
 
-<pre><code>    my $config_json_string = $hsxkpasswd_instance-&gt;config_json();
+<pre><code>    my $config_json_string = $hsxkpasswd_instance-&gt;config_as_json();
     </code></pre>
 
 <p>This function returns the content of the instance&#39;s loaded config hashref as a JSON string.</p>
 
 <p>The output from this function can be loaded into the web interface at <a href="https://xkpasswd.net">https://xkpasswd.net</a> (using the load/save tab).</p>
 
-<p>The function will croak if the standard JSON Perl module (<a href="http://search.cpan.org/perldoc?JSON">http://search.cpan.org/perldoc?JSON</a>) is not installed.</p>
+<h3 id="config_as_string">-&gt;config_as_string()</h3>
 
-<h3 id="config_string">config_string()</h3>
-
-<pre><code>    my $config_string = $hsxkpasswd_instance-&gt;config_string();
+<pre><code>    my $config_string = $hsxkpasswd_instance-&gt;config_as_string();
     </code></pre>
 
 <p>This function returns the content of the instance&#39;s loaded config hashref as a scalar string.</p>
 
-<h3 id="dictionary">dictionary()</h3>
+<h3 id="dictionary">-&gt;dictionary()</h3>
 
 <pre><code>    my $dictionary_clone = $hsxkpasswd_instance-&gt;dictionary();
     $hsxkpasswd_instance-&gt;dictionary($dictionary_instance);
@@ -1064,7 +1150,7 @@
 
 <p>To load a new dictionary into an instance, call this function with arguments. The first argument argument can be an instance of a class that extends <code>Crypt::HSXKPasswd::Dictionary</code>, a reference to an array of words, or the path to a dictionary file. If either an array reference or a file path are passed, they will be used to instantiate an instance of the class <code>Crypt::HSXKPasswd::Dictionary::Basic</code>, and that new instance will then be loaded into the object. If a file path is passed, it will be assumed to be UTF-8 encoded. If not, an optional second argument can be passed to specify the file&#39;s encoding.</p>
 
-<h3 id="password">password()</h3>
+<h3 id="password">-&gt;password()</h3>
 
 <pre><code>    my $password = $hsxkpasswd_instance-&gt;password();
     </code></pre>
@@ -1073,7 +1159,7 @@
 
 <p>The function croaks if there is an error generating the password. The most likely cause of and error is the random number generation, particularly if the loaded random generation function relies on a cloud service or a non-standard library.</p>
 
-<h3 id="passwords">passwords()</h3>
+<h3 id="passwords">-&gt;passwords()</h3>
 
 <pre><code>    my @passwords = $hsxkpasswd_instance-&gt;passwords(10);
     </code></pre>
@@ -1082,26 +1168,26 @@
 
 <p>The function uses <code>password()</code> to generate the passwords, and hence will croak if there is an error generating any of the requested passwords.</p>
 
-<h3 id="passwords_json">passwords_json()</h3>
+<h3 id="passwords_json">-&gt;passwords_json()</h3>
 
 <pre><code>    my $json_string = $hsxkpasswd_instance-&gt;passwords_json(10);
     </code></pre>
 
 <p>This function generates a number of passwords and returns them and the instance&#39;s entropy stats as a JSON string representing a hashref containing an array of passwords indexed by <code>passwords</code>, and a hashref of entropy stats indexed by <code>stats</code>. The stats hashref itself is indexed by: <code>password_entropy_blind</code>, <code>password_permutations_blind</code>, <code>password_entropy_blind_min</code>, <code>password_entropy_blind_max</code>, <code>password_permutations_blind_max</code>, <code>password_entropy_seen</code> &amp; <code>password_permutations_seen</code>.</p>
 
-<p>The function uses <code>passwords()</code> to generate the passwords, and hence will croak if there is an error generating any of the requested passwords. This function requires that the standard Perl JSON package be installed, if not, it will croak.</p>
+<p>The function uses <code>passwords()</code> to generate the passwords, and hence will croak if there is an error generating any of the requested passwords.</p>
 
-<h3 id="rng">rng()</h3>
+<h3 id="rng">-&gt;rng()</h3>
 
 <pre><code>    my $rng_instance = $hsxkpasswd_instance-&gt;rng();
     $hsxkpasswd_instance-&gt;rng($rng_instance);
     </code></pre>
 
-<p>When called with no arguments this function returns currently loaded Random Number Genereatator (RNG) which will be an instance of a class that extends <code>Crypt::HSXKPasswd::RNG</code>.</p>
+<p>When called with no arguments this function returns currently loaded Random Number Generator (RNG) which will be an instance of a class that extends <code>Crypt::HSXKPasswd::RNG</code>.</p>
 
 <p>To load a new RNG into an instance, call this function with a single argument, an instance of a class that extends <code>Crypt::HSXKPasswd::RNG</code>.</p>
 
-<h3 id="stats">stats()</h3>
+<h3 id="stats">-&gt;stats()</h3>
 
 <pre><code>    my %stats = $hsxkpasswd_instance-&gt;stats();
     </code></pre>
@@ -1175,7 +1261,7 @@
 </li>
 </ul>
 
-<h3 id="status">status()</h3>
+<h3 id="status">-&gt;status()</h3>
 
 <pre><code>    print $hsxkpasswd_instance-&gt;status();
     </code></pre>
@@ -1183,7 +1269,7 @@
 <p>Generates a string detailing the internal status of the instance. Below is a sample status string:</p>
 
 <pre><code>    *DICTIONARY*
-    Source: Crypt::HSXKPasswd::Dictionary::EN_Default
+    Source: Crypt::HSXKPasswd::Dictionary::EN
     # words: 1425
     # words of valid length: 1194 (84%)
     
@@ -1215,33 +1301,579 @@
     # Random Numbers needed per-password: 9
     Passwords Generated: 0</code></pre>
 
-<h3 id="update_config">update_config()</h3>
+<h3 id="update_config">-&gt;update_config()</h3>
 
 <pre><code>    $hsxkpasswd_instance-&gt;update_config({separator_character =&gt; &#39;+&#39;});
     </code></pre>
 
 <p>The function updates the config within an HSXKPasswd instance. A hashref with the config options to be changed must be passed. The function returns a reference to the instance to enable function chaining. The function will croak if the updated config would be invalid in some way. Note that if this happens the running config will not have been altered in any way.</p>
 
+<h2 id="CLASS-METHODS">CLASS METHODS</h2>
+
+<p><b>NOTE</b> - All class methods must be invoked via the package name, or they will croak.</p>
+
+<h3 id="clone_config">clone_config()</h3>
+
+<pre><code>    my $clone = Crypt::HSXKPasswd-&gt;clone_config($config);
+    </code></pre>
+
+<p>This function must be passed a valid config hashref as the first argument or it will croak. The function returns a hashref.</p>
+
+<h3 id="config_key_definition">config_key_definition()</h3>
+
+<pre><code>    my %key_definition = Crypt::HSXKPasswd-&gt;config_key_definition($key_name);
+    </code></pre>
+
+<p>A function to return the definition for a config key. The definition is returned as a hash indexed by the following keys:</p>
+
+<ul>
+
+<li><p><code>required</code> - 1 if the key is a required key, and 0 otherwise.</p>
+
+</li>
+<li><p><code>type</code> - a <code>Type::Tiny</code> object representing the valid data type for the key.</p>
+
+</li>
+<li><p><code>expects</code> - an English description of valid values for the key.</p>
+
+</li>
+</ul>
+
+<h3 id="config_key_definitions">config_key_definitions()</h3>
+
+<pre><code>    my %key_definitions = Crypt::HSXKPasswd-&gt;config_key_definitions();
+    </code></pre>
+
+<p>A function to return definitions for all defined config keys as a hash indexed by config key names. Each definition is represented as a hash with the same keys as the hashes returned by the function <code>config_key_definition()</code>.</p>
+
+<h3 id="config_stats">config_stats()</h3>
+
+<pre><code>    my %stats = Crypt::HSXKPasswd-&gt;config_stats($config);
+    my %stats = Crypt::HSXKPasswd-&gt;config_stats(
+        $config,
+        suppress_warnings =&gt; 1,
+    );
+    </code></pre>
+
+<p>This function requires one argument, a valid config hashref. It returns a hash of statistics about a given configuration. The hash is indexed by the following:</p>
+
+<ul>
+
+<li><p><code>length_min</code> - the minimum length a password generated with the given config could be.</p>
+
+</li>
+<li><p><code>length_max</code> - the maximum length a password generated with the given config could be. (see caveat below)</p>
+
+</li>
+<li><p><code>random_numbers_required</code> - the amount of random numbers needed to generate a password using the given config.</p>
+
+</li>
+</ul>
+
+<p>There is one scenario in which the calculated maximum length will not be reliably accurate, and that&#39;s when a character substitution with a length greater than 1 is specified, and <code>padding_type</code> is not set to <code>ADAPTIVE</code>. If the config passed contains such a character substitution, the length will be calculated ignoring the possibility that one or more extra characters could be introduced depending on how many, if any, of the long substitutions get triggered by the randomly chosen words. If this happens the function will also carp with a warning. Such warnings can be suppressed by passing an optional named argument <code>suppress_warnings</code> with the value <code>1</code>.</p>
+
+<h3 id="config_to_json">config_to_json()</h3>
+
+<pre><code>    my $config_json_string = Crypt::HSXKPasswd-&gt;config_to_json($config);
+    </code></pre>
+
+<p>This function returns a JSON representation of the passed config hashref as a scalar string.</p>
+
+<p>The function must be passed a valid config hashref or it will croak.</p>
+
+<h3 id="config_to_string">config_to_string()</h3>
+
+<pre><code>    my $config_string = Crypt::HSXKPasswd-&gt;config_to_string($config);
+    </code></pre>
+
+<p>This function returns the content of the passed config hashref as a scalar string. The function must be passed a valid config hashref or it will croak.</p>
+
+<h3 id="default_config">default_config()</h3>
+
+<pre><code>    my $config = Crypt::HSXKPasswd-&gt;default_config();</code></pre>
+
+<p>This function returns a hashref containing a config with default values.</p>
+
+<p>This function can optionally be called with a single argument, a hashref containing keys with values to override the defaults with.</p>
+
+<pre><code>    my $config = Crypt::HSXKPasswd-&gt;default_config({num_words =&gt; 3});
+    </code></pre>
+
+<p>When overrides are present, the function will carp if an invalid key or value is passed, and croak if the resulting merged config is invalid.</p>
+
+<p>This function is a shortcut for <code>preset_config()</code>, and the two examples above are equivalent to the following:</p>
+
+<pre><code>    my $config = Crypt::HSXKPasswd-&gt;preset_config(&#39;DEFAULT&#39;);
+    my $config = Crypt::HSXKPasswd-&gt;preset_config(&#39;DEFAULT&#39;, {num_words =&gt; 3});</code></pre>
+
+<h3 id="defined_config_keys">defined_config_keys()</h3>
+
+<pre><code>    my @config_key_names = Crypt::HSXKPasswd-&gt;defined_config_keys();
+    </code></pre>
+
+<p>This function returns the list of valid config key names as an array of strings.</p>
+
+<h3 id="defined_presets">defined_presets()</h3>
+
+<pre><code>    my @preset_names = Crypt::HSXKPasswd-&gt;defined_presets();
+    </code></pre>
+
+<p>This function returns the list of defined preset names as an array of strings.</p>
+
+<h3 id="distil_to_config_keys">distil_to_config_keys()</h3>
+
+<pre><code>    my $dist_hashref = Crypt::HSXKPasswd-&gt;distil_to_config_keys($hashref);
+    </code></pre>
+
+<p>This function takes a hashref as an argument, and returns a deep clone of that hashref containing only valid config keys with valid values.</p>
+
+<p>By default the function silently drops keys that are not valid config keys, but issues a warning when dropping a key that is a valid config key, but contains an invalid value. The function can also issue warnings when dropping keys that are not valid config keys.</p>
+
+<p>The warnings can be controlled with a pair of optional named arguments that can be added as a second argument:</p>
+
+<pre><code>    # suppress all warnings
+    my $dist_hashref = Crypt::HSXKPasswd-&gt;distil_to_config_keys(
+        $hashref,
+        suppress_warnings =&gt; 1,
+    );
+    
+    # emit warnings when dropping invalidly named keys
+    my $dist_hashref = Crypt::HSXKPasswd-&gt;distil_to_config_keys(
+        $hashref,
+        warn_invalid_key_names =&gt; 1,
+    );</code></pre>
+
+<h3 id="distil_to_symbol_alphabet">distil_to_symbol_alphabet()</h3>
+
+<pre><code>    my @unique_syms = Crypt::HSXKPasswd-&gt;distil_to_symbol_alphabet($arrayref);
+    my @unique_syms = Crypt::HSXKPasswd-&gt;distil_to_symbol_alphabet(
+        $arrayref,
+        warn =&gt; 1,
+    );
+    </code></pre>
+
+<p>This function takes reference to an array of strings and returns a new array containing all the valid symbols from the referenced array. The valid symbols are de-duplicated before being returned.</p>
+
+<p>By default the function silently skips over strings that are not valid symbols. The function can be made issue warnings each time a string is skipped by passing a named argument <code>warn</code> with a value of <code>1</code> (<code>0</code> can also be passed to explicitly disable warnings).</p>
+
+<h3 id="distil_to_words">distil_to_words()</h3>
+
+<pre><code>    my @valid_unique_words = Crypt::HSXKPasswd-&gt;distil_to_words($arrayref);
+    my @valid_unique_words = Crypt::HSXKPasswd-&gt;distil_to_words(
+        $arrayref,
+        warn =&gt; 1,
+    );
+    </code></pre>
+
+<p>This function takes reference to an array of strings and returns a new array containing all the valid words from the referenced array. The valid words are de-duplicated before being returned.</p>
+
+<p>By default the function silently skips over strings that are not valid words. The function can be made issue warnings each time a string is skipped by passing a named argument <code>warn</code> with a value of <code>1</code> (<code>0</code> can also be passed to explicitly disable warnings).</p>
+
+<h3 id="is_valid_config">is_valid_config()</h3>
+
+<pre><code>    # determine the validity
+    my $is_ok = Crypt::HSXKPasswd-&gt;is_valid_config($config);
+    
+    # assert the validity - will croak if the config is invalid
+    Crypt::HSXKPasswd-&gt;is_valid_config($config, croak =&gt; 1);
+    </code></pre>
+
+<p>This function must be passed a hashref to test as the first argument. The function returns 1 if the passed config is valid, and 0 otherwise.</p>
+
+<p>Optionally, a named argument <code>croak</code> can also be passed to control whehther or not the function should croak if the config is invalid. The value of this named argument should be <code>1</code> or <code>0</code>.</p>
+
+<p>When calling the function with <code>croak</code> set to <code>1</code>, the message thrown by croak will explain why the config is invalid.</p>
+
+<pre><code>    use English qw( -no_match_vars );
+    eval{
+        Crypt::HSXKPasswd-&gt;is_valid_config($config, croak =&gt; 1);
+    }or do{
+        print &quot;ERROR - config is invalid because: $EVAL_ERROR\n&quot;;
+    }
+    </code></pre>
+
+<h3 id="module_config">module_config()</h3>
+
+<pre><code>    my $debug_val = Crypt::HSXKPasswd-&gt;module_config(&#39;DEBUG&#39;); # getter
+    Crypt::HSXKPasswd-&gt;module_config(&#39;DEBUG&#39;, 1); # setter
+    </code></pre>
+
+<p>This function is used to access or alter the value of one of the module configuration settings. The first function must always be a valid module configuration key name. If no second argument is provided, the value stored in the module configuration key will not be updated. To update the stored value, pass a new value as a second argument. Regardless of whether or not a second argument is passed, the value stored in the module configuration key is always returned.</p>
+
+<p>The function will croak if called with an invalid module configuration key name, or passed an invalid new value.</p>
+
+<p>For a list of the module configuration keys, see the MODULE CONFIGURATION section of this document.</p>
+
+<h3 id="preset_config">preset_config()</h3>
+
+<pre><code>    my $config = Crypt::HSXKPasswd-&gt;preset_config(&#39;XKCD&#39;);
+    </code></pre>
+
+<p>This function returns the config hashref for a given preset. See above for the list of available presets.</p>
+
+<p>The first argument this function accepts is the name of the desired preset as a scalar. If an invalid name is passed, the function will carp. If no preset is passed the preset <code>DEFAULT</code> is assumed.</p>
+
+<p>This function can optionally accept a second argument, a hashref containing keys with values to override the defaults with.</p>
+
+<pre><code>    my $config = Crypt::HSXKPasswd-&gt;preset_config(
+        &#39;XKCD&#39;,
+        {case_transform =&gt; &#39;INVERT&#39;}
+    );
+    </code></pre>
+
+<p>When overrides are present, the function will carp if an invalid key or value is passed, and croak if the resulting merged config is invalid.</p>
+
+<h3 id="preset_definition">preset_definition()</h3>
+
+<pre><code>    my %preset_def = Crypt::HSXKPasswd-&gt;preset_definition(&#39;XKCD&#39;);
+    </code></pre>
+
+<p>This function returns a hash defining a preset. The hash contains an English description of the preset indexed be <code>description</code> and a config hashref indexed by <code>config</code>.</p>
+
+<p>The function expects to be called with one argument, a valid preset name, but it can be called without arguments, in which case it will return the definition for the preset c&lt;DEFAULT&gt;.</p>
+
+<p>You can see all the defined presets in the PRESETS section of this document, and you can get a list of valid preset names programatically with the function <code>defined_presets()</code>.</p>
+
+<h3 id="preset_definitions">preset_definitions()</h3>
+
+<pre><code>    my %preset_defs = Crypt::HSXKPasswd-&gt;preset_definitions();
+    </code></pre>
+
+<p>This function returns a hash of all defined presets indexed by preset name. Each preset definition is a hash as returned by <code>preset_definition()</code>.</p>
+
+<p>This function does not take any arguments.</p>
+
+<h3 id="presets_json">presets_json()</h3>
+
+<pre><code>    my $json_string = Crypt::HSXKPasswd-&gt;presets_json();
+    </code></pre>
+
+<p>This function returns a JSON string representing all the defined configs, including their descriptions.</p>
+
+<p>The returned JSON string represents a hashref indexed by three keys: <code>defined_keys</code> contains an array of preset identifiers, <code>presets</code> contains the preset configs indexed by reset identifier, and <code>preset_descriptions</code> contains a hashref of descriptions indexed by preset identifiers.</p>
+
+<h3 id="preset_description">preset_description()</h3>
+
+<pre><code>    my $description = Crypt::HSXKPasswd-&gt;preset_description(&#39;XKCD&#39;);
+    </code></pre>
+
+<p>This function returns the description for a given preset. See above for the list of available presets.</p>
+
+<p>The first argument this function accepts is the name of the desired preset as a scalar. If an invalid name is passed, the function will carp. If no preset is passed the preset <code>DEFAULT</code> is assumed.</p>
+
+<h3 id="presets_to_string">presets_to_string()</h3>
+
+<pre><code>    print Crypt::HSXKPasswd-&gt;presets_to_string();
+    </code></pre>
+
+<p>This function returns a string containing a description of each defined preset and the configs associated with the presets.</p>
+
+<h2 id="COMMANDLINE-INTERFACE">COMMANDLINE INTERFACE</h2>
+
+<p>The module ships with a commandline interface to this library, simply called <code>hsxkpasswd</code>.</p>
+
+<p>This interface allows for the generation of multiple passwords at a time, the use of presets and preset overrides, the use of custom password generator configurations, the use of custom word sources, and the use of custom random number generators.</p>
+
+<p>Both preset overrides and password generator configurations must be specified in JSON format.</p>
+
+<h3 id="Examples">Examples</h3>
+
+<p>Generate a single password using all the default settings:</p>
+
+<pre><code>    hsxkpasswd
+    </code></pre>
+
+<p>Generate five passwords using the default settings:</p>
+
+<pre><code>    hsxkpasswd 5
+    </code></pre>
+
+<p>Generate five passwords using the <code>XKCD</code> preset:</p>
+
+<pre><code>    hsxkpasswd -p XKCD 5
+    </code></pre>
+
+<p>Generate five passwords using the <code>XKCD</code> preset with an overridden password generator configuration key:</p>
+
+<pre><code>    hsxkpasswd -p XKCD -o &#39;{&quot;separator_character&quot; : &quot;*&quot;}&#39; 5</code></pre>
+
+<p>Generate five passwords using a custom password generator configuration stored in a text file in JSON format:</p>
+
+<pre><code>    hsxkpasswd -c my_config.json
+    </code></pre>
+
+<h3 id="Further-Reading">Further Reading</h3>
+
+<p>The examples above are just a sample of what the command can do, for complete documentation, run the command with the -h flag:</p>
+
+<pre><code>    hsxkpasswd -h
+    </code></pre>
+
+<p>If you are new to JSON, you may find the following links useful:</p>
+
+<ul>
+
+<li><p>JSON on Wikipedia - <a href="http://en.wikipedia.org/wiki/JSON">http://en.wikipedia.org/wiki/JSON</a></p>
+
+</li>
+<li><p>A free online JSON validator - <a href="http://jsonformatter.curiousconcept.com">http://jsonformatter.curiousconcept.com</a></p>
+
+</li>
+<li><p>A JSON tutorial from W3Schools - <a href="http://www.w3schools.com/json/">http://www.w3schools.com/json/</a></p>
+
+</li>
+</ul>
+
+<h2 id="ENTROPY-CHECKING">ENTROPY CHECKING</h2>
+
+<p>For security reasons, this module&#39;s default behaviour is to warn (using <code>carp()</code>) when ever the loaded combination of word source and configuration would result in low-entropy passwords. When the constructor is invoked, or when an instance&#39;s the word source or config are altered (using <code>dictionary()</code> or <code>config()</code>), the entropy is re-calculated and re-checked against the defined minima.</p>
+
+<p>Entropy is calculated and checked for two scenarios. Firstly, for the best-case scenario, when an attacker has no prior knowledge about the password, and must resort to a brute-force attack. And secondly, for the worst-case scenario, when the attacker is assumed to know that this module was used to generate the password, and, that the attacker has a copy of the word source and config settings used to generate the password.</p>
+
+<p>Entropy checking is controlled via three module configuration variables (which can be accessed and updated using the function <code>module_config()</code>):</p>
+
+<ul>
+
+<li><p><code>ENTROPY_MIN_BLIND</code> - the minimum acceptable entropy in bits for a brute-force attack. The default value is 78bits, the equivalent to a 12 character password consisting of mixed-case letters, digits, and symbols.</p>
+
+</li>
+<li><p><code>ENTROPY_MIN_SEEN</code> - the minimum acceptable entropy in bits for a worst-case scenario (where the word source and config are known). The default value is 52bits, equivalent to an 8 character password consisting of mixed-case letters, digits, and symbols.</p>
+
+</li>
+<li><p><code>SUPPRESS_ENTROPY_WARNINGS</code> - this variable can be used to suppress one or both of the entropy warnings. The following values are valid:</p>
+
+<ul>
+
+<li><p><code>NONE</code> - no warnings are suppressed. This is the default value.</p>
+
+</li>
+<li><p><code>SEEN</code> - only warnings for the worst-case scenario are suppressed.</p>
+
+</li>
+<li><p><code>BLIND</code> - only warnings for the best-case scenario are suppressed.</p>
+
+</li>
+<li><p><code>ALL</code> - all entropy warnings are suppressed.</p>
+
+</li>
+</ul>
+
+</li>
+</ul>
+
+<h3 id="Caveats">Caveats</h3>
+
+<p>The entropy calculations make some assumptions which may in some cases lead to the results being inaccurate. In general, an attempt has been made to always round down, meaning that in reality the entropy of the produced passwords may be higher than the values calculated by the package.</p>
+
+<p>When calculating the entropy for brute force attacks on configurations that can result in variable length passwords, the shortest possible password is assumed.</p>
+
+<p>When calculating the entropy for brute force attacks on configurations that contain at least one symbol, it is assumed that an attacker would have to brute-force-check 33 symbols. This is the same value used by Steve Gibson&#39;s <i>Password Haystacks</i> calculator (<a href="https://www.grc.com/haystack.htm">https://www.grc.com/haystack.htm</a>).</p>
+
+<p>When calculating the entropy for worst-case attacks on configurations that contain symbol substitutions where the replacement is more than 1 character long the possible extra length is ignored.</p>
+
+<h2 id="WORD-SOURCES-DICTIONARIES">WORD SOURCES (DICTIONARIES)</h2>
+
+<p>The abstract class <code>Crypt::HSXKPasswd::Dictionary</code> acts as a base class for sources of words for use by this module. Word sources should extend this base class and implement the function <code>word_list()</code>, which should return an array of words.</p>
+
+<p>In order to produce secure passwords it&#39;s important to use a word source that contains a large selection of words with a good mix of different lengths of words.</p>
+
+<p>The module ships with a number of pre-defined word sources:</p>
+
+<h3 id="Crypt::HSXKPasswd::Dictionary::DE"><code>Crypt::HSXKPasswd::Dictionary::DE</code></h3>
+
+<p>A German word list based on the GPL-licensed German dictionary for WinEdit by Juergen Vierheilig.</p>
+
+<p><b>Note:</b> This module is licensed under the GPL, not the BSD license used for the majority of this project.</p>
+
+<h3 id="Crypt::HSXKPasswd::Dictionary::EN"><code>Crypt::HSXKPasswd::Dictionary::EN</code></h3>
+
+<p>A default word list consisting of English words and place names.</p>
+
+<h3 id="Crypt::HSXKPasswd::Dictionary::ES"><code>Crypt::HSXKPasswd::Dictionary::ES</code></h3>
+
+<p>A Spanish word list based on the BSD-licensed Spanish dictionary for WinEdit by Juan L. Varona from the Universidad de La Rioja.</p>
+
+<h3 id="Crypt::HSXKPasswd::Dictionary::FR"><code>Crypt::HSXKPasswd::Dictionary::FR</code></h3>
+
+<p>A French word list based on the GPL-licensed French dictionary for WinEdit.</p>
+
+<p><b>Note:</b> This module is licensed under GPL V2, not the BSD license used for the majority of this project.</p>
+
+<h3 id="Crypt::HSXKPasswd::Dictionary::IT"><code>Crypt::HSXKPasswd::Dictionary::IT</code></h3>
+
+<p>An Italian word list based on the free-for-non-commerical-use Italian dictionary for WinEdit by Karl Koeller.</p>
+
+<p><b>Note:</b> This module is licensed under GPL V2, not the BSD license used for the majority of this project.</p>
+
+<h3 id="Crypt::HSXKPasswd::Dictionary::NL"><code>Crypt::HSXKPasswd::Dictionary::NL</code></h3>
+
+<p>A Dutch/Flemish word list based on the GPL-licensed Dutch dictionary for WinEdit.</p>
+
+<p><b>Note:</b> This module is licensed under GPL V2, not the BSD license used for the majority of this project.</p>
+
+<h3 id="Crypt::HSXKPasswd::Dictionary::PT"><code>Crypt::HSXKPasswd::Dictionary::PT</code></h3>
+
+<p>A Portuguese word list based on the GPL-licensed Portuguese dictionary for WinEdit compiled by Bernhard Enders (building on work by Raimundo Santos Moura &amp; Ricardo Ueda Karpischek).</p>
+
+<p><b>Note:</b> This module is licensed under GPL V2.1, not the BSD license used for the majority of this project.</p>
+
+<h3 id="Crypt::HSXKPasswd::Dictionary::System"><code>Crypt::HSXKPasswd::Dictionary::System</code></h3>
+
+<p>This class tries to find and use a Unix words file on the system.</p>
+
+<p>The constructor croaks if no system words file can be found.</p>
+
+<h4 id="Usage">Usage</h4>
+
+<pre><code>    my $word_source = Crypt::HSXKPasswd::Dictionary::System-&gt;new();</code></pre>
+
+<h3 id="Crypt::HSXKPasswd::Dictionary::Basic"><code>Crypt::HSXKPasswd::Dictionary::Basic</code></h3>
+
+<p>This class can be initialised from a words file, or from an array ref containing words.</p>
+
+<h4 id="Usage1">Usage</h4>
+
+<pre><code>    my $word_source = Crypt::HSXKPasswd::Dictionary::Basic-&gt;new(&#39;file_path&#39;);
+    my $word_source = Crypt::HSXKPasswd::Dictionary::Basic-&gt;new(
+        &#39;file_path&#39;,
+        &#39;Latin1&#39;
+    );
+    my $word_source = Crypt::HSXKPasswd::Dictionary::Basic-&gt;new($array_ref);</code></pre>
+
+<p>The rules for the formatting of dictionary files are simple. Dictionary files must contain one word per line. Words shorter than four letters will be ignored, as will all lines starting with the # symbol. Files are assumed to be UTF-8 encoded, but an optional second argument can be passed specifying a different file encoding.</p>
+
+<p>This format is the same as that of the standard Unix Words file, usually found at <code>/usr/share/dict/words</code> on Unix and Linux operating systems (including OS X).</p>
+
+<h2 id="RANDOM-NUMBER-SOURCES">RANDOM NUMBER SOURCES</h2>
+
+<p>In order to minimise the number of non-standard modules this module requires, the default source of randomness is Perl&#39;s built-in <code>rand()</code> function. This provides a reasonable level of randomness, and should suffice for most users, however, some users will prefer to make use of one of the many advanced randomisation modules in CPAN, or, reach out to a web service like <a href="http://random.org">http://random.org</a> for their random numbers. To facilitate both of these options, this module uses a cache of randomness, and provides an abstract Random Number Generator (RNG) class that can be extended.</p>
+
+<p>The module can use an instance of any class that extends <code>Crypt::HSXKPasswd::RNG</code> as it&#39;s source of randomness. Custom RNG classes must implement the method <code>random_numbers()</code> which will be invoked on an instance of the class and passed one argument, the number of random numbers required to generate a single password. The function must return an array of random numbers between 0 and 1. The number of random numbers returned is entirely up to the module to decide. The number required for a single password is passed purely as a guide. The function must always return at least one random number.</p>
+
+<p>The module ships with five standard RNGs (described below).</p>
+
+<p>By default, the module will try to use one of the following four RNGs, listed from most to least preferred, depending on what is available on the system:</p>
+
+<ol>
+
+<li><p><code>Crypt::HSXKPasswd::RNG::Math_Random_Secure</code> (only available if <code>Math::Random::Secure</code> is installed on the system).</p>
+
+</li>
+<li><p><code>Crypt::HSXKPasswd::RNG::Data_Entropy</code> (only available if <code>Data::Entropy::Algorithms</code> is installed on the system).</p>
+
+</li>
+<li><p><code>Crypt::HSXKPasswd::RNG::DevUrandom</code> (only available on Linux/Unix systems with a <code>/dev/urandom</code>).</p>
+
+</li>
+<li><p><code>Crypt::HSXKPasswd::RNG::Basic</code> (available on all systems because it uses Perl&#39;s built-in <code>rand()</code> function).</p>
+
+</li>
+</ol>
+
+<p>If the constructor is called without specifying an RNG, and if the only available RNG is <code>Crypt::HSXKPasswd::RNG::Basic</code>, a warning will be thrown suggesting installing <code>Math::Random::Secure</code> or <code>Data::Entropy::Algorithms</code>.</p>
+
+<p>The module also ships with a fifth RNG, <code>Crypt::HSXKPasswd::RNG::RandomDotOrg</code>, but this one must be explicitly used, the constructor will never used it by default. As its name suggests, this class uses <a href="http://Random.Org/">http://Random.Org/</a>&#39;s HTTP API to generate random numbers.</p>
+
+<p>To explicitly use any particular RNG, create an instance of it, and either pass that instance to the constructor with the named argument <code>rng</code>, or, set the RNG after instantiating the object using the <code>rng()</code> function.</p>
+
+<h3 id="Crypt::HSXKPasswd::RNG::Math_Random_Secure">Crypt::HSXKPasswd::RNG::Math_Random_Secure</h3>
+
+<pre><code>    my $rng = Crypt::HSXKPasswd::RNG::Math_Random_Secure-&gt;new();</code></pre>
+
+<p>This is the preferred RNG because it is both fast and secure, but, it requires the non-standard module <code>Math::Random::Secure</code> (<a href="http://search.cpan.org/perldoc?Math%3A%3ARandom%3A%3ASecure">http://search.cpan.org/perldoc?Math%3A%3ARandom%3A%3ASecure</a>) be installed.</p>
+
+<h3 id="Crypt::HSXKPasswd::RNG::Data_Entropy">Crypt::HSXKPasswd::RNG::Data_Entropy</h3>
+
+<pre><code>    my $rng = Crypt::HSXKPasswd::RNG::Data_Entropy-&gt;new();</code></pre>
+
+<p>This RNG is secure, but it is quite slow (about six times slower than <code>Crypt::HSXKPasswd::RNG::Math_Random_Secure</code>), and it requires the non-standard module <code>Data::Entropy::Algorithms</code> (<a href="http://search.cpan.org/perldoc?Data%3A%3AEntropy%3A%3AAlgorithms">http://search.cpan.org/perldoc?Data%3A%3AEntropy%3A%3AAlgorithms</a>) be installed.</p>
+
+<h3 id="Crypt::HSXKPasswd::RNG::DevUrandom">Crypt::HSXKPasswd::RNG::DevUrandom</h3>
+
+<pre><code>    my $rng = Crypt::HSXKPasswd::RNG::DevUrandom-&gt;new();
+    </code></pre>
+
+<p>This RNG is secure and relatively fast (faster than <code>Crypt::HSXKPasswd::RNG::Data_Entropy</code> but slower than <code>Crypt::HSXKPasswd::RNG::Math_Random_Secure</code>), but is only available on Linux/Unix systems with a <code>/dev/urandom</code> special file.</p>
+
+<h3 id="Crypt::HSXKPasswd::RNG::Basic">Crypt::HSXKPasswd::RNG::Basic</h3>
+
+<pre><code>    my $rng = Crypt::HSXKPasswd::RNG::Basic-&gt;new();
+    </code></pre>
+
+<p>This RNG uses Perl&#39;s built-in <code>rand()</code> function as its source of randomness, and this is sub-optimal. The Perl docs warn that <code>rand()</code> is not a particularly good source of random numbers, and advises against its use for cryptography.</p>
+
+<p>This RNG provides a base-line, and should only be used if none of the better RNGs are available. While it is sub-optimal, it will still generate passwords with sufficient entropy in most situations. Ultimately, even using this imperfect RNG, this module will still produce passwords that are much better than those produced by the human imagination!</p>
+
+<h3 id="Crypt::HSXKPasswd::RNG::RandomDotOrg">Crypt::HSXKPasswd::RNG::RandomDotOrg</h3>
+
+<pre><code>    my $rng = Crypt::HSXKPasswd::RNG::RandomDotOrg-&gt;new(&#39;my.address@my.dom&#39;);
+    my $rng = Crypt::HSXKPasswd::RNG::RandomDotOrg-&gt;new(&#39;my.address@my.dom&#39;,
+        timeout =&gt; 180,
+        num_passwords =&gt; 3,
+    );</code></pre>
+
+<p>This RNG serves as a usable example of an RNG that queries a web service. As its name suggests, this class uses <a href="http://Random.Org/">http://Random.Org/</a>&#39;s HTTP API to generate random numbers.</p>
+
+<p>In order to comply with Random.Org&#39;s client guidelines (<a href="https://www.random.org/clients/">https://www.random.org/clients/</a>), this module requires that a valid email address be passed as the first argument.</p>
+
+<p>The client guidelines also request that clients use long timeouts, and batch their requests. They prefer to be asked for more number less frequently than less numbers more frequently. For this reason the class&#39;s default behaviour is to use a timeout of 180 seconds, and to request enough random numbers to generate three passwords at a time.</p>
+
+<p>These defaults can be overridden by passing named arguments to the constructor after the email address. The following named arguments are supported:</p>
+
+<ul>
+
+<li><p><code>timeout</code> - the timeout to use when making HTTP requests to Random.Org in seconds (the default is 180).</p>
+
+</li>
+<li><p><code>num_passwords</code> - the number of password generations to fetch random numbers for per request from Random.org. This value is in effect a multiplier for the value passed to the <code>random_numbers()</code> function by <code>Crypt::HSXKPasswd</code>.</p>
+
+<p><code>num_absolute</code> - the absolute number of random numbers to fetch per request to Random.Org. This argument takes precedence over <code>num_passwords</code>.</p>
+
+</li>
+</ul>
+
+<p><code>num_passwords</code> and <code>num_absolute</code> should not be used together, but if they are, <code>num_absolute</code> use used, and <code>num_passwords</code> is ignored.</p>
+
+<p>This class requires a number of modules not used by any other classes under <code>Crypt::HSXKPasswd</code>, and not listed in that module&#39;s requirements. If all of the following modules are not installed, the constructor will croak:</p>
+
+<ul>
+
+<li><p><code>Email::Valid</code></p>
+
+</li>
+<li><p><code>LWP::UserAgent</code></p>
+
+</li>
+<li><p><code>Mozilla::CA</code></p>
+
+</li>
+<li><p><code>URI</code></p>
+
+</li>
+</ul>
+
 <h1 id="DIAGNOSTICS">DIAGNOSTICS</h1>
 
-<p>By default this module does all of it&#39;s error notification via the functions <code>carp()</code>, <code>croak()</code>, and <code>confess()</code> from the <code>Carp</code> module. Optionally, all error messages can also be printed. To enable the printing of messages, set <code>$Crypt::HSXKPasswd::LOG_ERRORS</code> to a truthy value. All error messages will then be printed to the stream at <code>$Crypt::HSXKPasswd::LOG_STREAM</code>, which is set to <code>STDERR</code> by default.</p>
+<p>By default this module does all of it&#39;s error notification via the functions <code>carp()</code>, <code>croak()</code>, and <code>confess()</code> from the <code>Carp</code> module. Optionally, all error messages can also be printed to a stream. To enable the printing of messages, set the <code>LOG_ERRORS</code> module configuration variable to <code>1</code>. All error messages will then be printed to the stream defined by the module configuration variable <code>LOG_STREAM</code>, which is set to <code>STDERR</code> by default.</p>
 
-<p>Ordinarily this module produces very little output, to enable more verbose output <code>$Crypt::HSXKPasswd::DEBUG</code> can be set to a truthy value. If this is set, all debug messages will be printed to the stream <code>$Crypt::HSXKPasswd::LOG_STREAM</code>.</p>
+<p>Ordinarily this module produces very little output. To enable more verbose output the module configuration variable <code>DEBUG</code> can be set to <code>1</code>. Debug message are printed to the stream specified by the module variable <code>LOG_STREAM</code>.</p>
 
 <p>This module produces output at three severity levels:</p>
 
 <ul>
 
-<li><p><code>DEBUG</code> - this output is completely suppressed unless <code>$Crypt::HSXKPasswd::DEBUG</code> is set to a truthy value. If not suppressed debug messages are always printed to <code>$Crypt::HSXKPasswd::LOG_STREAM</code> (regardless of the value of <code>$Crypt::HSXKPasswd::LOG_ERRORS</code>).</p>
+<li><p><code>DEBUG</code> - this output is completely suppressed unless the module configuration variable <code>DEBUG</code> is set to <code>1</code>. All debug messages are pritned to the stream defined in the module configuration variable <code>LOG_STREAM</code> (regardless of the the value of the module configuration variable <code>LOG_ERRORS</code>).</p>
 
 </li>
-<li><p><code>WARNING</code> - warning messages are always thrown with <code>carp()</code>, and also printed to <code>$Crypt::HSXKPasswd::LOG_STREAM</code> if <code>$Crypt::HSXKPasswd::LOG_ERRORS</code> evaluates to true.</p>
+<li><p><code>WARNING</code> - warning messages are always thrown with <code>carp()</code>, and also printed to the stream specified by the module configuration variable <code>LOG_STREAM</code> if the module configuration variable <code>LOG_ERRORS</code> is set to <code>1</code>.</p>
 
 </li>
-<li><p><code>ERROR</code> - error messages are usually thrown with <code>croak()</code>, but will be thrown with <code>confess()</code> if <code>$Crypt::HSXKPasswd::DEBUG</code> evaluates to true. If <code>$Crypt::HSXKPasswd::LOG_ERRORS</code> evaluates to true errors are also printed to <code>$Crypt::HSXKPasswd::LOG_STREAM</code>, including a stack trace if <code>$Crypt::HSXKPasswd::DEBUG</code> evaluates to true and the module <code>Devel::StackTrace</code> is installed.</p>
+<li><p><code>ERROR</code> - error messages are usually thrown with <code>croak()</code>, but will be thrown with <code>confess()</code> if the module configuration variable <code>DEBUG</code> is set to <code>1</code>. If the module configuration variable <code>LOG_ERRORS</code> is set to <code>1</code> errors are also printed to the stream defined by the module configuration variable <code>LOG_STREAM</code>, including a stack trace if the module configuration variable <code>DEBUG</code> is set to <code>1</code> and the module <code>Devel::StackTrace</code> is installed.</p>
 
 </li>
 </ul>
+
+<p>The value stored in a module configuration variable can be accessed and updated using the function <code>module_config()</code>.</p>
 
 <h1 id="CONFIGURATION-AND-ENVIRONMENT">CONFIGURATION AND ENVIRONMENT</h1>
 
@@ -1256,10 +1888,22 @@
 <li><p><code>Carp</code> - <a href="http://search.cpan.org/perldoc?Carp">http://search.cpan.org/perldoc?Carp</a></p>
 
 </li>
+<li><p><code>Clone</code> - <a href="http://search.cpan.org/perldoc?Clone">http://search.cpan.org/perldoc?Clone</a></p>
+
+</li>
 <li><p><code>DateTime</code> - <a href="http://search.cpan.org/perldoc?DateTime">http://search.cpan.org/perldoc?DateTime</a></p>
 
 </li>
 <li><p><code>English</code> - <a href="http://search.cpan.org/perldoc?English">http://search.cpan.org/perldoc?English</a></p>
+
+</li>
+<li><p><code>Fatal</code> - <a href="http://search.cpan.org/perldoc?Fatal">http://search.cpan.org/perldoc?Fatal</a></p>
+
+</li>
+<li><p><code>Getopt::Long</code> - <a href="http://search.cpan.org/perldoc?Getopt%3A%3ALong">http://search.cpan.org/perldoc?Getopt%3A%3ALong</a></p>
+
+</li>
+<li><p><code>JSON</code> - <a href="http://search.cpan.org/perldoc?JSON">http://search.cpan.org/perldoc?JSON</a></p>
 
 </li>
 <li><p><code>List::MoreUtils</code> - <a href="http://search.cpan.org/perldoc?List%3A%3AMoreUtils">http://search.cpan.org/perldoc?List%3A%3AMoreUtils</a></p>
@@ -1271,7 +1915,13 @@
 <li><p><code>Math::Round</code> - <a href="http://search.cpan.org/perldoc?Math%3A%3ARound">http://search.cpan.org/perldoc?Math%3A%3ARound</a></p>
 
 </li>
-<li><p><code>Params::Validate</code> - <a href="http://search.cpan.org/perldoc?Params%3A%3AValidate">http://search.cpan.org/perldoc?Params%3A%3AValidate</a></p>
+<li><p><code>Module::Load</code> - <a href="http://search.cpan.org/perldoc?Module%3A%3ALoad">http://search.cpan.org/perldoc?Module%3A%3ALoad</a></p>
+
+</li>
+<li><p><code>Pod::Usage</code> - <a href="http://search.cpan.org/perldoc?Pod%3A%3AUsage">http://search.cpan.org/perldoc?Pod%3A%3AUsage</a></p>
+
+</li>
+<li><p><code>Readonly</code> - <a href="http://search.cpan.org/perldoc?Readonly">http://search.cpan.org/perldoc?Readonly</a></p>
 
 </li>
 <li><p><code>Scalar::Util</code> - <a href="http://search.cpan.org/perldoc?Scalar%3A%3AUtil">http://search.cpan.org/perldoc?Scalar%3A%3AUtil</a></p>
@@ -1281,6 +1931,18 @@
 
 </li>
 <li><p><code>Text::Unidecode</code> - <a href="http://search.cpan.org/perldoc?Text%3A%3AUnidecode">http://search.cpan.org/perldoc?Text%3A%3AUnidecode</a></p>
+
+</li>
+<li><p><code>Type::Library</code> - <a href="http://search.cpan.org/perldoc?Type%3A%3ALibrary">http://search.cpan.org/perldoc?Type%3A%3ALibrary</a></p>
+
+</li>
+<li><p><code>Type::Params</code> - <a href="http://search.cpan.org/perldoc?Type%3A%3AParams">http://search.cpan.org/perldoc?Type%3A%3AParams</a></p>
+
+</li>
+<li><p><code>Type::Tiny</code> - <a href="http://search.cpan.org/perldoc?Type%3A%3ATiny">http://search.cpan.org/perldoc?Type%3A%3ATiny</a></p>
+
+</li>
+<li><p><code>Types::Standard</code> - <a href="http://search.cpan.org/perldoc?Types%3A%3AStandard">http://search.cpan.org/perldoc?Types%3A%3AStandard</a></p>
 
 </li>
 <li><p><code>warnings</code> - <a href="http://search.cpan.org/perldoc?warnings">http://search.cpan.org/perldoc?warnings</a></p>
@@ -1305,11 +1967,6 @@
 <li><p><code>Email::Valid</code> - <a href="http://search.cpan.org/perldoc?Email%3A%3AValid">http://search.cpan.org/perldoc?Email%3A%3AValid</a></p>
 
 <p>Used by the Random.Org RNG class <code>Crypt::HSXKPasswd::RNG::RandomDotOrg</code>.</p>
-
-</li>
-<li><p><code>JSON</code> - <a href="http://search.cpan.org/perldoc?JSON">http://search.cpan.org/perldoc?JSON</a></p>
-
-<p>Used for loading and exporting config hashrefs as JSON strings. Needed if the named parameter <code>config_json</code> is passed to the constructor or <code>hsxkpasswd()</code>, if a string is passed to <code>config()</code>, or if any function contianing the word <code>json</code> in the function name is called.</p>
 
 </li>
 <li><p><code>LWP::UserAgent</code> - <a href="http://search.cpan.org/perldoc?LWP%3A%3AUserAgent">http://search.cpan.org/perldoc?LWP%3A%3AUserAgent</a></p>
