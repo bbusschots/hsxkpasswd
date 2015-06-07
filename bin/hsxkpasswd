@@ -1,0 +1,471 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use English qw( -no_match_vars );
+use Fatal qw( :void open close binmode ); # make builtins throw exceptions
+use Getopt::Long; # for argument processing
+use Pod::Usage; # for help and usage
+use JSON qw( decode_json ); # for decoding JSON strings
+use Module::Load; # for dynamically loading modules
+
+# include Crypt::HSXKPasswd Stuff
+# DEV-ONLY
+use lib './lib/';
+use Crypt::HSXKPasswd;
+use Crypt::HSXKPasswd::Types qw( :types );
+
+# set things up for using UTF-8
+use 5.016; # min Perl for good UTF-8 support, implies feature 'unicode_strings'
+use Encode qw(encode decode);
+use utf8;
+binmode STDOUT, ':encoding(UTF-8)';
+
+# Copyright (c) 2015, Bart Busschots T/A Bartificer Web Solutions All rights
+# reserved.
+#
+# Code released under the FreeBSD license (included in the POD at the bottom of
+# this file)
+
+#
+# === Constants ===============================================================#
+#
+
+# version info
+use version; our $VERSION = qv('1.0_01');
+
+#
+# === Process Args ============================================================#
+#
+
+# parse the commandline options
+my $verbose = 0;
+my %hsxkpwd_args = ();
+GetOptions(
+    'help|h' => sub{
+        pod2usage(
+            -exitval => 0,
+            -verbose => 2,
+        );
+    },
+    'version|v' => sub{
+        pod2usage(
+            -exitval => 0,
+            -verbose => 99,
+            -sections => 'NAME',
+        );
+    },
+    'list-presets|l' => sub{
+        say join q{, }, Crypt::HSXKPasswd->defined_presets();
+        exit 0;
+    },
+    'test-config|t=s' => sub{
+        my ($opt_name, $val) = @_;
+        unless(-f $val){
+            byeee("file $val does not exist");
+        }
+        open my $CONFIG_FH, '<', $val or byee("failed to read file $val with error:\n* $OS_ERROR");
+        my $json_string = do{local $/ = undef; <$CONFIG_FH>};
+        close $CONFIG_FH;
+        my $config;
+        eval{
+            $config = decode_json($json_string);
+            1; # explicit evaluation
+        }or do{
+            byeee("failed to parse the config JSON string:\n* source file: $val\n* parse error: $EVAL_ERROR");
+        };
+        say 'Distilling the config down to just valid keys ...';
+        $config = Crypt::HSXKPasswd->distil_to_config_keys($config, warn_invalid_key_names => 1);
+        say q{}; # empty line
+        say 'Validing the distilled config ...';
+        my $is_valid = Config->check(Config->coerce($config));
+        if($is_valid){
+            say '** Config OK **';
+        }else{
+            say '** Config INVALID **';
+            say Config->get_message($config);
+            exit 1;
+        }
+        exit 0;
+    },
+    'preset|p=s' => sub{
+        my ($opt_name, $val) = @_;
+        unless(PresetName->check(PresetName->coerce($val))){
+            my $msg = "preset '$val' does not exist.\n* Valid Presets: ";
+            $msg .= join q{, }, Crypt::HSXKPasswd->defined_presets();
+            byeee($msg);
+        }
+        $hsxkpwd_args{preset} = $val;
+    },
+    'overrides|o=s' => sub{
+        my ($opt_name, $val) = @_;
+        my $overrides = {};
+        eval{
+            $overrides = decode_json($val);
+            1; # explicit evaluation
+        }or do{
+            byeee("failed to parse JSON preset string with error:\n* $EVAL_ERROR");
+        };
+        unless(ConfigOverride->check(ConfigOverride->coerce($overrides))){
+            byeee("invalid preset overrides:\n* ".ConfigOverride->get_message($overrides));
+        }
+        $hsxkpwd_args{preset_overrides} = $overrides;
+    },
+    'config-file|c=s' => sub{
+        my ($opt_name, $val) = @_;
+        unless(-f $val){
+            byeee("file $val does not exist");
+        }
+        open my $CONFIG_FH, '<', $val or byee("failed to read file $val with error:\n* $OS_ERROR");
+        my $json_string = do{local $/ = undef; <$CONFIG_FH>};
+        close $CONFIG_FH;
+        $hsxkpwd_args{config_json} = $json_string;
+    },
+    'dictionary-package|d=s' => sub{
+        my ($opt_name, $val) = @_;
+        unless(PerlPackageName->check($val)){
+            byeee(PerlPackageName->get_message($val));
+        }
+        my $dict;
+        eval{
+            load $val;
+            $dict = $val->new();
+            1; # explicit evaluation
+        }or do{
+            byeee("failed to use '$val' to initialise a word source with error:\n* $EVAL_ERROR");
+        };
+        $hsxkpwd_args{dictionary} = $dict;
+    },
+    'rng-package|r=s' => sub{
+        my ($opt_name, $val) = @_;
+        unless(PerlPackageName->check($val)){
+            byeee(PerlPackageName->get_message($val));
+        }
+        my $rng;
+        eval{
+            load $val;
+            $rng = $val->new();
+            1; # explicit evaluation
+        }or do{
+            byeee("failed to use '$val' to initialise an RNG with error:\n* $EVAL_ERROR");
+        };
+        $hsxkpwd_args{rng} = $rng;
+    },
+    'verbose' => \$verbose,
+) or pod2usage(
+    -exitval => 1,
+    -verbose => 1,
+);
+
+# process the bare args
+my $num_pwds = shift @ARGV;
+if($num_pwds){
+    # validate the passed number of args
+    unless(NonZeroPositiveInteger->check($num_pwds)){
+        say 'ERROR - invalid number of passwords requested:';
+        say '* '.NonZeroPositiveInteger->get_message($num_pwds);
+        exit 1;
+    }
+}else{
+    $num_pwds = 1;
+}
+
+#
+# === Generate the Password(s) ================================================#
+#
+
+# try create an HSXKPasswd object
+my $hsxkpwd_obj;
+eval{
+    $hsxkpwd_obj = Crypt::HSXKPasswd->new(%hsxkpwd_args);
+    1; # explicit evaluation
+}or do{
+    say "ERROR - failed to initialise HSXKPasswd with error:\n* $EVAL_ERROR";
+    exit 2;
+};
+
+# if in verbose mode, print the status of the password generator STDERR
+if($verbose){
+    print {*STDERR} $hsxkpwd_obj->status()."\n";
+}
+
+# genereate and print the passwords
+say join "\n", $hsxkpwd_obj->passwords($num_pwds);
+
+#
+# === Helper Functions ========================================================#
+#
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE
+# Purpose    : Whine about bad user input and exit
+# Returns    : nothing, since this function exists the script.
+# Arguments  : 1) the message to depart with
+# Throws     : NOTHING
+# Notes      : Imagine the function name in Queenie from Black Adder's accent :)
+# See Also   :
+sub byeee{
+    say q{ERROR - }.(shift);
+    exit 1;
+}
+
+#
+# === The Documentation =======================================================#
+#
+
+## no critic (RequirePodSections);
+
+__END__
+
+=head1 NAME
+
+hsxkpasswd (v1.0) - a command-line interface to the Crypt::HSXKPasswd secure
+memorable password generator (L<http://www.bartb.ie/xkpasswd>).
+
+=head1 SYNOPSIS
+
+Generate Passwords:
+    B<hsxkpasswd> [options] [num_passwords]
+    
+Information/Utility Functions:
+    B<hsxkpasswd -v>|B<--version>
+    B<hsxkpasswd -h>|B<--help>
+    B<hsxkpasswd -l>|B<--list-presets>
+    B<hsxkpasswd -t>|B<--test-config> file
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<-c>, B<--config-file>
+
+The path to a file containing a valid config as a JSON string.
+
+Config files can be tested with either of the commands:
+    B<hsxkpasswd -t> file
+    B<hsxkpasswd --test-config> file
+
+If the specified config is invalid, the command will try to give useful feedback
+to help debug the config.
+
+It is possible for a config file to contain extraneous configuration keys but
+still be usable by the command. In this case the command will issue warnings,
+but still evaluate the config as valid.
+
+=item B<-d>, B<--dictionary-package>
+
+The name of a Perl module to use as the word source when generating passwords.
+
+The specified module must meet the following criteria:
+
+=over 4
+
+=item *
+
+The package must be installed on the system and available within Perl's standard
+library paths (C<@INC>).
+
+=item *
+
+The package must extend the class C<Crypt::HSXKPasswd::Dictionary>, and must
+override all the needed functions as described in the WORD SOURCES section of
+the Crypt::HSXKPasswd documentation.
+
+=item *
+
+The package should not require any parameters on import.
+
+=item *
+
+The constructor should not require any arguments to initialise a useable word
+source.
+
+=back
+
+Crypt::HSXKPasswd ships with a number of standard packages that can be used with
+this option. For more details see the WORD SOURCES section of
+the Crypt::HSXKPasswd documentation.
+
+If this option is not passed, the package
+Crypt::HSXKPasswd::Dictionary::EN_Default is used.
+
+=item B<-o>, B<--overrides>
+
+A JSON string representing a hash of configuration key names and values to
+override one or more configuration values from the loaded preset.
+
+This option is ignored unless a preset is specified.
+
+=item B<-p>, B<--preset>
+
+Use the specified preset when generating passwords.
+
+A list of presets can be generated with either of the the commands:
+    B<hsxkpasswd -l>
+    B<hsxkpasswd --list-presets>
+
+Note that B<-c>/B<--config-file> takes precedence over this option.
+
+=item B<-r>, B<--rng-package>
+
+The name of a Perl module to use as the random number generator (RNG) when
+generating passwords.
+
+The specified module must meet the following criteria:
+
+=over 4
+
+=item *
+
+The package must be installed on the system and available within Perl's standard
+library paths (C<@INC>).
+
+=item *
+
+The package must extend the class C<Crypt::HSXKPasswd::RNG>, and must
+override all the needed functions as described in the RANDOM NUMBER SOURCES
+section of the Crypt::HSXKPasswd documentation.
+
+=item *
+
+The package should not require any parameters to import.
+
+=item *
+
+The constructor should not require any arguments to initialise a useable RNG.
+
+=back
+
+Crypt::HSXKPasswd ships with a number of standard packages that can be used with
+this option. For more details see the RANDOM NUMBER SOURCES section of
+the Crypt::HSXKPasswd documentation.
+
+If this option is not passed, the package uses the most secure supported RNG
+available on the system.
+
+=item B<--verbose>
+
+Enable verbose output. Information about the internal state of the
+Crypt::HSXKPasswd object initialised by the command to generate passwords will
+be printed to STDERR before the passwords are printed to STDOUT.
+
+=back
+
+=head1 EXIT CODES
+
+=over 8
+
+=item B<0>
+
+Success - the command executed without error.
+
+=item B<1>
+
+User Error - there was something wrong with some input form the user.
+
+=item B<2>
+
+System Error - an unexpected error occurred while trying to generate the
+password(s).
+
+=back
+
+=head1 DESCRIPTION
+
+This is a command-line interface to the Perl module Crypt::HSXKPasswd, a module
+designed to generate secure memorable passwords inspired by Steve Gibson's
+Password Hay Stacks (https://www.grc.com/haystack.htm) and the famous 'correct
+horse battery staple' issue of the XKCD web comic (https://xkcd.com/936/).
+
+Passwords are generated using the following algorithm:
+
+=over 4
+
+=item 1
+
+Randomly choose some words from a word source.
+
+=item 2
+
+Apply any desired case transformations to the words.
+
+=item 3
+
+Create pseudo-words consisting of a few randomly chosen digits and add one to
+the front and back of the words
+
+=item 4
+
+Insert a separator symbol between each of the words. This symbol can be randomly
+chosen, but all the words and pseudo-words will be separated from each other by
+the same symbol.
+
+=item 5
+
+Zero or more instances of a padding symbol are added to the front and back of
+the password. Again, this symbol can be randomly chosen, but there will be just
+one padding symbol used in any one password.
+
+=back
+
+This process can be visualised as follows:
+
+    correct horse battery staple
+    CORRECT horse BATTERY STAPLE
+    94 CORRECT horse BATTERY STAPLE 34
+    94-CORRECT-horse-BATTERY-STAPLE-34
+    !!94-CORRECT-horse-BATTERY-STAPLE-34!!
+    
+Many aspects of this algorithm can be customised, and all steps apart from the
+first one are optional. You could use this command to generate a random password
+consisting of only words, with no case transformations, no digits, no separator
+symbol, and no padding symbol.
+
+For ease of use, a number of named presets have been created. See the SYNOPSIS
+and OPTIONS sections of this document for details on how to use presets.
+
+It is also possible to tweak a preset by overriding one or more configuration
+keys using the B<--overrides> option.
+
+For a more detailed explanation on how to configure this password generator, see
+the documentation for the Crypt::HSXKPasswd documentation, which can be accessed
+using the perldoc command:
+    B<perldoc Crypt::HSXKPasswd>
+
+=head1 LICENCE AND COPYRIGHT
+
+Copyright (c) 2015, Bart Busschots T/A Bartificer Web Solutions All rights
+reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+=over 4
+
+=item 1.
+
+Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer. 
+
+=item 2.
+
+Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+=back
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+=head1 AUTHOR
+
+Bart Busschots (http://www.bartbusschots.ie/)

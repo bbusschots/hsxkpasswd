@@ -31,3 +31,10 @@ README
 *.tmp
 
 pod.html
+
+temp/
+test2.pl
+
+Makefile.PL
+
+test1.pl
