@@ -151,7 +151,7 @@
 
 <h1 id="VERSION">VERSION</h1>
 
-<p>This documentation refers to <code>Crypt::HSXKPasswd</code> version 3.2.1.</p>
+<p>This documentation refers to <code>Crypt::HSXKPasswd</code> version 3.3.1.</p>
 
 <h1 id="SYNOPSIS">SYNOPSIS</h1>
 
@@ -412,7 +412,7 @@
 <p>For more details see the ENTROPY CHECKING section of this document.</p>
 
 </li>
-<li><p><code>SUPPRESS_ENTROPY_WARNINGS</code> - control the suppression of entropy warnings. The value must be one of <code>NONE</code>, <code>ALL</code>, <code>SEEN</code>, or <code>BLIND</code>. The default value is <code>NONE</code>.</p>
+<li><p><code>ENTROPY_WARNINGS</code> - control the emission of entropy warnings. The value must be one of <code>ALL</code>, <code>BLIND</code>, or <code>NONE</code>. The default value is <code>ALL</code>.</p>
 
 <p>For more details see the ENTROPY CHECKING section of this document.</p>
 
@@ -572,7 +572,7 @@
 
 <ul>
 
-<li><p><code>ALTERNATE</code> - each alternate word will be converted to all upper case and all lower case.</p>
+<li><p><code>ALTERNATE</code> - each alternate word will be converted to all upper case and all lower case. The case of the first word is chosen at random.</p>
 
 </li>
 <li><p><code>CAPITALISE</code> - the first letter in every word will be converted to upper case, all other letters will be converted to lower case.</p>
@@ -728,15 +728,15 @@
 
 <p>Sample Password:</p>
 
-<pre><code>    @60:london:TAUGHT:forget:70@
+<pre><code>    -25,favor,MANY,BEAR,53-
     </code></pre>
 
 <p>Preset Definition:</p>
 
 <pre><code>    {
-        padding_alphabet =&gt; [qw{! ? @ &amp;}],
-        separator_alphabet =&gt; [qw{- : .}, q{,}],
-        word_length_min =&gt; 5,
+        padding_alphabet =&gt; [qw{- : . ! ? @ &amp;}],
+        separator_alphabet =&gt; [qw{- : . @}, q{,}, q{ }],
+        word_length_min =&gt; 4,
         word_length_max =&gt; 7,
         num_words =&gt; 3,
         separator_character =&gt; &#39;RANDOM&#39;,
@@ -830,28 +830,24 @@
     }</code></pre>
 
 </li>
-<li><p><code>WEB16</code> - a preset for websites that don&#39;t allow passwords to be longer than 16 characters. Because 16 characters is not very long, a large symbol alphabet had to be used to provide sufficient entropy.</p>
+<li><p><code>WEB16</code> - a preset for websites that don&#39;t allow passwords to be longer than 16 characters. <b>ONLY USE THIS PRESET IF YOU MUST!</b> The 14 character limit does not allow for sufficient entropy in scenarios where the attacker knows the dictionary and config used to generate the password. Use of this preset will generate a low entropy warning.</p>
 
 <p>Sample Password:</p>
 
-<pre><code>    :baby.ohio.DEAR:
+<pre><code>    tube+NICE+iron+02
     </code></pre>
 
 <p>Preset Definition:</p>
 
 <pre><code>    {
-        padding_alphabet =&gt; [qw{! @ $ % ^ &amp; * + = : | ~ ?}],
-        separator_alphabet =&gt; [qw{- + = . * _ | ~}, q{,}],
+        symbol_alphabet =&gt; [qw{! @ $ % ^ &amp; * - _ + = : | ~ ? / . ;}],
         word_length_min =&gt; 4,
         word_length_max =&gt; 4,
         num_words =&gt; 3,
         separator_character =&gt; &#39;RANDOM&#39;,
         padding_digits_before =&gt; 0,
-        padding_digits_after =&gt; 0,
-        padding_type =&gt; &#39;FIXED&#39;,
-        padding_character =&gt; &#39;RANDOM&#39;,
-        padding_characters_before =&gt; 1,
-        padding_characters_after =&gt; 1,
+        padding_digits_after =&gt; 2,
+        padding_type =&gt; &#39;NONE&#39;,
         case_transform =&gt; &#39;RANDOM&#39;,
         allow_accents =&gt; 0,
     }
@@ -915,7 +911,7 @@
 
 <p>Sample Password:</p>
 
-<pre><code>    KING-madrid-exercise-BELGIUM
+<pre><code>    quiet-children-OCTOBER-today-HOPE
     </code></pre>
 
 <p>Preset Definition:</p>
@@ -923,7 +919,7 @@
 <pre><code>    {
         word_length_min =&gt; 4,
         word_length_max =&gt; 8,
-        num_words =&gt; 4,
+        num_words =&gt; 5,
         separator_character =&gt; q{-},
         padding_digits_before =&gt; 0,
         padding_digits_after =&gt; 0,
@@ -1480,7 +1476,7 @@
 
 <p>This function must be passed a hashref to test as the first argument. The function returns 1 if the passed config is valid, and 0 otherwise.</p>
 
-<p>Optionally, a named argument <code>croak</code> can also be passed to control whehther or not the function should croak if the config is invalid. The value of this named argument should be <code>1</code> or <code>0</code>.</p>
+<p>Optionally, a named argument <code>croak</code> can also be passed to control whether or not the function should croak if the config is invalid. The value of this named argument should be <code>1</code> or <code>0</code>.</p>
 
 <p>When calling the function with <code>croak</code> set to <code>1</code>, the message thrown by croak will explain why the config is invalid.</p>
 
@@ -1640,20 +1636,17 @@
 <li><p><code>ENTROPY_MIN_SEEN</code> - the minimum acceptable entropy in bits for a worst-case scenario (where the word source and config are known). The default value is 52bits, equivalent to an 8 character password consisting of mixed-case letters, digits, and symbols.</p>
 
 </li>
-<li><p><code>SUPPRESS_ENTROPY_WARNINGS</code> - this variable can be used to suppress one or both of the entropy warnings. The following values are valid:</p>
+<li><p><code>ENTROPY_WARNINGS</code> - this variable can be used to control the emission of entropy warnings. The following values are valid:</p>
 
 <ul>
 
-<li><p><code>NONE</code> - no warnings are suppressed. This is the default value.</p>
+<li><p><code>ALL</code> - all entropy warnings are emitted. This is the default value.</p>
 
 </li>
-<li><p><code>SEEN</code> - only warnings for the worst-case scenario are suppressed.</p>
+<li><p><code>BLIND</code> - only warnings for the best-case scenario are emitted. I.e. warnings for the worst-case scenario (attacker has full knowledge) are suppressed.</p>
 
 </li>
-<li><p><code>BLIND</code> - only warnings for the best-case scenario are suppressed.</p>
-
-</li>
-<li><p><code>ALL</code> - all entropy warnings are suppressed.</p>
+<li><p><code>NONE</code> - all entropy warnings are suppressed.</p>
 
 </li>
 </ul>
@@ -1862,7 +1855,7 @@
 
 <ul>
 
-<li><p><code>DEBUG</code> - this output is completely suppressed unless the module configuration variable <code>DEBUG</code> is set to <code>1</code>. All debug messages are pritned to the stream defined in the module configuration variable <code>LOG_STREAM</code> (regardless of the the value of the module configuration variable <code>LOG_ERRORS</code>).</p>
+<li><p><code>DEBUG</code> - this output is completely suppressed unless the module configuration variable <code>DEBUG</code> is set to <code>1</code>. All debug messages are printed to the stream defined in the module configuration variable <code>LOG_STREAM</code> (regardless of the the value of the module configuration variable <code>LOG_ERRORS</code>).</p>
 
 </li>
 <li><p><code>WARNING</code> - warning messages are always thrown with <code>carp()</code>, and also printed to the stream specified by the module configuration variable <code>LOG_STREAM</code> if the module configuration variable <code>LOG_ERRORS</code> is set to <code>1</code>.</p>
@@ -1898,6 +1891,9 @@
 
 </li>
 <li><p><code>Fatal</code> - <a href="http://search.cpan.org/perldoc?Fatal">http://search.cpan.org/perldoc?Fatal</a></p>
+
+</li>
+<li><p><code>File::HomeDir</code> - <a href="http://search.cpan.org/perldoc?File%3A%3AHomeDir">http://search.cpan.org/perldoc?File%3A%3AHomeDir</a></p>
 
 </li>
 <li><p><code>Getopt::Long</code> - <a href="http://search.cpan.org/perldoc?Getopt%3A%3ALong">http://search.cpan.org/perldoc?Getopt%3A%3ALong</a></p>
