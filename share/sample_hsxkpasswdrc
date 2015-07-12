@@ -1,0 +1,40 @@
+{
+    "custom_presets" : {
+        "TRUE_XKCD" : {
+            "description" : "A preset that mimicks the famous cartoon exactly",
+            "config" : {
+                "word_length_min" : 4,
+                "word_length_max" : 8,
+                "num_words" : 4,
+                "separator_character" : " ",
+                "padding_digits_before" : 0,
+                "padding_digits_after" : 0,
+                "padding_type" : "NONE",
+                "case_transform" : "LOWER",
+                "allow_accents" : 0
+            }
+        },
+        "DEFAULT" : {
+            "description" : "A custom default preset to ovrride the standard default",
+            "config" : {
+                "padding_alphabet" : ["!", "?", "@", "&"],
+                "separator_alphabet" : ["-", ":", ".", ","],
+                "word_length_min" : 4,
+                "word_length_max" : 8,
+                "num_words" : 2,
+                "separator_character" : "RANDOM",
+                "padding_digits_before" : 2,
+                "padding_digits_after" : 2,
+                "padding_type" : "FIXED",
+                "padding_character" : "RANDOM",
+                "padding_characters_before" : 1,
+                "padding_characters_after" : 1,
+                "case_transform" : "ALTERNATE",
+                "allow_accents" : 0
+            }
+        }
+    },
+    "default_entropy_warnings" : "BLIND",
+    "default_dictionary" : "Crypt::HSXKPasswd::Dictionary::NL",
+    "default_rng" : "Crypt::HSXKPasswd::RNG::Basic"
+}

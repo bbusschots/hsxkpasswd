@@ -11,7 +11,7 @@ use Crypt::HSXKPasswd::RNG::Basic;
 plan tests => 10;
 
 # supress entropy warnings - some of the test data will be very low in entropy!
-Crypt::HSXKPasswd->module_config('SUPPRESS_ENTROPY_WARNINGS', 'ALL');
+Crypt::HSXKPasswd->module_config('ENTROPY_WARNINGS', 'NONE');
 
 #
 # generate a password with each of the named arguents in the constructor

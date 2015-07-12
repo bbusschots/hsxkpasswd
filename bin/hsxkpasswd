@@ -8,6 +8,7 @@ use Getopt::Long; # for argument processing
 use Pod::Usage; # for help and usage
 use JSON qw( decode_json ); # for decoding JSON strings
 use Module::Load; # for dynamically loading modules
+use File::HomeDir; # for finding the path to the user's home dir
 
 # include Crypt::HSXKPasswd Stuff
 # DEV-ONLY
@@ -32,7 +33,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 #
 
 # version info
-use version; our $VERSION = qv('1.0_01');
+use version; our $VERSION = qv('1.1_01');
 
 #
 # === Process Args ============================================================#
@@ -40,8 +41,11 @@ use version; our $VERSION = qv('1.0_01');
 
 # parse the commandline options
 my $verbose = 0;
-my %hsxkpwd_args = ();
+my %cmd_args = ();
 GetOptions(
+    #
+    # -- the 'do and exit' options --
+    #
     'help|h' => sub{
         pod2usage(
             -exitval => 0,
@@ -54,10 +58,6 @@ GetOptions(
             -verbose => 99,
             -sections => 'NAME',
         );
-    },
-    'list-presets|l' => sub{
-        say join q{, }, Crypt::HSXKPasswd->defined_presets();
-        exit 0;
     },
     'test-config|t=s' => sub{
         my ($opt_name, $val) = @_;
@@ -88,14 +88,49 @@ GetOptions(
         }
         exit 0;
     },
+    'test-rcfile=s' => sub{
+        my ($opt_name, $val) = @_;
+        unless(-f $val){
+            byeee("file $val does not exist");
+        }
+        open my $RCFILE_FH, '<', $val or byee("failed to read file $val with error:\n* $OS_ERROR");
+        my $json_string = do{local $/ = undef; <$RCFILE_FH>};
+        close $RCFILE_FH;
+        my $rcdata;
+        eval{
+            $rcdata = decode_json($json_string);
+            1; # explicit evaluation
+        }or do{
+            byeee("failed to parse the hsxkpasswdrc file's content as JSON:\n* source file: $val\n* parse error: $EVAL_ERROR");
+        };
+        say 'Validing the converted datatsructure from the hsxkpasswdrc file ...';
+        my $is_valid = RCFileData->check($rcdata);
+        if($is_valid){
+            say '** hsxkpasswdrc data OK **';
+        }else{
+            say '** hsxkpasswdrc data INVALID **';
+            say RCFileData->get_message($rcdata);
+            exit 1;
+        }
+        exit 0;
+    },
+    #
+    # -- the delayed 'do and exit' options --
+    #
+    'list-presets|l' => sub{
+        my ($opt_name, $val) = @_;
+        $cmd_args{do_list_presets} = 1;
+    },
+    #
+    # -- the regular data options --
+    #
     'preset|p=s' => sub{
         my ($opt_name, $val) = @_;
-        unless(PresetName->check(PresetName->coerce($val))){
-            my $msg = "preset '$val' does not exist.\n* Valid Presets: ";
-            $msg .= join q{, }, Crypt::HSXKPasswd->defined_presets();
-            byeee($msg);
+        my $preset_name = uc $val; # convert to upper-case
+        unless(UppercaseIdentifier->check($preset_name)){
+            byeee("$val is not a valid preset name, should only contain un-accented letters, digits and underscores");
         }
-        $hsxkpwd_args{preset} = $val;
+        $cmd_args{preset} = $preset_name;
     },
     'overrides|o=s' => sub{
         my ($opt_name, $val) = @_;
@@ -104,12 +139,12 @@ GetOptions(
             $overrides = decode_json($val);
             1; # explicit evaluation
         }or do{
-            byeee("failed to parse JSON preset string with error:\n* $EVAL_ERROR");
+            byeee("failed to parse JSON preset overrides string with error:\n* $EVAL_ERROR");
         };
         unless(ConfigOverride->check(ConfigOverride->coerce($overrides))){
             byeee("invalid preset overrides:\n* ".ConfigOverride->get_message($overrides));
         }
-        $hsxkpwd_args{preset_overrides} = $overrides;
+        $cmd_args{preset_overrides} = $overrides;
     },
     'config-file|c=s' => sub{
         my ($opt_name, $val) = @_;
@@ -119,39 +154,42 @@ GetOptions(
         open my $CONFIG_FH, '<', $val or byee("failed to read file $val with error:\n* $OS_ERROR");
         my $json_string = do{local $/ = undef; <$CONFIG_FH>};
         close $CONFIG_FH;
-        $hsxkpwd_args{config_json} = $json_string;
+        my $config = {};
+        eval{
+            $config = decode_json($json_string);
+            1; # explicit evaluation
+        }or do{
+            byeee("failed to parse JSON config string from file $val with error:\n* $EVAL_ERROR");
+        };
+        unless(Config->check(Config->coerce($config))){
+            byeee("invalid config from file $val:\n* ".Config->get_message($config));
+        }
+        $cmd_args{config} = $config;
     },
     'dictionary-package|d=s' => sub{
         my ($opt_name, $val) = @_;
-        unless(PerlPackageName->check($val)){
-            byeee(PerlPackageName->get_message($val));
-        }
-        my $dict;
-        eval{
-            load $val;
-            $dict = $val->new();
-            1; # explicit evaluation
-        }or do{
-            byeee("failed to use '$val' to initialise a word source with error:\n* $EVAL_ERROR");
-        };
-        $hsxkpwd_args{dictionary} = $dict;
+        $cmd_args{dictionary} = load_dictionary($val);
     },
     'rng-package|r=s' => sub{
         my ($opt_name, $val) = @_;
-        unless(PerlPackageName->check($val)){
-            byeee(PerlPackageName->get_message($val));
+        $cmd_args{rng} = load_rng($val);
+    },
+    'rcfile=s' => sub{
+        my ($opt_name, $val) = @_;
+        if($val eq 'NONE'){
+            $cmd_args{no_rcdata} = 1;
+        }else{
+            $cmd_args{rcdata} = load_rcfile($val);
         }
-        my $rng;
-        eval{
-            load $val;
-            $rng = $val->new();
-            1; # explicit evaluation
-        }or do{
-            byeee("failed to use '$val' to initialise an RNG with error:\n* $EVAL_ERROR");
-        };
-        $hsxkpwd_args{rng} = $rng;
     },
     'verbose' => \$verbose,
+    'warn|w=s' => sub{
+        my ($opt_name, $val) = @_;
+        unless(EntropyWarningLevel->check($val)){
+            byeee('invalid entropy warning level: '.EntropyWarningLevel->get_message($val));
+        }
+        $cmd_args{warn} = uc $val; # make sure it's upper case
+    },
 ) or pod2usage(
     -exitval => 1,
     -verbose => 1,
@@ -171,6 +209,168 @@ if($num_pwds){
 }
 
 #
+# === Try load an hsxkpasswdrc file if possible ================================#
+#
+
+# try determine the user's home dir and .hsxkpasswdrc file path
+my @home_dir = File::Spec->splitdir(File::HomeDir->my_home());
+my $dot_hsxkpasswdrc_path = File::Spec->catfile(@home_dir, '.hsxkpasswdrc');
+
+# start with blank rcdata
+my $rcdata = {};
+
+# unless we're skipping rcdata completely, try from the args, then from ~/hsxkpasswdrc
+if($cmd_args{no_rcdata}){
+    note('loading of hsxkpasswdrc files disabled with --rcfile=NONE');
+}else{
+    if($cmd_args{rcdata}){
+        $rcdata = $cmd_args{rcdata};
+        note('using hsxkpasswdrc file from --rcfile option');
+    }elsif(-f $dot_hsxkpasswdrc_path){
+        $rcdata = load_rcfile($dot_hsxkpasswdrc_path);
+        note("using hsxkpasswdrc file $dot_hsxkpasswdrc_path");
+    }else{
+        note('no hsxkpasswdrc file loaded');
+    }
+}
+
+#
+# === List presets and exit if --list-presets =================================#
+#
+if($cmd_args{do_list_presets}){
+    # merge the presets into a single array
+    my %preset_lookup = ();
+    my %standard_preset_lookup = ();
+    my %custom_preset_lookup = ();
+    foreach my $preset (Crypt::HSXKPasswd->defined_presets()){
+        $preset_lookup{$preset} = 1;
+        $standard_preset_lookup{$preset} = 1;
+    }
+    if($rcdata->{custom_presets}){
+        foreach my $preset (keys %{$rcdata->{custom_presets}}){
+            $preset_lookup{$preset} = 1;
+            $custom_preset_lookup{$preset} = 1;
+        }
+    }
+    
+    # if there are custom presets, print out the detail if in verbose mode
+    if($verbose && $rcdata->{custom_presets}){
+        note('custom presets (from hsxkpasswdrc file): '.(join q{, }, keys %custom_preset_lookup));
+        my @unoverriden_standard_presets = ();
+        my @overridden_standard_presets = ();
+        foreach my $preset (sort keys %standard_preset_lookup){
+            if($custom_preset_lookup{$preset}){
+                push @overridden_standard_presets, $preset;
+            }else{
+                push @unoverriden_standard_presets, $preset;
+            }
+        }
+        if(scalar @unoverriden_standard_presets){
+            note('available standard presets: '.(join q{, }, @unoverriden_standard_presets));
+        }
+        if(scalar @overridden_standard_presets){
+            note('UN-AVAILABLE standard presets (custom presets with same name): '.(join q{, }, @overridden_standard_presets));
+        }
+        say {*STDERR} q{}; # print a blank line to STDERR to make the output easier to read
+    }
+    
+    # always print a de-duplicated list of all defined presets
+    say join q{, }, sort keys %preset_lookup;
+    
+    # exit with success
+    exit 0;
+}
+
+#
+# === Set the Warning Level (if specified) ====================================#
+#
+if($cmd_args{warn}){
+    Crypt::HSXKPasswd->module_config('ENTROPY_WARNINGS', $cmd_args{warn});
+    note('using entropy warning level specified with --warn option');
+}elsif($rcdata->{default_entropy_warnings}){
+    Crypt::HSXKPasswd->module_config('ENTROPY_WARNINGS', $rcdata->{default_entropy_warnings});
+    note('using entropy warning level specified in hsxkpasswdrc file');
+}else{
+    note('no custom entropy warning level set');
+}
+
+#
+# === Assemble the options for the HSXKPasswd constructor =====================#
+#
+
+my %hsxkpwd_args = ();
+
+# deal with the config - first try a directly specified config, then a preset,
+# then fall back to the default config
+if($cmd_args{config}){
+    $hsxkpwd_args{config} = $cmd_args{config};
+    note('using config from file specified with --config-file option');
+}elsif($cmd_args{preset}){
+    # if there is a matching custom preset, use it to generate a config,
+    # otherwise treat the config as a standard config
+    if($rcdata->{custom_presets} && $rcdata->{custom_presets}->{$cmd_args{preset}}){
+        # we are a custom preset
+        my $config = $rcdata->{custom_presets}->{$cmd_args{preset}}->{config};
+        
+        # apply any overrides if needed
+        if($cmd_args{preset_overrides}){
+            # save the keys into the config
+            foreach my $key (keys %{$cmd_args{preset_overrides}}){
+                $config->{$key} = $cmd_args{preset_overrides}->{$key};
+            }
+            # validate the resulting config
+            unless(Config->check($config)){
+                byeee('the custom preset combined with the specified overrides produces an invalid config: '.Config->get_message($config));
+            }
+        }
+        
+        # save to the hsxkpasswd arguments object
+        $hsxkpwd_args{config} = $config;
+        note(qq{using config from custom preset '$cmd_args{preset}'});
+    }else{
+        # treat as a standard config - make sure it exists, then use
+        unless(PresetName->check($cmd_args{preset})){
+            byeee("no preset exists with the name '$cmd_args{preset}' (you can see all defined presets with: hsxkpasswd --list-presets)");
+        }
+        $hsxkpwd_args{preset} = $cmd_args{preset};
+        if($cmd_args{preset_overrides}){
+            $hsxkpwd_args{preset_overrides} = $cmd_args{preset_overrides};
+        }
+        note(qq{using standard preset '$cmd_args{preset}'});
+    }
+}else{
+    # if the preset DEFUALT is ovrridden by the rcdata, us it
+    if($rcdata->{custom_presets} && $rcdata->{custom_presets}->{'DEFAULT'}){
+        $hsxkpwd_args{config} = $rcdata->{custom_presets}->{'DEFAULT'}->{config};
+        note('using custom default config from hsxkpasswdrc file');
+    }else{
+        note('using standard default config');
+    }
+}
+
+# deal with the dictionary - the commandline takes precedence, then the rc file
+if($cmd_args{dictionary}){
+    $hsxkpwd_args{dictionary} = $cmd_args{dictionary};
+    note('using word source package from --dictionary-package option');
+}elsif($rcdata->{default_dictionary}){
+    $hsxkpwd_args{dictionary} = load_dictionary($rcdata->{default_dictionary});
+    note('using word source package from hsxkpasswdrc file');
+}else{
+    note('using default word source');
+}
+
+# deal wit the rng - the commandline takes precedence, then the rc file
+if($cmd_args{rng}){
+    $hsxkpwd_args{rng} = $cmd_args{rng};
+    note('using rng package from --rng-package option');
+}elsif($rcdata->{default_rng}){
+    $hsxkpwd_args{rng} = load_rng($rcdata->{default_rng});
+    note('using rng package from hsxkpasswdrc file');
+}else{
+    note('using default rng');
+}
+
+#
 # === Generate the Password(s) ================================================#
 #
 
@@ -184,9 +384,9 @@ eval{
     exit 2;
 };
 
-# if in verbose mode, print the status of the password generator STDERR
+# if in verbose mode, print the status of the password generator
 if($verbose){
-    print {*STDERR} $hsxkpwd_obj->status()."\n";
+    say {*STDERR} "\n".$hsxkpwd_obj->status();
 }
 
 # genereate and print the passwords
@@ -209,6 +409,127 @@ sub byeee{
     exit 1;
 }
 
+#####-SUB-######################################################################
+# Type       : SUBROUTINE
+# Purpose    : Print a verbose-mode-only message if appropriate
+# Returns    : VOID (always returns 1 to keep perlcritic happy)
+# Arguments  : 1) the message to print
+# Throws     : NOTHING
+# Notes      :
+# See Also   :
+sub note{
+    say {*STDERR} q{*NOTE* }.(shift) if $verbose;
+    return 1; # to keep perlcritic happy
+}
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE
+# Purpose    : Try load an hsxkpasswdrc file
+# Returns    : A valid RDFileData hashref
+# Arguments  : 1) the path to try load the data from
+# Throws     : NOTHING - but does exit the script on error
+# Notes      : Exits the script with a sane error message via byeee() on error.
+# See Also   : byeee()
+sub load_rcfile{
+    my $rcfile_path = shift;
+    
+    # validate the args
+    unless(NonEmptyString->check($rcfile_path)){
+        byeee('load_rcfile(): invalid args, must pass a file path as the first argument');
+    }
+    unless(-f $rcfile_path){
+        byeee("file $rcfile_path does not exist");
+    }
+    
+    # try slurp the file
+    open my $RCFILE_FH, '<', $rcfile_path or byee("failed to read file $rcfile_path with error:\n* $OS_ERROR");
+    my $json_string = do{local $/ = undef; <$RCFILE_FH>};
+    close $RCFILE_FH;
+    
+    # try parse the file to JSON
+    my $loaded_rcdata = {};
+    eval{
+        $loaded_rcdata = decode_json($json_string);
+        1; # explicit evaluation
+    }or do{
+        byeee("failed to parse JSON string from file $rcfile_path with error:\n* $EVAL_ERROR");
+    };
+    
+    # validate the data structure represnted by the JSON
+    unless(RCFileData->check($loaded_rcdata)){
+        byeee("invalid hsxkpasswdrc data from file $rcfile_path:\n* ".RCFileData->get_message($loaded_rcdata));
+    }
+    
+    # return the data
+    return $loaded_rcdata;
+}
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE
+# Purpose    : Load a dictionary object form a package name
+# Returns    : An object of a class that extends Crypt::HSXKPasswd::Dictionary
+# Arguments  : 1) the Perl package name as a string
+# Throws     : NOTHING - exists the script if there is a problem
+# Notes      : Exits the script with a sane error message via byeee() on error.
+# See Also   : byeee()
+sub load_dictionary{
+    my $pkg_name = shift;
+    
+    # validate args
+    unless(NonEmptyString->check($pkg_name)){
+        byeee('load_dictionary(): invalid args, must pass a perl package name as the first argument');
+    }
+    unless(PerlPackageName->check($pkg_name)){
+        byeee(PerlPackageName->get_message($pkg_name));
+    }
+    
+    # try instantiate an object with the passed class
+    my $dict;
+    eval{
+        load $pkg_name;
+        $dict = $pkg_name->new();
+        1; # explicit evaluation
+    }or do{
+        byeee("failed to use '$pkg_name' to initialise a word source with error:\n* $EVAL_ERROR");
+    };
+    
+    # return the object
+    return $dict;
+}
+
+#####-SUB-######################################################################
+# Type       : SUBROUTINE
+# Purpose    : Load an rng object form a package name
+# Returns    : An object of a class that extends Crypt::HSXKPasswd::RNG
+# Arguments  : 1) the Perl package name as a string
+# Throws     : NOTHING - exists the script if there is a problem
+# Notes      : Exits the script with a sane error message via byeee() on error.
+# See Also   : byeee()
+sub load_rng{
+    my $pkg_name = shift;
+    
+    # validate args
+    unless(NonEmptyString->check($pkg_name)){
+        byeee('load_rng(): invalid args, must pass a perl package name as the first argument');
+    }
+    unless(PerlPackageName->check($pkg_name)){
+        byeee(PerlPackageName->get_message($pkg_name));
+    }
+    
+    # try instantiate an object with the passed class
+    my $rng;
+    eval{
+        load $pkg_name;
+        $rng = $pkg_name->new();
+        1; # explicit evaluation
+    }or do{
+        byeee("failed to use '$pkg_name' to initialise an RNG with error:\n* $EVAL_ERROR");
+    };
+    
+    # return the object
+    return $rng;
+}
+
 #
 # === The Documentation =======================================================#
 #
@@ -219,19 +540,22 @@ __END__
 
 =head1 NAME
 
-hsxkpasswd (v1.0) - a command-line interface to the Crypt::HSXKPasswd secure
+hsxkpasswd (v1.1.1) - a command-line interface to the Crypt::HSXKPasswd secure
 memorable password generator (L<http://www.bartb.ie/xkpasswd>).
 
 =head1 SYNOPSIS
 
 Generate Passwords:
-    B<hsxkpasswd> [options] [num_passwords]
+
+    hsxkpasswd [options] [num_passwords]
     
 Information/Utility Functions:
-    B<hsxkpasswd -v>|B<--version>
-    B<hsxkpasswd -h>|B<--help>
-    B<hsxkpasswd -l>|B<--list-presets>
-    B<hsxkpasswd -t>|B<--test-config> file
+
+    hsxkpasswd -v|--version
+    hsxkpasswd -h|--help
+    hsxkpasswd> -l|--list-presets
+    hsxkpasswd> -t|--test-config file
+    hsxkpasswd> --test-rcfile file
 
 =head1 OPTIONS
 
@@ -242,8 +566,9 @@ Information/Utility Functions:
 The path to a file containing a valid config as a JSON string.
 
 Config files can be tested with either of the commands:
-    B<hsxkpasswd -t> file
-    B<hsxkpasswd --test-config> file
+
+    hsxkpasswd -t file
+    hsxkpasswd --test-config file
 
 If the specified config is invalid, the command will try to give useful feedback
 to help debug the config.
@@ -267,9 +592,9 @@ library paths (C<@INC>).
 
 =item *
 
-The package must extend the class C<Crypt::HSXKPasswd::Dictionary>, and must
-override all the needed functions as described in the WORD SOURCES section of
-the Crypt::HSXKPasswd documentation.
+The package must extend the class B<Crypt::HSXKPasswd::Dictionary>, and must
+override all the needed functions as described in the C<WORD SOURCES> section of
+the B<Crypt::HSXKPasswd> documentation.
 
 =item *
 
@@ -282,12 +607,12 @@ source.
 
 =back
 
-Crypt::HSXKPasswd ships with a number of standard packages that can be used with
-this option. For more details see the WORD SOURCES section of
-the Crypt::HSXKPasswd documentation.
+B<Crypt::HSXKPasswd> ships with a number of standard packages that can be used with
+this option. For more details see the C<WORD SOURCES> section of
+the B<Crypt::HSXKPasswd> documentation.
 
 If this option is not passed, the package
-Crypt::HSXKPasswd::Dictionary::EN_Default is used.
+B<Crypt::HSXKPasswd::Dictionary::EN_Default> is used.
 
 =item B<-o>, B<--overrides>
 
@@ -301,8 +626,9 @@ This option is ignored unless a preset is specified.
 Use the specified preset when generating passwords.
 
 A list of presets can be generated with either of the the commands:
-    B<hsxkpasswd -l>
-    B<hsxkpasswd --list-presets>
+
+    hsxkpasswd -l
+    hsxkpasswd --list-presets
 
 Note that B<-c>/B<--config-file> takes precedence over this option.
 
@@ -322,9 +648,9 @@ library paths (C<@INC>).
 
 =item *
 
-The package must extend the class C<Crypt::HSXKPasswd::RNG>, and must
-override all the needed functions as described in the RANDOM NUMBER SOURCES
-section of the Crypt::HSXKPasswd documentation.
+The package must extend the class B<Crypt::HSXKPasswd::RNG>, and must
+override all the needed functions as described in the C<RANDOM NUMBER SOURCES>
+section of the B<Crypt::HSXKPasswd> documentation.
 
 =item *
 
@@ -336,18 +662,30 @@ The constructor should not require any arguments to initialise a useable RNG.
 
 =back
 
-Crypt::HSXKPasswd ships with a number of standard packages that can be used with
-this option. For more details see the RANDOM NUMBER SOURCES section of
-the Crypt::HSXKPasswd documentation.
+B<Crypt::HSXKPasswd> ships with a number of standard packages that can be used with
+this option. For more details see the C<RANDOM NUMBER SOURCES> section of
+the B<Crypt::HSXKPasswd> documentation.
 
 If this option is not passed, the package uses the most secure supported RNG
 available on the system.
 
+=item B<-w>, B<--warn>
+
+The entropy warning level to use when initialising the B<Crypt::HSXKPasswd> object
+that will be used to generate the passwords.
+
+Must be one of C<ALL>, C<BLIND>, or C<NONE>.
+
+=item B<--rcfile>
+
+The path to a B<hsxkpasswdrc> file. For more details see the FILES section of
+this document.
+
 =item B<--verbose>
 
 Enable verbose output. Information about the internal state of the
-Crypt::HSXKPasswd object initialised by the command to generate passwords will
-be printed to STDERR before the passwords are printed to STDOUT.
+B<Crypt::HSXKPasswd> object initialised by the command to generate passwords will
+be printed to B<STDERR> before the passwords are printed to B<STDOUT>.
 
 =back
 
@@ -372,7 +710,7 @@ password(s).
 
 =head1 DESCRIPTION
 
-This is a command-line interface to the Perl module Crypt::HSXKPasswd, a module
+This is a command-line interface to the Perl module B<Crypt::HSXKPasswd>, a module
 designed to generate secure memorable passwords inspired by Steve Gibson's
 Password Hay Stacks (https://www.grc.com/haystack.htm) and the famous 'correct
 horse battery staple' issue of the XKCD web comic (https://xkcd.com/936/).
@@ -431,6 +769,80 @@ For a more detailed explanation on how to configure this password generator, see
 the documentation for the Crypt::HSXKPasswd documentation, which can be accessed
 using the perldoc command:
     B<perldoc Crypt::HSXKPasswd>
+
+=head1 C<hsxkpasswdrc> FILES
+
+B<hsxkpasswdrc> files can be used to specify custom presets, and to override
+some default settings.
+
+B<hsxkpasswdrc> files can be loaded explicitly by using the B<--rcfile> option,
+or implicitly by creating a file called B<.hsxkpasswdrc> and placing it at the
+root of the home folder of the user account executing the B<hsxkpasswd> command.
+
+If the B<--rcfile> option is specified, and there is a file named
+B<.hsxkpasswdrc> in the user's home directory, the file specified with the
+B<--rcfile> option takes precedence.
+
+The B<--rcfile> option can also be used to suppress the loading of all
+B<hsxkpasswdrc> files by specifying the special value C<NONE>.
+
+=head2 The C<hsxkpasswdrc> File Format
+
+B<hsxkpasswdrc> files must contain a valid JSON string, and be UTF-8 encoded.
+
+The JSON string must represent a reference to a hash indexed by zero or more of
+the following keys (and no other keys):
+
+=over 8
+
+=item B<custom_presets>
+
+A hash of preset definitions indexed by preset name.
+
+Preset names must be strings of length at least one consisting of only
+upper-case un-accented letters, digits, and underscores.
+
+Preset definitions must be hashes indexed by the keys C<description> and
+C<config>, with description contianing a non-empty string, and config a valid
+config hashref.
+
+=item B<default_entropy_warnings>
+
+The entropy warning level to use when initialising the B<Crypt::HSXKPasswd>
+object that will be used to generate the passwords.
+
+Must be one of B<ALL>, B<BLIND>, or B<NONE>.
+
+This value will be ignored whenever either of the B<-w> or B<--warn> options are
+specified.
+
+=item B<default_dictionary>
+
+A string containing the perl package name to use as the default word source.
+
+The package must extend B<Crypt::HSXKPasswd::Dictionary>, and have a
+constructor that requires no arguments.
+
+The package specified will only be used when neither the B<-d> nor
+B<--dictionary-package> options are specified.
+
+=item B<default_rng>
+
+A string containing the perl package name to use as the default random number
+source.
+
+The package must extend B<Crypt::HSXKPasswd::RNG>, and have a constructor that
+requires no arguments.
+
+The package specified will only be used when neither the B<-r> nor
+B<--rng-package> options are specified.
+
+=back
+
+=head2 Testing C<hsxkpasswdrc> Files
+
+The B<--test-rcfile> option can be used to test whether the specified file is a
+valid B<hsxkpasswdrc> file.
 
 =head1 LICENCE AND COPYRIGHT
 

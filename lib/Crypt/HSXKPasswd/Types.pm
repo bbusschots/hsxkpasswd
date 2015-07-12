@@ -34,7 +34,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 #
 
 # version info
-use version; our $VERSION = qv('1.0');
+use version; our $VERSION = qv('1.2');
 
 #
 # === Define The Fundamental Types ============================================#
@@ -89,7 +89,7 @@ my $NON_ZERO_POSITIVE_INTEGER = Type::Tiny->new(
 );
 __PACKAGE__->meta->add_type($NON_ZERO_POSITIVE_INTEGER);
 
-# add a type for positive integers (including 0)
+# add a type for strings of at least one character
 my $NON_EMPTY_STRING_ENGLISH = 'a string contianing at least one character';
 my $NON_EMPTY_STRING = Type::Tiny->new(
     name => 'NonEmptyString',
@@ -207,6 +207,45 @@ my $TRUE_FALSE = Type::Tiny->new(
     },
 );
 __PACKAGE__->meta->add_type($TRUE_FALSE);
+
+#
+# === Define HSXKPasswd-specific general Types ================================#
+#
+
+# add a type for upper-case identifiers
+my $UPPERCASE_IDENTIFIER_ENGLISH = 'a non-empty string containging only upper-case un-accented letters, digits and underscores';
+my $UPPERCASE_IDENTIFIER = Type::Tiny->new(
+    name => 'UppercaseIdentifier',
+    parent => Str,
+    constraint => sub{
+        return m/^[A-Z0-9_]+$/sx; ## no critic (ProhibitEnumeratedClasses)
+    },
+    message => sub{
+        return var_to_string($_).qq{ is not $UPPERCASE_IDENTIFIER_ENGLISH};
+    },
+    my_methods => {
+        english => sub {return $UPPERCASE_IDENTIFIER_ENGLISH;},
+    },
+);
+__PACKAGE__->meta->add_type($UPPERCASE_IDENTIFIER);
+
+# add a type for entropy warning levels
+my $ENTROPY_WARNING_LEVEL_ENGLISH = q{one of 'ALL', 'BLIND', or 'NONE'};
+my $ENTROPY_WARNING_LEVEL = Type::Tiny->new(
+    name => 'EntropyWarningLevel',
+    parent => Str,
+    constraint => sub{
+        return m/^[A-Z0-9_]+$/sx; ## no critic (ProhibitEnumeratedClasses)
+    },
+    message => sub{
+        return var_to_string($_).qq{ is not a valid entropy warning level, must be $ENTROPY_WARNING_LEVEL_ENGLISH};
+    },
+    my_methods => {
+        english => sub {return $ENTROPY_WARNING_LEVEL_ENGLISH;},
+    },
+);
+$ENTROPY_WARNING_LEVEL->coercion()->add_type_coercions(Str, q{uc $_}); ## no critic (RequireInterpolationOfMetachars)
+__PACKAGE__->meta->add_type($ENTROPY_WARNING_LEVEL);
 
 #
 # === Define the Config Keys and related Types ================================#
@@ -693,20 +732,16 @@ my $_PRESETS = {
         },
     },
     WEB16 => {
-        description => 'A preset for websites that insit passwords not be longer than 16 characters.',
+        description => 'A preset for websites that insit passwords not be longer than 16 characters. WARNING - only use this preset if you have to, it is too short to be acceptably secure and will always generate entropy warnings for the case where the config and dictionary are known.',
         config => {
-            padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
-            separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+            symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ? / . ;}],
             word_length_min => 4,
             word_length_max => 4,
             num_words => 3,
             separator_character => 'RANDOM',
             padding_digits_before => 0,
-            padding_digits_after => 0,
-            padding_type => 'FIXED',
-            padding_character => 'RANDOM',
-            padding_characters_before => 1,
-            padding_characters_after => 1,
+            padding_digits_after => 2,
+            padding_type => 'NONE',
             case_transform => 'RANDOM',
             allow_accents => 0,
         },
@@ -732,9 +767,9 @@ my $_PRESETS = {
     APPLEID => {
         description => 'A preset respecting the many prerequisites Apple places on Apple ID passwords. The preset also limits itself to symbols found on the iOS letter and number keyboards (i.e. not the awkward to reach symbol keyboard)',
         config => {
-            padding_alphabet => [qw{! ? @ &}],
-            separator_alphabet => [qw{- : .}, q{,}],
-            word_length_min => 5,
+            padding_alphabet => [qw{- : . ! ? @ &}],
+            separator_alphabet => [qw{- : . @}, q{,}, q{ }],
+            word_length_min => 4,
             word_length_max => 7,
             num_words => 3,
             separator_character => 'RANDOM',
@@ -786,11 +821,11 @@ my $_PRESETS = {
         },
     },
     XKCD => {
-        description => 'A preset for generating passwords similar to the example in the original XKCD cartoon, but with a dash to separate the four random words, and the capitalisation randomised to add sufficient entropy to avoid warnings.',
+        description => 'A preset for generating passwords similar to the example in the original XKCD cartoon, but with an extra word, a dash to separate the random words, and the capitalisation randomised to add sufficient entropy to avoid warnings.',
         config => {
             word_length_min => 4,
             word_length_max => 8,
-            num_words => 4,
+            num_words => 5,
             separator_character => q{-},
             padding_digits_before => 0,
             padding_digits_after => 0,
@@ -824,6 +859,114 @@ my $PRESET_NAME = Type::Tiny->new(
 );
 $PRESET_NAME->coercion()->add_type_coercions(Str, q{uc $_}); ## no critic (RequireInterpolationOfMetachars)
 __PACKAGE__->meta->add_type($PRESET_NAME);
+
+#
+# === Define .hsxkpassdrc file related Types ==================================#
+#
+
+my $RCFILE_DATA_ENGLISH = q{a reference to a hash defining one or more of: custom presets, default_entropy_warnings, default dictionary, and default random number generator};
+my $RCFILE_DATA = Type::Tiny->new(
+    name => 'RCFileData',
+    parent => Dict[
+        custom_presets => Optional[Map[$UPPERCASE_IDENTIFIER, $PRESET_DEFINITION]],
+        default_entropy_warnings => Optional[$ENTROPY_WARNING_LEVEL],
+        default_dictionary => Optional[$PERL_PACKAGE_NAME],
+        default_rng => Optional[$PERL_PACKAGE_NAME],
+    ],
+    message => sub{
+        my $basic_msg = var_to_string($_).qq{ is not a valid hsxkpasswdrc file data structure (must be $RCFILE_DATA_ENGLISH)};
+        # make sure we at least have a hash
+        unless(HashRef->check($_)){
+            return $basic_msg;
+        }
+        
+        # make sure there are no invalid keys present
+        my @invalid_keys = ();
+        foreach my $key (sort keys %{$_}){
+            unless($key =~ m/^(?:custom_presets)|(?:default_entropy_warnings)|(?:default_dictionary)|(?:default_rng)$/sx){ ## no critic (ProhibitComplexRegexes)
+                push @invalid_keys, $key;
+            }
+        }
+        if(scalar @invalid_keys){
+            return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure becuse it is indexed by one or more invalid keys: }.(join q{, }, @invalid_keys);
+        }
+        
+        # if defined, make sure each preset is valid
+        if($_->{custom_presets}){
+            # make sure custom_presets is a hashref
+            unless(HashRef->check($_->{custom_presets})){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because it defines the key 'custom_presets', but not as a reference to a hash};
+            }
+            
+            # make sure all the preset names are valid
+            my @invalid_preset_names = ();
+            foreach my $preset_name (sort keys %{$_->{custom_presets}}){
+                unless($UPPERCASE_IDENTIFIER->check($preset_name)){
+                    push @invalid_preset_names, $preset_name;
+                }
+            }
+            if(scalar @invalid_preset_names){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because it contains one or more invalid custom preset names: }.(join q{, }, @invalid_preset_names).qq{ (each preset name must be $UPPERCASE_IDENTIFIER_ENGLISH)};
+            }
+            
+            # test each preset
+            my @invalid_preset_defs = ();
+            foreach my $preset_name (sort keys %{$_->{custom_presets}}){
+                unless($PRESET_DEFINITION->check($_->{custom_presets}->{$preset_name})){
+                    # if the preset is valid except for the config, print the problem with the config
+                    # NOTE - this code is potentially brittle - if the test for a preset definition
+                    #     is changed, this code could fail to be triggered, leading to less helpful
+                    #     error message. Because of the final check against config, the message cannot
+                    #     be triggered if the config is valid though, so at least the code can't give a
+                    #     BS answer!
+                    if(
+                        $_->{custom_presets}->{$preset_name}->{description} &&
+                        $NON_EMPTY_STRING->check($_->{custom_presets}->{$preset_name}->{description}) &&
+                        $_->{custom_presets}->{$preset_name}->{config} &&
+                        HashRef->check($_->{custom_presets}->{$preset_name}->{config}) &&
+                        !$CONFIG->check($_->{custom_presets}->{$preset_name}->{config})
+                    ){
+                        return return var_to_string($_).qq{ is not a valid hsxkpasswdrc file data structure because it defines a custom preset '$preset_name' which is invalid:\n}.$CONFIG->get_message($_->{custom_presets}->{$preset_name}->{config});
+                    }
+                    
+                    # otherwise, just report that there is a problem with the definition
+                    push @invalid_preset_defs, $preset_name;
+                }
+            }
+            if(scalar @invalid_preset_defs){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because it contains one or more invalid preset definitions: }.(join q{, }, @invalid_preset_defs).qq{ (each preset definition must be $PRESET_DEFINITION_ENGLISH)};
+            }
+        }
+        
+        # if defined, make sure the default entropy warning level is valid
+        if($_->{default_entropy_warnings}){
+            unless($ENTROPY_WARNING_LEVEL->check($_->{default_entropy_warnings})){
+                return var_to_string($_).qq{ is not a valid hsxkpasswdrc file data structure because it contains an invalid value for the key 'default_entropy_warnings', which must be $ENTROPY_WARNING_LEVEL_ENGLISH)}; 
+            }
+        }
+        
+        # if defined, make sure the default dictionary is valid
+        if($_->{default_dictionary}){
+            unless($PERL_PACKAGE_NAME->check($_->{default_dictionary})){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because if specifies and invalid default dictionary (}.var_to_string($_->{default_dictionary}).qq{). If present, the key 'default_dictionary' must contain $PERL_PACKAGE_NAME_ENGLISH};
+            }
+        }
+        
+        # if defined, make sure the default rng is valid
+        if($_->{default_rng}){
+            unless($PERL_PACKAGE_NAME->check($_->{default_rng})){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because if specifies and invalid default random number generator (}.var_to_string($_->{default_rng}).qq{). If present, the key 'default_rng' must contain $PERL_PACKAGE_NAME_ENGLISH};
+            }
+        }
+        
+        # a final return, in case none of the other more detailed messages were triggered
+        return $basic_msg;
+    },
+    my_methods => {
+        english => sub {return $RCFILE_DATA_ENGLISH;},
+    },
+);
+__PACKAGE__->meta->add_type($RCFILE_DATA);
 
 #
 # === Finalise the Defined Types ==============================================#

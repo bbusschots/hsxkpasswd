@@ -26,6 +26,7 @@ MANIFEST			This list of files
 META.json
 META.yml
 README
+share/sample_config.json	A sample JSON config file for use with the hsxkpasswd terminal command
 share/sample_dict_DE.txt	A sample dictionary file for use with Crypt::HSXKPasswd::Dictionary::Basic containing German words
 share/sample_dict_EN.txt	A sample dictionary file for use with Crypt::HSXKPasswd::Dictionary::Basic containing English words
 share/sample_dict_ES.txt	A sample dictionary file for use with Crypt::HSXKPasswd::Dictionary::Basic containing Spanish words
@@ -33,6 +34,7 @@ share/sample_dict_FR.txt	A sample dictionary file for use with Crypt::HSXKPasswd
 share/sample_dict_IT.txt	A sample dictionary file for use with Crypt::HSXKPasswd::Dictionary::Basic containing Italian words
 share/sample_dict_NL.txt	A sample dictionary file for use with Crypt::HSXKPasswd::Dictionary::Basic containing Dutch/Flemish words
 share/sample_dict_PT.txt	A sample dictionary file for use with Crypt::HSXKPasswd::Dictionary::Basic containing Portuguese words
+share/sample_hsxkpasswdrc	A sample hsxkpasswdrc file for use with teh hsxkpasswd terminal command
 t/00-load.t
 t/01-defined-constants.t
 t/02-generate-passwords.t

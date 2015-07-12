@@ -40,6 +40,7 @@ my $builder = Module::Build->new(
         'Data::Dumper' => 0,
         'Pod::Usage' => 0,
         'Module::Load' => 0,
+        'File::HomeDir' => 0,
     },
     recommends => {
         'Data::Entropy::Algorithms' => 0,

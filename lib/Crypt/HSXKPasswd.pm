@@ -59,12 +59,12 @@ our @EXPORT = qw( hsxkpasswd );
 #
 
 # version info
-use version; our $VERSION = qv('3.2_01');
+use version; our $VERSION = qv('3.3_01');
 
 # entropy control variables
 my $_ENTROPY_MIN_BLIND = 78; # 78 bits - equivalent to 12 alpha numeric characters with mixed case and symbols
 my $_ENTROPY_MIN_SEEN = 52; # 52 bits - equivalent to 8 alpha numeric characters with mixed case and symbols
-my $_SUPPRESS_ENTROPY_WARNINGS = 'NONE'; # valid values are 'NONE', 'ALL', 'SEEN', or 'BLIND' (invalid values treated like 'NONE')
+my $_ENTROPY_WARNINGS = 'ALL'; # valid values are 'ALL', 'BLIND', or 'NONE' (invalid values treated like 'ALL')
 
 # utility constants
 Readonly my $_CLASS => __PACKAGE__;
@@ -292,22 +292,18 @@ sub module_config{
         
         #return the value
         return $_ENTROPY_MIN_SEEN;
-    }elsif($config_key eq 'SUPPRESS_ENTROPY_WARNINGS'){
+    }elsif($config_key eq 'ENTROPY_WARNINGS'){
         # check if we are a setter
         if(defined $new_value){
             # make sure the new value is valid
-            my $enum_type = Type::Tiny->new(
-                parent => Enum[qw( NONE ALL SEEN BLIND )],
-                message => sub{return Crypt::HSXKPasswd::Types::_var_to_string($_).q{ is not a valid value for the module config key 'SUPPRESS_ENTROPY_WARNINGS' (must be one of 'NONE', 'ALL', 'SEEN', or 'BLIND')};}, ## no critic (ProtectPrivateSubs)
-            );
-            $enum_type->check($new_value) || _error($enum_type->get_message($new_value));
+            EntropyWarningLevel->check($new_value) || _error(EntropyWarningLevel->get_message($new_value));
             
             # save the new value
-            $_SUPPRESS_ENTROPY_WARNINGS = $new_value;
+            $_ENTROPY_WARNINGS = $new_value;
         }
         
         #return the value
-        return $_SUPPRESS_ENTROPY_WARNINGS;
+        return $_ENTROPY_WARNINGS;
     }else{
         # the config key was invalid
         _error(qq{no package variable '$config_key'});
@@ -2084,13 +2080,18 @@ sub _separator{
 #              padding_type & padding_character config variables.
 # See Also   :
 sub _padding_char{
-    my @args = @_;
-    my $self = shift @args;
-    _force_instance($self);
+    my $self = shift;
+    my $sep = shift;
     
-    # validate args
-    state $args_check = compile(Symbol);
-    my ($sep) = $args_check->(@args);
+    
+    # validate args - doing it the old-fassioned way because the separator will
+    # be an empty string if the separator is set to 'NONE'
+    _force_instance($self);
+    if($sep){
+        unless(Symbol->check($sep)){
+            _error('first argument must be an empty string or a valid Symbol');
+        }
+    }
     
     # if there is no padding character needed, return an empty string
     if($self->{_CONFIG}->{padding_type} eq 'NONE'){
@@ -2157,9 +2158,11 @@ sub _transform_case{
             $words_ref->[$i] = lcfirst uc $words_ref->[$i];
         }
     }elsif($self->{_CONFIG}->{case_transform} eq 'ALTERNATE'){
+        # randomly decide whether to capitalise on odd or even
+        my $rand_bias = ($self->_random_int(2) % 2 == 0) ? 1 : 0;
         foreach my $i (0..((scalar @{$words_ref}) - 1)){
             my $word = $words_ref->[$i];
-            if($i % 2 == 0){
+            if(($i + $rand_bias) % 2 == 0){
                 $word = lc $word;
             }else{
                 $word = uc $word;
@@ -2404,11 +2407,16 @@ sub _calculate_entropy_stats{
     my $b_num_words = Math::BigInt->new($num_words);
     my $b_seen_perms = Math::BigInt->new('0');
     # start with the permutations from the chosen words
+    $b_seen_perms->badd($b_num_words->copy()->bpow(Math::BigInt->new($self->{_CONFIG}->{num_words}))); # += $num_words ** $self->{_CONFIG}->{num_words};
+    # then add the extra randomness from the case transformations (if any)
     if($self->{_CONFIG}->{case_transform} eq 'RANDOM'){
-        # effectively doubles the numberof words in the dictionary
-        $b_seen_perms->badd($b_num_words->copy()->bpow(Math::BigInt->new($self->{_CONFIG}->{num_words} * 2)));
-    }else{
-        $b_seen_perms->badd($b_num_words->copy()->bpow(Math::BigInt->new($self->{_CONFIG}->{num_words}))); # += $num_words ** $self->{_CONFIG}->{num_words};
+        # multiply by two for each word
+        for my $n (1..$self->{_CONFIG}->{num_words}){
+            $b_seen_perms->bmul(Math::BigInt->new(2));
+        }
+    }elsif($self->{_CONFIG}->{case_transform} eq 'ALTERNATE'){
+        # multiply by two for the one random decision about whether or capitalise the odd or even words
+        $b_seen_perms->bmul(Math::BigInt->new(2));
     }
     # multiply in the permutations from the separator (if any - i.e. if it's randomly chosen)
     if($self->{_CONFIG}->{separator_character} eq 'RANDOM'){
@@ -2579,16 +2587,14 @@ sub _update_entropystats_cache{
     $self->{_CACHE_ENTROPYSTATS} = \%stats;
     
     # warn if we need to
-    unless(uc $_SUPPRESS_ENTROPY_WARNINGS eq 'ALL'){
-        # blind warning if needed
-        unless(uc $_SUPPRESS_ENTROPY_WARNINGS eq 'BLIND'){
-            if($self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min} < $_ENTROPY_MIN_BLIND){
-                _warn('for brute force attacks, the combination of the loaded config and dictionary produces an entropy of '.$self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min}.'bits, below the minimum recommended '.$_ENTROPY_MIN_BLIND.'bits');
-            }
+    unless(uc $_ENTROPY_WARNINGS eq 'NONE'){
+        # blind warnings are always needed if the level is not 'NONE'
+        if($self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min} < $_ENTROPY_MIN_BLIND){
+            _warn('for brute force attacks, the combination of the loaded config and dictionary produces an entropy of '.$self->{_CACHE_ENTROPYSTATS}->{entropy_blind_min}.'bits, below the minimum recommended '.$_ENTROPY_MIN_BLIND.'bits');
         }
         
-        # seen warnings if needed
-        unless(uc $_SUPPRESS_ENTROPY_WARNINGS eq 'SEEN'){
+        # seen warnings if the cut-off is not 'BLIND'
+        unless(uc $_ENTROPY_WARNINGS eq 'BLIND'){
             if($self->{_CACHE_ENTROPYSTATS}->{entropy_seen} < $_ENTROPY_MIN_SEEN){
                 _warn('for attacks assuming full knowledge, the combination of the loaded config and dictionary produces an entropy of '.$self->{_CACHE_ENTROPYSTATS}->{entropy_seen}.'bits, below the minimum recommended '.$_ENTROPY_MIN_SEEN.'bits');
             }
@@ -2681,7 +2687,7 @@ famous XKCD password cartoon (L<https://xkcd.com/936/>).
 
 =head1 VERSION
 
-This documentation refers to C<Crypt::HSXKPasswd> version 3.2.1.
+This documentation refers to C<Crypt::HSXKPasswd> version 3.3.1.
 
 =head1 SYNOPSIS
 
@@ -3106,9 +3112,8 @@ For more details see the ENTROPY CHECKING section of this document.
 
 =item *
 
-C<SUPPRESS_ENTROPY_WARNINGS> - control the suppression of entropy warnings.
-The value must be one of C<NONE>, C<ALL>, C<SEEN>, or C<BLIND>. The default
-value is C<NONE>.
+C<ENTROPY_WARNINGS> - control the emission of entropy warnings. The value must
+be one of C<ALL>, C<BLIND>, or C<NONE>. The default value is C<ALL>.
 
 For more details see the ENTROPY CHECKING section of this document.
 
@@ -3376,7 +3381,7 @@ must be one of the following:
 =item *
 
 C<ALTERNATE> - each alternate word will be converted to all upper case and
-all lower case.
+all lower case. The case of the first word is chosen at random.
 
 =item *
 
@@ -3644,14 +3649,14 @@ symbols keyboard C<#+=>.
 
 Sample Password:
 
-    @60:london:TAUGHT:forget:70@
+    -25,favor,MANY,BEAR,53-
     
 Preset Definition:
 
     {
-        padding_alphabet => [qw{! ? @ &}],
-        separator_alphabet => [qw{- : .}, q{,}],
-        word_length_min => 5,
+        padding_alphabet => [qw{- : . ! ? @ &}],
+        separator_alphabet => [qw{- : . @}, q{,}, q{ }],
+        word_length_min => 4,
         word_length_max => 7,
         num_words => 3,
         separator_character => 'RANDOM',
@@ -3752,28 +3757,26 @@ Preset Definition:
 =item *
 
 C<WEB16> - a preset for websites that don't allow passwords to be longer than
-16 characters. Because 16 characters is not very long, a large symbol alphabet
-had to be used to provide sufficient entropy.
+16 characters. B<ONLY USE THIS PRESET IF YOU MUST!> The 14 character limit does
+not allow for sufficient entropy in scenarios where the attacker knows the
+dictionary and config used to generate the password. Use of this preset will
+generate a low entropy warning.
 
 Sample Password:
 
-    :baby.ohio.DEAR:
+    tube+NICE+iron+02
     
 Preset Definition:
 
     {
-        padding_alphabet => [qw{! @ $ % ^ & * + = : | ~ ?}],
-        separator_alphabet => [qw{- + = . * _ | ~}, q{,}],
+        symbol_alphabet => [qw{! @ $ % ^ & * - _ + = : | ~ ? / . ;}],
         word_length_min => 4,
         word_length_max => 4,
         num_words => 3,
         separator_character => 'RANDOM',
         padding_digits_before => 0,
-        padding_digits_after => 0,
-        padding_type => 'FIXED',
-        padding_character => 'RANDOM',
-        padding_characters_before => 1,
-        padding_characters_after => 1,
+        padding_digits_after => 2,
+        padding_type => 'NONE',
         case_transform => 'RANDOM',
         allow_accents => 0,
     }
@@ -3842,14 +3845,14 @@ entropy to avoid low entropy warnings.
 
 Sample Password:
 
-    KING-madrid-exercise-BELGIUM
+    quiet-children-OCTOBER-today-HOPE
     
 Preset Definition:
 
     {
         word_length_min => 4,
         word_length_max => 8,
-        num_words => 4,
+        num_words => 5,
         separator_character => q{-},
         padding_digits_before => 0,
         padding_digits_after => 0,
@@ -4553,7 +4556,7 @@ explicitly disable warnings).
 This function must be passed a hashref to test as the first argument. The
 function returns 1 if the passed config is valid, and 0 otherwise.
 
-Optionally, a named argument C<croak> can also be passed to control whehther or
+Optionally, a named argument C<croak> can also be passed to control whether or
 not the function should croak if the config is invalid. The value of this named
 argument should be C<1> or C<0>.
 
@@ -4761,26 +4764,23 @@ digits, and symbols.
 
 =item *
 
-C<SUPPRESS_ENTROPY_WARNINGS> - this variable can be used to suppress one or both
-of the entropy warnings. The following values are valid:
+C<ENTROPY_WARNINGS> - this variable can be used to control the emission of
+entropy warnings. The following values are valid:
 
 =over 4
 
 =item *
 
-C<NONE> - no warnings are suppressed. This is the default value.
+C<ALL> - all entropy warnings are emitted. This is the default value.
 
 =item *
 
-C<SEEN> - only warnings for the worst-case scenario are suppressed.
+C<BLIND> - only warnings for the best-case scenario are emitted. I.e. warnings
+for the worst-case scenario (attacker has full knowledge) are suppressed.
 
 =item *
 
-C<BLIND> - only warnings for the best-case scenario are suppressed.
-
-=item *
-
-C<ALL> - all entropy warnings are suppressed.
+C<NONE> - all entropy warnings are suppressed.
 
 =back
 
@@ -5096,7 +5096,7 @@ This module produces output at three severity levels:
 =item *
 
 C<DEBUG> - this output is completely suppressed unless the module configuration
-variable C<DEBUG> is set to C<1>. All debug messages are pritned to the stream
+variable C<DEBUG> is set to C<1>. All debug messages are printed to the stream
 defined in the module configuration variable C<LOG_STREAM> (regardless of the 
 the value of the module configuration variable C<LOG_ERRORS>).
 
@@ -5150,6 +5150,10 @@ C<English> - L<http://search.cpan.org/perldoc?English>
 =item *
 
 C<Fatal> - L<http://search.cpan.org/perldoc?Fatal>
+
+=item *
+
+C<File::HomeDir> - L<http://search.cpan.org/perldoc?File%3A%3AHomeDir>
 
 =item *
 

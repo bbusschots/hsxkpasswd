@@ -1,0 +1,11 @@
+{
+    "word_length_min" : 4,
+    "word_length_max" : 8,
+    "num_words" : 4,
+    "separator_character" : " ",
+    "padding_digits_before" : 0,
+    "padding_digits_after" : 0,
+    "padding_type" : "NONE",
+    "case_transform" : "LOWER",
+    "allow_accents" : 0
+}

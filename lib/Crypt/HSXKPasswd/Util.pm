@@ -33,7 +33,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 #
 
 # version info
-use version; our $VERSION = qv('1.2');
+use version; our $VERSION = qv('1.3');
 
 # utility variables
 Readonly my $_CLASS => __PACKAGE__;
@@ -52,7 +52,8 @@ Readonly my $_MAIN_CLASS => 'Crypt::HSXKPasswd';
 #                 Crypt::HSXKPasswd::Dictionary
 # Throws     : Croaks on invalid invocation or args, or if there is a problem
 #              testing the configs
-# Notes      :
+# Notes      : This function can be called as a perl one-liner, e.g.
+#              perl -C -Ilib -MCrypt::HSXKPasswd::Util -MCrypt::HSXKPasswd::Dictionary::EN -e 'Crypt::HSXKPasswd::Util->test_presets(Crypt::HSXKPasswd::Dictionary::EN->new())'
 # See Also   :
 sub test_presets{
     my @args = @_;
@@ -69,7 +70,7 @@ sub test_presets{
     
     # first test the validity of all preset configs
     print "\nINFO - testing preset config validity\n";
-    $_MAIN_CLASS->_check_presets();
+    $_MAIN_CLASS->_check_preset_definitions();
     print "INFO - Done testing config validity\n";
     
     # then test each config for sufficient entropy by instantiating an instance with each one
@@ -78,14 +79,14 @@ sub test_presets{
         print "Testing '$preset'\n";
         my $hsxkpasswd = $_MAIN_CLASS->new(preset => $preset, dictionary => $dictionary);
         my %stats = $hsxkpasswd->stats();
-        print "$preset: TOTAL WORDS=$stats{dictionary_words_total}, AVAILABLE WORDS=$stats{dictionary_words_filtered} ($stats{dictionary_words_percent_avaialable}%)";
+        print "$preset: TOTAL WORDS=$stats{dictionary_words_total}, AVAILABLE WORDS=$stats{dictionary_words_filtered} ($stats{dictionary_words_percent_available}%), ";
         print 'RESTRICTIONS: ';
         if($stats{dictionary_filter_length_min} == $stats{dictionary_filter_length_max}){
             print "length=$stats{dictionary_filter_length_min}\n";
         }else{
             print "$stats{dictionary_filter_length_min}>=length<=$stats{dictionary_filter_length_max}\n";
         }
-        print "$preset: BLIND=$stats{password_entropy_blind_min} (need ${Crypt::HSXKPasswd::ENTROPY_MIN_BLIND}), SEEN=$stats{password_entropy_seen} (need ${Crypt::HSXKPasswd::ENTROPY_MIN_SEEN})\n";
+        print "$preset: BLIND=$stats{password_entropy_blind_min} (need ".Crypt::HSXKPasswd->module_config('ENTROPY_MIN_BLIND')."), SEEN=$stats{password_entropy_seen} (need ".Crypt::HSXKPasswd->module_config('ENTROPY_MIN_SEEN').")\n";
     }
     print "INFO - Done testing entropy\n";
     
@@ -101,7 +102,7 @@ sub test_presets{
 # Arguments  : 1) An instance of a class that extends
 #                 Crypt::HSXKPasswd::Dictionary
 # Throws     : Croaks on invalid invocation
-# Notes      :
+# Notes      : perl -C -Ilib -MCrypt::HSXKPasswd::Util -MCrypt::HSXKPasswd::Dictionary::EN -e 'Crypt::HSXKPasswd::Util->print_preset_samples(Crypt::HSXKPasswd::Dictionary::EN->new())'
 # See Also   :
 sub print_preset_samples{
     my @args = @_;
