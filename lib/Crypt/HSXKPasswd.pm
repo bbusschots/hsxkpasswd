@@ -3068,7 +3068,7 @@ C<module_config()>.
     my $debug_status = Crypt::HSXKPasswd->module_config('DEBUG');
     
     # configure the module to suppress all entropy warnings
-    Crypt::HSXKPasswd->module_config('SUPPRESS_ENTROPY_WARNINGS', 'ALL');
+    Crypt::HSXKPasswd->module_config('ENTROPY_WARNINGS', 'NONE');
 
 The following module configuration keys exist within the module:
 
