@@ -914,24 +914,42 @@ specified.
 
 =item B<default_dictionary>
 
+A reference to a hash indexed by either:
+
+=over 8
+
+=item B<file>
+
+The path to a dictionary file to use as the default word source.
+
+=item B<package>
+
 A string containing the perl package name to use as the default word source.
 
-The package must extend B<Crypt::HSXKPasswd::Dictionary>, and have a
-constructor that requires no arguments.
+The package must extend B<Crypt::HSXKPasswd::Dictionary>.
 
-The package specified will only be used when neither the B<-d> nor
-B<--dictionary-package> options are specified.
+Arguments to the package's constructor can be specified using the optional key
+B<package_constructor_arguments>. The arguments must be a reference to an array.
+
+=back
+
+Word sources passed as command line options take precedence over the word source
+specified here.
 
 =item B<default_rng>
 
-A string containing the perl package name to use as the default random number
-source.
+A reference to a hash indexed by B<package>, and optionally
+B<package_constructor_arguments>.
 
-The package must extend B<Crypt::HSXKPasswd::RNG>, and have a constructor that
-requires no arguments.
+B<package> must be a string containing the perl package name to use as the
+default random number source, and the package must extend
+B<Crypt::HSXKPasswd::RNG>.
+
+Arguments for the package's constructor can be specified with
+B<package_constructor_arguments>, which must be a reference to an array.
 
 The package specified will only be used when neither the B<-r> nor
-B<--rng-package> options are specified.
+B<--rng-pkg> command line options are specified.
 
 =back
 
