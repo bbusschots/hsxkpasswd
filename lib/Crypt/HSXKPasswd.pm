@@ -59,7 +59,7 @@ our @EXPORT = qw( hsxkpasswd );
 #
 
 # version info
-use version; our $VERSION = qv('3.3_01');
+use version; our $VERSION = qv('3.4_01');
 
 # entropy control variables
 my $_ENTROPY_MIN_BLIND = 78; # 78 bits - equivalent to 12 alpha numeric characters with mixed case and symbols
@@ -2687,7 +2687,7 @@ famous XKCD password cartoon (L<https://xkcd.com/936/>).
 
 =head1 VERSION
 
-This documentation refers to C<Crypt::HSXKPasswd> version 3.3.1.
+This documentation refers to C<Crypt::HSXKPasswd> version 3.4.1.
 
 =head1 SYNOPSIS
 

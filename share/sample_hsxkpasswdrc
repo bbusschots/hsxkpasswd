@@ -35,6 +35,10 @@
         }
     },
     "default_entropy_warnings" : "BLIND",
-    "default_dictionary" : "Crypt::HSXKPasswd::Dictionary::NL",
-    "default_rng" : "Crypt::HSXKPasswd::RNG::Basic"
+    "default_dictionary" : {
+        "package" : "Crypt::HSXKPasswd::Dictionary::NL"
+    },
+    "default_rng" : {
+        "package" : "Crypt::HSXKPasswd::RNG::Basic"
+    }
 }

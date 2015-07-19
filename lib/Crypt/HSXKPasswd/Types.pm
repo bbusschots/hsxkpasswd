@@ -870,9 +870,30 @@ my $RCFILE_DATA = Type::Tiny->new(
     parent => Dict[
         custom_presets => Optional[Map[$UPPERCASE_IDENTIFIER, $PRESET_DEFINITION]],
         default_entropy_warnings => Optional[$ENTROPY_WARNING_LEVEL],
-        default_dictionary => Optional[$PERL_PACKAGE_NAME],
-        default_rng => Optional[$PERL_PACKAGE_NAME],
+        default_dictionary => Optional[Dict[
+            package => Optional[$PERL_PACKAGE_NAME],
+            package_constructor_args => Optional[ArrayRef],
+            file => Optional[$NON_EMPTY_STRING],
+        ]],
+        default_rng => Optional[Dict[
+            package => $PERL_PACKAGE_NAME,
+            package_constructor_args => Optional[ArrayRef],
+        ]],
     ],
+    constraint => sub{
+        # if there is a default dictionary section, make sure there is exactly one source specified
+        if($_->{default_dictionary}){
+            unless($_->{default_dictionary}->{package} || $_->{default_dictionary}->{file}){
+                return 0;
+            }
+            if($_->{default_dictionary}->{package} && $_->{default_dictionary}->{file}){
+                return 0;
+            }
+        }
+        
+        # if we got here, all is OK
+        return 1;
+    },
     message => sub{
         my $basic_msg = var_to_string($_).qq{ is not a valid hsxkpasswdrc file data structure (must be $RCFILE_DATA_ENGLISH)};
         # make sure we at least have a hash
@@ -888,7 +909,7 @@ my $RCFILE_DATA = Type::Tiny->new(
             }
         }
         if(scalar @invalid_keys){
-            return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure becuse it is indexed by one or more invalid keys: }.(join q{, }, @invalid_keys);
+            return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because it is indexed by one or more invalid keys: }.(join q{, }, @invalid_keys);
         }
         
         # if defined, make sure each preset is valid
@@ -911,8 +932,20 @@ my $RCFILE_DATA = Type::Tiny->new(
             
             # test each preset
             my @invalid_preset_defs = ();
+            ## no critic (ProhibitDeepNests);
             foreach my $preset_name (sort keys %{$_->{custom_presets}}){
                 unless($PRESET_DEFINITION->check($_->{custom_presets}->{$preset_name})){
+                    # make sure the preset does not define any invalid keys
+                    my @invalid_preset_keys = ();
+                    foreach my $preset_key (sort keys %{$_->{custom_presets}->{$preset_name}}){
+                        unless($preset_key =~ m/^(?:description)|(?:config)$/sx){
+                            push @invalid_preset_keys, $preset_key;
+                        }
+                    }
+                    if(scalar @invalid_preset_keys){
+                        return var_to_string($_).qq{ is not a valid hsxkpasswdrc file data structure because the custom preset '$preset_name' is indexed by one or more invalid keys: }.(join q{, }, @invalid_preset_keys);
+                    }
+                    
                     # if the preset is valid except for the config, print the problem with the config
                     # NOTE - this code is potentially brittle - if the test for a preset definition
                     #     is changed, this code could fail to be triggered, leading to less helpful
@@ -933,6 +966,7 @@ my $RCFILE_DATA = Type::Tiny->new(
                     push @invalid_preset_defs, $preset_name;
                 }
             }
+            ## use critic
             if(scalar @invalid_preset_defs){
                 return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because it contains one or more invalid preset definitions: }.(join q{, }, @invalid_preset_defs).qq{ (each preset definition must be $PRESET_DEFINITION_ENGLISH)};
             }
@@ -947,15 +981,71 @@ my $RCFILE_DATA = Type::Tiny->new(
         
         # if defined, make sure the default dictionary is valid
         if($_->{default_dictionary}){
-            unless($PERL_PACKAGE_NAME->check($_->{default_dictionary})){
-                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because if specifies and invalid default dictionary (}.var_to_string($_->{default_dictionary}).qq{). If present, the key 'default_dictionary' must contain $PERL_PACKAGE_NAME_ENGLISH};
+            # make sure it is a hashref
+            unless(HashRef->check($_->{default_dictionary})){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because it defines the key 'default_dictionary', but not as a reference to a hash};
+            }
+            
+            # make sure there are no invalid keys
+            my @invalid_dict_keys = ();
+            foreach my $key (sort keys %{$_->{default_dictionary}}){
+                unless($key =~ m/^(?:package)|(?:package_constructor_args)|(?:file)$/sx){
+                    push @invalid_dict_keys, $key;
+                }
+            }
+            if(scalar @invalid_dict_keys){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because 'default_dictionary' is indexed by one or more invalid keys: }.(join q{, }, @invalid_dict_keys);
+            }
+            
+            # make sure each key is valid
+            if($_->{default_dictionary}->{package} && !$PERL_PACKAGE_NAME->check($_->{default_dictionary}->{package})){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because 'default_dictionary'->'package' is not a valid Perl package name}; 
+            }
+            if($_->{default_dictionary}->{package_constructor_args} && !ArrayRef->check($_->{default_dictionary}->{package_constructor_args})){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because 'default_dictionary'->'package_constructor_args' is not a reference to an array}; 
+            }
+            if($_->{default_dictionary}->{file} && !$NON_EMPTY_STRING->check($_->{default_dictionary}->{file})){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because 'default_dictionary'->'file' is not a file path}; 
+            }
+            
+            # make sure there is exactly 1 dictionary source defined
+            unless($_->{default_dictionary}->{package} || $_->{default_dictionary}->{file}){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because 'default_dictionary' does not specify 'package' or 'file'};
+            }
+            if($_->{default_dictionary}->{package} && $_->{default_dictionary}->{file}){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because 'default_dictionary' specifies both 'package' and 'file'};
             }
         }
         
         # if defined, make sure the default rng is valid
         if($_->{default_rng}){
-            unless($PERL_PACKAGE_NAME->check($_->{default_rng})){
-                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because if specifies and invalid default random number generator (}.var_to_string($_->{default_rng}).qq{). If present, the key 'default_rng' must contain $PERL_PACKAGE_NAME_ENGLISH};
+            # make sure it is a hashref
+            unless(HashRef->check($_->{default_rng})){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because it defines the key 'default_rng', but not as a reference to a hash};
+            }
+            
+            # make sure there are no invalid keys
+            my @invalid_rng_keys = ();
+            foreach my $key (sort keys %{$_->{default_rng}}){
+                unless($key =~ m/^(?:package)|(?:package_constructor_args)$/sx){
+                    push @invalid_rng_keys, $key;
+                }
+            }
+            if(scalar @invalid_rng_keys){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because 'default_rng' is indexed by one or more invalid keys: }.(join q{, }, @invalid_rng_keys);
+            }
+            
+            # make sure each key is valid
+            if($_->{default_rng}->{package} && !$PERL_PACKAGE_NAME->check($_->{default_rng}->{package})){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because 'default_rng'->'package' is not a valid Perl package name}; 
+            }
+            if($_->{default_rng}->{package_constructor_args} && !ArrayRef->check($_->{default_rng}->{package_constructor_args})){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because 'default_rng'->'package_constructor_args' is not a reference to an array}; 
+            }
+            
+            # make sure there is a package specified
+            unless($_->{default_rng}->{package}){
+                return var_to_string($_).q{ is not a valid hsxkpasswdrc file data structure because 'default_rng' does not specify a 'package'};  
             }
         }
         

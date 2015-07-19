@@ -9,6 +9,7 @@ use Pod::Usage; # for help and usage
 use JSON qw( decode_json ); # for decoding JSON strings
 use Module::Load; # for dynamically loading modules
 use File::HomeDir; # for finding the path to the user's home dir
+use Types::Standard qw( :types ); # for basic type checking (Int Str etc.)
 
 # include Crypt::HSXKPasswd Stuff
 # DEV-ONLY
@@ -33,7 +34,7 @@ binmode STDOUT, ':encoding(UTF-8)';
 #
 
 # version info
-use version; our $VERSION = qv('1.1_01');
+use version; our $VERSION = qv('1.2_01');
 
 #
 # === Process Args ============================================================#
@@ -166,13 +167,57 @@ GetOptions(
         }
         $cmd_args{config} = $config;
     },
-    'dictionary-package|d=s' => sub{
+    'dict-file|d=s' => sub{
         my ($opt_name, $val) = @_;
-        $cmd_args{dictionary} = load_dictionary($val);
+        unless(NonEmptyString->check($val)){
+            byee('--dict-file cannot specify an empty string');
+        }
+        unless(-f $val){
+           byeee("file $val does not exist");
+        }
+        $cmd_args{'dict-file'} = $val;
     },
-    'rng-package|r=s' => sub{
+    'dict-pkg=s' => sub{
         my ($opt_name, $val) = @_;
-        $cmd_args{rng} = load_rng($val);
+        unless(PerlPackageName->check($val)){
+            byeee("$val is not a valid Perl Package name");
+        }
+        $cmd_args{'dict-pkg'} = $val;
+    },
+    'dict-pkg-args=s' => sub{
+        my ($opt_name, $val) = @_;
+        my $args = [];
+        eval{
+            $args = decode_json($val);
+            1; # explicit evaluation
+        }or do{
+            byeee("failed to parse --dict-pkg-args as JSON with error:\n* $EVAL_ERROR");
+        };
+        unless(ArrayRef->check($args)){
+            byeee('--dict-pkg-args did not specify JSON representing an array');
+        }
+        $cmd_args{'dict-pkg-args'} = $args;
+    },
+    'rng-pkg|r=s' => sub{
+        my ($opt_name, $val) = @_;
+        unless(PerlPackageName->check($val)){
+            byeee("$val is not a valid Perl Package name");
+        }
+        $cmd_args{'rng-pkg'} = $val;
+    },
+    'rng-pkg-args=s' => sub{
+        my ($opt_name, $val) = @_;
+        my $args = [];
+        eval{
+            $args = decode_json($val);
+            1; # explicit evaluation
+        }or do{
+            byeee("failed to parse --rng-pkg-args as JSON with error:\n* $EVAL_ERROR");
+        };
+        unless(ArrayRef->check($args)){
+            byeee('--rng-pkg-args did not specify JSON representing an array');
+        }
+        $cmd_args{'rng-pkg-args'} = $args;
     },
     'rcfile=s' => sub{
         my ($opt_name, $val) = @_;
@@ -192,7 +237,7 @@ GetOptions(
     },
 ) or pod2usage(
     -exitval => 1,
-    -verbose => 1,
+    -verbose => 0,
 );
 
 # process the bare args
@@ -349,22 +394,45 @@ if($cmd_args{config}){
 }
 
 # deal with the dictionary - the commandline takes precedence, then the rc file
-if($cmd_args{dictionary}){
-    $hsxkpwd_args{dictionary} = $cmd_args{dictionary};
-    note('using word source package from --dictionary-package option');
+if($cmd_args{'dict-file'}){
+    $hsxkpwd_args{dictionary_file} = $cmd_args{'dict-file'};
+    note('using dictionary file from --dict-file option');
+}elsif($cmd_args{'dict-pkg'}){
+    $hsxkpwd_args{dictionary} = load_dictionary(
+        $cmd_args{'dict-pkg'},
+        $cmd_args{'dict-pkg-args'} || [],
+    );
+    note('using dictionary package from --dict-pkg option');
 }elsif($rcdata->{default_dictionary}){
-    $hsxkpwd_args{dictionary} = load_dictionary($rcdata->{default_dictionary});
-    note('using word source package from hsxkpasswdrc file');
+    if($rcdata->{default_dictionary}->{file}){
+        $hsxkpwd_args{dictionary_file} = $rcdata->{default_dictionary}->{file};
+        note('using dictionary file from hsxkpasswdrc file');
+    }elsif($rcdata->{default_dictionary}->{package}){
+        $hsxkpwd_args{dictionary} = load_dictionary(
+            $rcdata->{default_dictionary}->{package},
+            $rcdata->{default_dictionary}->{package_constructor_args} || [],
+        );
+        note('using dictionary package from hsxkpasswdrc file');
+    }else{
+        # this should be impossible if the rcfile validation is working!
+        note('using default word source');
+    }
 }else{
     note('using default word source');
 }
 
 # deal wit the rng - the commandline takes precedence, then the rc file
-if($cmd_args{rng}){
-    $hsxkpwd_args{rng} = $cmd_args{rng};
-    note('using rng package from --rng-package option');
+if($cmd_args{'rng-pkg'}){
+    $hsxkpwd_args{rng} = load_rng(
+        $cmd_args{'rng-pkg'},
+        $cmd_args{'rng-pkg-args'} || [],
+    );
+    note('using rng package from --rng-pkg option');
 }elsif($rcdata->{default_rng}){
-    $hsxkpwd_args{rng} = load_rng($rcdata->{default_rng});
+    $hsxkpwd_args{rng} = load_rng(
+        $rcdata->{default_rng}->{package},
+        $rcdata->{default_rng}->{package_constructor_args} || [],
+    );
     note('using rng package from hsxkpasswdrc file');
 }else{
     note('using default rng');
@@ -469,11 +537,13 @@ sub load_rcfile{
 # Purpose    : Load a dictionary object form a package name
 # Returns    : An object of a class that extends Crypt::HSXKPasswd::Dictionary
 # Arguments  : 1) the Perl package name as a string
+#              2) a reference to an array
 # Throws     : NOTHING - exists the script if there is a problem
 # Notes      : Exits the script with a sane error message via byeee() on error.
 # See Also   : byeee()
 sub load_dictionary{
     my $pkg_name = shift;
+    my $args_ref = shift;
     
     # validate args
     unless(NonEmptyString->check($pkg_name)){
@@ -482,12 +552,15 @@ sub load_dictionary{
     unless(PerlPackageName->check($pkg_name)){
         byeee(PerlPackageName->get_message($pkg_name));
     }
+    unless(ArrayRef->check($args_ref)){
+        byeee('load_dictionary(): invalid args, must pass a reference to an array as the second argument');
+    }
     
-    # try instantiate an object with the passed class
+    # try instantiate an object with the passed class & args
     my $dict;
     eval{
         load $pkg_name;
-        $dict = $pkg_name->new();
+        $dict = $pkg_name->new(@{$args_ref});
         1; # explicit evaluation
     }or do{
         byeee("failed to use '$pkg_name' to initialise a word source with error:\n* $EVAL_ERROR");
@@ -502,11 +575,13 @@ sub load_dictionary{
 # Purpose    : Load an rng object form a package name
 # Returns    : An object of a class that extends Crypt::HSXKPasswd::RNG
 # Arguments  : 1) the Perl package name as a string
+#              2) a reference to an array
 # Throws     : NOTHING - exists the script if there is a problem
 # Notes      : Exits the script with a sane error message via byeee() on error.
 # See Also   : byeee()
 sub load_rng{
     my $pkg_name = shift;
+    my $args_ref = shift;
     
     # validate args
     unless(NonEmptyString->check($pkg_name)){
@@ -515,12 +590,15 @@ sub load_rng{
     unless(PerlPackageName->check($pkg_name)){
         byeee(PerlPackageName->get_message($pkg_name));
     }
+    unless(ArrayRef->check($args_ref)){
+        byeee('load_rng(): invalid args, must pass a reference to an array as the second argument');
+    }
     
     # try instantiate an object with the passed class
     my $rng;
     eval{
         load $pkg_name;
-        $rng = $pkg_name->new();
+        $rng = $pkg_name->new(@{$args_ref});
         1; # explicit evaluation
     }or do{
         byeee("failed to use '$pkg_name' to initialise an RNG with error:\n* $EVAL_ERROR");
@@ -540,7 +618,7 @@ __END__
 
 =head1 NAME
 
-hsxkpasswd (v1.1.1) - a command-line interface to the Crypt::HSXKPasswd secure
+hsxkpasswd (v1.2.1) - a command-line interface to the Crypt::HSXKPasswd secure
 memorable password generator (L<http://www.bartb.ie/xkpasswd>).
 
 =head1 SYNOPSIS
@@ -549,13 +627,24 @@ Generate Passwords:
 
     hsxkpasswd [options] [num_passwords]
     
+Available Options:
+
+    -c|--config-file FILE
+    -d|--dict-file FILE
+    --dict-pkg PERL_PACKAGE_NAME
+    --dict-pkg-args JSON_STRING
+    -o|--overrides JSON_STRING
+    -p|--preset PRESET_NAME
+    -r|--rng-pkg PERL_PACKAGE_NAME
+    --rng-pkg-args JSON_STRING
+    
 Information/Utility Functions:
 
     hsxkpasswd -v|--version
     hsxkpasswd -h|--help
     hsxkpasswd> -l|--list-presets
-    hsxkpasswd> -t|--test-config file
-    hsxkpasswd> --test-rcfile file
+    hsxkpasswd> -t|--test-config FILE
+    hsxkpasswd> --test-rcfile FILE
 
 =head1 OPTIONS
 
@@ -577,7 +666,12 @@ It is possible for a config file to contain extraneous configuration keys but
 still be usable by the command. In this case the command will issue warnings,
 but still evaluate the config as valid.
 
-=item B<-d>, B<--dictionary-package>
+=item B<-d>, B<--dict-file>
+
+The path to a dictionary file to use as the word source. The file must be UTF-8
+encoded.
+
+=item B<--dict-pkg>
 
 The name of a Perl module to use as the word source when generating passwords.
 
@@ -600,11 +694,6 @@ the B<Crypt::HSXKPasswd> documentation.
 
 The package should not require any parameters on import.
 
-=item *
-
-The constructor should not require any arguments to initialise a useable word
-source.
-
 =back
 
 B<Crypt::HSXKPasswd> ships with a number of standard packages that can be used with
@@ -613,6 +702,11 @@ the B<Crypt::HSXKPasswd> documentation.
 
 If this option is not passed, the package
 B<Crypt::HSXKPasswd::Dictionary::EN_Default> is used.
+
+=item B<--dict-pkg-args>
+
+A JSON string representing an array of arguments to pass to the constructor of
+the package specified with B<--dict-pkg>.
 
 =item B<-o>, B<--overrides>
 
@@ -632,7 +726,7 @@ A list of presets can be generated with either of the the commands:
 
 Note that B<-c>/B<--config-file> takes precedence over this option.
 
-=item B<-r>, B<--rng-package>
+=item B<-r>, B<--rng-pkg>
 
 The name of a Perl module to use as the random number generator (RNG) when
 generating passwords.
@@ -656,18 +750,20 @@ section of the B<Crypt::HSXKPasswd> documentation.
 
 The package should not require any parameters to import.
 
-=item *
-
-The constructor should not require any arguments to initialise a useable RNG.
-
 =back
 
-B<Crypt::HSXKPasswd> ships with a number of standard packages that can be used with
-this option. For more details see the C<RANDOM NUMBER SOURCES> section of
+B<Crypt::HSXKPasswd> ships with a number of standard packages that can be used
+with this option. For more details see the C<RANDOM NUMBER SOURCES> section of
 the B<Crypt::HSXKPasswd> documentation.
 
 If this option is not passed, the package uses the most secure supported RNG
 available on the system.
+
+=item B<--rng-pkg-args>
+
+A JSON string representing an array of arguments to pass to the constructor of
+the package specified with B<-r>/B<--rng-pkg>.
+
 
 =item B<-w>, B<--warn>
 
