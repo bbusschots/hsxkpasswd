@@ -1,11 +1,11 @@
-xkpasswd.pm
-===========
+HSXKPasswd
+==========
 
 A Perl module and terminal command for generating secure memorable passwords inspired by the Steve Gibson's Password Haystacks and the fabulous XKCD web comic. This is the library that drives www.xkpasswd.net
 
-* Project Home Page: [www.bartb.ie/xkpasswd](http://www.bartb.ie/xkpasswd) - **please consider making a donation here**
+* Project Home Page: [www.bartb.ie/xkpasswd](http://www.bartb.ie/hsxkpasswd) - **please consider making a donation here**
 * [CPAN Page](http://search.cpan.org/perldoc?Crypt%3A%3AHSXKPasswd)
-* [Perl POD Documentation](http://bbusschots.github.io/xkpasswd.pm/pod.html)
+* [Perl POD Documentation](http://bbusschots.github.io/hsxkpasswd/pod.html)
 
 This library is provided entirely free of charge under a very liberal free
 licence. It has taken a signifficant amount of time to write, and continues to
