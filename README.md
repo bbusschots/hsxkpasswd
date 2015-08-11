@@ -1,9 +1,10 @@
 xkpasswd.pm
 ===========
 
-A Perl module for generating secure memorable passwords inspired by the Steve Gibson's Password Haystacks and the fabulous XKCD web comic. This is the library that drives www.xkpasswd.net
+A Perl module and terminal command for generating secure memorable passwords inspired by the Steve Gibson's Password Haystacks and the fabulous XKCD web comic. This is the library that drives www.xkpasswd.net
 
 * Project Home Page: [www.bartb.ie/xkpasswd](http://www.bartb.ie/xkpasswd) - **please consider making a donation here**
+* [CPAN Page](http://search.cpan.org/perldoc?Crypt%3A%3AHSXKPasswd)
 * [Perl POD Documentation](http://bbusschots.github.io/xkpasswd.pm/pod.html)
 
 This library is provided entirely free of charge under a very liberal free
@@ -14,31 +15,31 @@ and effort, please consider making a donation at the project's home page (linked
 Quick Install Guide
 -------------------
 
-This module has been packaged for distribution on CPAN, but has not yet been published there. It will appear there shortly.
+The latest stable release of this module is available via CPAN:
 
-In the mean time, it can be installed manually as follows (from the root of the GIT project as root):
+    sudo cpan Crypt::HSXKPasswd
+
+You can manually build any version of the module by downloading the code and executing the following in the root directory of the download:
 
     perl Build.PL
     ./Build
     ./Build test
     ./Build install
     
-Perl One-liners
----------------
+Commandline Basics:
+-------------------
 
-These commands all assume the module has been successfully installed.
+Generate a single password with all the default settings:
 
-To see a list of defined presets use:
+    hsxkpasswd
 
-    perl -MCrypt::HSXKPasswd -e 'print join ", ", Crypt::HSXKPasswd->defined_presets(); print"\n";'
+Get a list of defined presets:
+
+    hsxkpasswd -l
     
-To see the details of a preset use a command of the form (replacing `WEB32` with which ever preset you want to view):
+Generate 10 passwords from a preset:
 
-    perl -MCrypt::HSXKPasswd -e 'print Crypt::HSXKPasswd->new(preset => "WEB32")->status()."\n";'
-    
-To generate a password using a preset you can use a command of the form (replacing `WEB32` with which ever preset you want to view):
-
-    perl -MCrypt::HSXKPasswd -e 'print hsxkpasswd(preset => "WEB32")."\n";'
+    hsxkpasswd -p XKCD 10
     
 Sample Perl File
 ----------------
