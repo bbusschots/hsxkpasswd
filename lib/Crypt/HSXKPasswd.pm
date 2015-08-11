@@ -59,7 +59,7 @@ our @EXPORT = qw( hsxkpasswd );
 #
 
 # version info
-use version; our $VERSION = qv('3.5');
+use version; our $VERSION = qv('3.6');
 
 # entropy control variables
 my $_ENTROPY_MIN_BLIND = 78; # 78 bits - equivalent to 12 alpha numeric characters with mixed case and symbols
@@ -607,7 +607,7 @@ sub distil_to_config_keys{
         }
         
         # check each key in the test hash against the lookup table
-        foreach my $test_key (sort keys $hashref){
+        foreach my $test_key (sort keys %{$hashref}){
             unless($defined_keys_lookup{$test_key}){
                 _warn(qq{distilling out undefined config key '$test_key'});
             }
@@ -625,7 +625,7 @@ sub distil_to_config_keys{
             }
         }
     }
-    _debug('hashref distilled down from '.(scalar keys $hashref).' to '.(scalar keys $distilled).' keys');
+    _debug('hashref distilled down from '.(scalar keys %{$hashref}).' to '.(scalar keys %{$distilled}).' keys');
     
     # return the distilled hashref
     return $distilled;
@@ -2687,7 +2687,7 @@ famous XKCD password cartoon (L<https://xkcd.com/936/>).
 
 =head1 VERSION
 
-This documentation refers to C<Crypt::HSXKPasswd> version 3.5.
+This documentation refers to C<Crypt::HSXKPasswd> version 3.6.
 
 =head1 SYNOPSIS
 
@@ -3880,7 +3880,7 @@ There is only a single function exported by the module:
     
 This function call is equivalent to the following Object-Oriented code:
 
-    my $password =  HSXKPasswd->new()->password();
+    my $password =  Crypt::HSXKPasswd->new()->password();
     
 This function passes all arguments it receives through to the constructor, so all
 arguments that are valid in C<new()> are valid here.
@@ -3901,15 +3901,15 @@ each time the function is called.
     # customise the word source, config, and random number source.
     
     # create an instance that uses the UNIX words file as the word source
-    my $hsxkpasswd_instance = HSXKPasswd->new(
+    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new(
         dictionary => Crypt::HSXKPasswd::Dictionary::System->new()
     );
     
     # create an instance that uses an array reference as the word source
-    my $hsxkpasswd_instance = HSXKPasswd->new(dictionary_list => $array_ref);
+    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new(dictionary_list => $array_ref);
     
     # create an instance that uses a dictionary file as the word source
-    my $hsxkpasswd_instance = HSXKPasswd->new(
+    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new(
         dictionary_file => 'sample_dict_EN.txt'
     );
     
@@ -3919,27 +3919,27 @@ each time the function is called.
     $dictionary->add_words('dict1.txt');
     $dictionary->add_words('dict2.txt');
     $dictionary->add_words($array_ref);
-    my $hsxkpasswd_instance = HSXKPasswd->new(dictionary => $dictionary);
+    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new(dictionary => $dictionary);
     
     # create an instance from the preset 'XKCD'
-    my $hsxkpasswd_instance = HSXKPasswd->new(preset => 'XKCD');
+    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new(preset => 'XKCD');
     
     # create an instance based on the preset 'XKCD' with one customisation
-    my $hsxkpasswd_instance = HSXKPasswd->new(
+    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new(
         preset => 'XKCD',
         preset_override => {separator_character => q{ }}
     );
     
     # create an instance from a config based on a preset
     # but with many alterations
-    my $config = HSXKPasswd->preset_config('XKCD');
+    my $config = Crypt::HSXKPasswd->preset_config('XKCD');
     $config->{separator_character} = q{ };
     $config->{case_transform} = 'INVERT';
     $config->{padding_type} = "FIXED";
     $config->{padding_characters_before} = 1;
     $config->{padding_characters_after} = 1;
     $config->{padding_character} = '*';
-    my $hsxkpasswd_instance = HSXKPasswd->new(config => $config);
+    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new(config => $config);
     
     # create an instance from an entirely custom configuration
     my $config = {
@@ -3957,7 +3957,7 @@ each time the function is called.
         padding_characters_after => 2,
         case_transform => 'CAPITALISE',
     }
-    my $hsxkpasswd_instance = HSXKPasswd->new(config => $config);
+    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new(config => $config);
     
     # create an instance from an entire custom config passed as a JSON string
     # a convenient way to use configs generated using the web interface at
@@ -3974,11 +3974,11 @@ each time the function is called.
      "padding_type": "NONE",
     }
     END_CONF
-    my $hsxkpasswd_instance = HSXKPasswd->new(config_json => $config);
+    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new(config_json => $config);
     
     # create an instance which uses /dev/urandom as the RNG
     # (only possible on Linux/Unix only systems)
-    my $hsxkpasswd_instance = HSXKPasswd->new(
+    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new(
         rng => Crypt::HSXKPasswd::RNG::DevUrandom->new();
     );
     
@@ -3989,7 +3989,7 @@ each time the function is called.
     # Crypt::HSXKPasswd::RNG::RandomDorOrg because Random.Org's usage
     # guidelines request that all invocations to their API contain a contact
     # email in the useragent header, and this module honours that request.
-    my $hsxkpasswd_instance = HSXKPasswd->new(
+    my $hsxkpasswd_instance = Crypt::HSXKPasswd->new(
         rng => Crypt::HSXKPasswd::RNG::RandomDorOrg->new('your.email@addre.ss');
     );
 
