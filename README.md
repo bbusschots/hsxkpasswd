@@ -26,6 +26,8 @@ You can manually build any version of the module by downloading the code and exe
     ./Build test
     ./Build install
     
+If you prefer to install the module into your home directory rather than system-wide, you can do so with perlbrew. This is particularly useful if you do not have sudo access. You'll find instructions [in this blog post](https://www.bartbusschots.ie/s/2015/12/15/hsxkpasswd-without-sudo-with-perlbrew/).
+    
 Commandline Basics:
 -------------------
 
