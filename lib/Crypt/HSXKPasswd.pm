@@ -1996,8 +1996,8 @@ sub _increment_random_cache{
         _error('random function did not return any random numbers');
     }
     foreach my $num (@random_numbers){
-        unless($num =~ m/^1|(0([.]\d+)?)$/sx){
-            _error("random function returned and invalid value ($num)");
+        unless($num =~ m/^1|(0([.]\d+(e-\d+)?)?)$/sx){
+            _error("random function returned an invalid value ($num)");
         }
     }
     
