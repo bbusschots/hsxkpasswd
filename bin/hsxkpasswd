@@ -162,6 +162,7 @@ GetOptions(
         }or do{
             byeee("failed to parse JSON config string from file $val with error:\n* $EVAL_ERROR");
         };
+        $config = Crypt::HSXKPasswd->distil_to_config_keys($config, warn_invalid_key_names => 0);
         unless(Config->check(Config->coerce($config))){
             byeee("invalid config from file $val:\n* ".Config->get_message($config));
         }
