@@ -122,6 +122,10 @@ GetOptions(
         my ($opt_name, $val) = @_;
         $cmd_args{do_list_presets} = 1;
     },
+    'preset-details' => sub{
+        my ($opt_name, $val) = @_;
+        $cmd_args{do_list_preset_details} = 1;
+    },
     #
     # -- the regular data options --
     #
@@ -281,9 +285,9 @@ if($cmd_args{no_rcdata}){
 }
 
 #
-# === List presets and exit if --list-presets =================================#
+# === List presets and exit if --list-presets or --preset-details ============#
 #
-if($cmd_args{do_list_presets}){
+if($cmd_args{do_list_presets} || $cmd_args{do_list_preset_details}){
     # merge the presets into a single array
     my %preset_lookup = ();
     my %standard_preset_lookup = ();
@@ -299,29 +303,48 @@ if($cmd_args{do_list_presets}){
         }
     }
     
-    # if there are custom presets, print out the detail if in verbose mode
-    if($verbose && $rcdata->{custom_presets}){
-        note('custom presets (from hsxkpasswdrc file): '.(join q{, }, keys %custom_preset_lookup));
-        my @unoverriden_standard_presets = ();
-        my @overridden_standard_presets = ();
-        foreach my $preset (sort keys %standard_preset_lookup){
-            if($custom_preset_lookup{$preset}){
-                push @overridden_standard_presets, $preset;
-            }else{
-                push @unoverriden_standard_presets, $preset;
+    # deal with the basic listing
+    if($cmd_args{do_list_presets}){
+        # if there are custom presets, print out the detail if in verbose mode
+        if($verbose && $rcdata->{custom_presets}){
+            note('custom presets (from hsxkpasswdrc file): '.(join q{, }, keys %custom_preset_lookup));
+            my @unoverriden_standard_presets = ();
+            my @overridden_standard_presets = ();
+            foreach my $preset (sort keys %standard_preset_lookup){
+                if($custom_preset_lookup{$preset}){
+                    push @overridden_standard_presets, $preset;
+                }else{
+                    push @unoverriden_standard_presets, $preset;
+                }
             }
+            if(scalar @unoverriden_standard_presets){
+                note('available standard presets: '.(join q{, }, @unoverriden_standard_presets));
+            }
+            if(scalar @overridden_standard_presets){
+                note('UN-AVAILABLE standard presets (custom presets with same name): '.(join q{, }, @overridden_standard_presets));
+            }
+            say {*STDERR} q{}; # print a blank line to STDERR to make the output easier to read
         }
-        if(scalar @unoverriden_standard_presets){
-            note('available standard presets: '.(join q{, }, @unoverriden_standard_presets));
-        }
-        if(scalar @overridden_standard_presets){
-            note('UN-AVAILABLE standard presets (custom presets with same name): '.(join q{, }, @overridden_standard_presets));
-        }
-        say {*STDERR} q{}; # print a blank line to STDERR to make the output easier to read
+        
+        # always print a de-duplicated list of all defined presets
+        say join q{, }, sort keys %preset_lookup;
     }
     
-    # always print a de-duplicated list of all defined presets
-    say join q{, }, sort keys %preset_lookup;
+    # deal with detailed listing
+    if($cmd_args{do_list_preset_details}){
+        # loop through all defined presets
+        foreach my $preset_name (sort keys %preset_lookup){
+            say "* $preset_name *";
+            if($custom_preset_lookup{$preset_name}){
+                say '(Custom Preset)';
+                say $rcdata->{custom_presets}->{$preset_name}->{description};
+            }else{
+                say '(Standard Preset)';
+                say Crypt::HSXKPasswd->preset_description($preset_name);
+            }
+            say '';
+        }
+    }
     
     # exit with success
     exit 0;
@@ -644,9 +667,10 @@ Information/Utility Functions:
 
     hsxkpasswd -v|--version
     hsxkpasswd -h|--help
-    hsxkpasswd> -l|--list-presets
-    hsxkpasswd> -t|--test-config FILE
-    hsxkpasswd> --test-rcfile FILE
+    hsxkpasswd -l|--list-presets
+    hsxkpasswd --preset-details
+    hsxkpasswd -t|--test-config FILE
+    hsxkpasswd --test-rcfile FILE
 
 =head1 OPTIONS
 
@@ -725,6 +749,10 @@ A list of presets can be generated with either of the the commands:
 
     hsxkpasswd -l
     hsxkpasswd --list-presets
+    
+A list if presets with descriotions can be generated with the command:
+
+    hsxkpasswd --preset-details
 
 Note that B<-c>/B<--config-file> takes precedence over this option.
 
