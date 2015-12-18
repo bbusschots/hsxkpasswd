@@ -636,6 +636,7 @@ Available Options:
     -o|--overrides JSON_STRING
     -p|--preset PRESET_NAME
     -r|--rng-pkg PERL_PACKAGE_NAME
+    --rcfile FILE
     --rng-pkg-args JSON_STRING
     
 Information/Utility Functions:
