@@ -1964,10 +1964,11 @@ sub _rand{
         $num = shift @{$self->{_CACHE_RANDOM}};
     }
     
-    # make sure we got a valid random number
-    unless(defined $num && $num =~ m/^\d+([.]\d+)?$/sx && $num >= 0 && $num <= 1){
-        _error('found invalid entry in random cache');
-    }
+    # this check is redundant, values have already been checked by _increment_random_cache()
+    ## make sure we got a valid random number
+    #unless(RandomNumber->check($num)){
+    #    _error('found invalid entry in random cache');
+    #}
     
     # return the random number
     _debug("returning $num (".(scalar @{$self->{_CACHE_RANDOM}}).' remaining in cache)');
@@ -1996,7 +1997,7 @@ sub _increment_random_cache{
         _error('random function did not return any random numbers');
     }
     foreach my $num (@random_numbers){
-        unless($num =~ m/^1|(0([.]\d+(e-\d+)?)?)$/sx){
+        unless(RandomNumber->check($num)){
             _error("random function returned an invalid value ($num)");
         }
     }

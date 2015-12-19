@@ -212,6 +212,23 @@ __PACKAGE__->meta->add_type($TRUE_FALSE);
 # === Define HSXKPasswd-specific general Types ================================#
 #
 
+# add a type for valid random numbers
+my $RANDOM_NUMBER_ENGLISH = 'a valid random number for use with the moduel, i.e. a real number between 0 and 1 inclusive.';
+my $RANDOM_NUMBER = Type::Tiny->new(
+    name => 'RandomNumber',
+    parent => StrictNum,
+    constraint => sub{
+        return $_ >= 0 && $_ <= 1;
+    },
+    message => sub{
+        return var_to_string($_).qq{ is not $RANDOM_NUMBER_ENGLISH};
+    },
+    my_methods => {
+        english => sub {return $RANDOM_NUMBER_ENGLISH;},
+    },
+);
+__PACKAGE__->meta->add_type($RANDOM_NUMBER);
+
 # add a type for upper-case identifiers
 my $UPPERCASE_IDENTIFIER_ENGLISH = 'a non-empty string containging only upper-case un-accented letters, digits and underscores';
 my $UPPERCASE_IDENTIFIER = Type::Tiny->new(
