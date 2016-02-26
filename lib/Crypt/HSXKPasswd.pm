@@ -2212,8 +2212,12 @@ sub _substitute_characters{
     # If we got here, go ahead and apply the substitutions
     foreach my $i (0..((scalar @{$words_ref}) - 1)){
         my $word = $words_ref->[$i];
+        my $prob = $self->{_CONFIG}->{substitution_probability} || 100;
         foreach my $char (keys %{$self->{_CONFIG}->{character_substitutions}}){
             my $sub = $self->{_CONFIG}->{character_substitutions}->{$char};
+            if ($prob > 0 && $prob < 100) {
+                next if $self->_random_int(100) >= $prob;
+            }
             $word =~ s/$char/$sub/sxg;
         }
         $words_ref->[$i] = $word;
@@ -2439,6 +2443,12 @@ sub _calculate_entropy_stats{
     while($num_padding_digits > 0){
         $b_seen_perms->bmul(Math::BigInt->new('10'));
         $num_padding_digits--;
+    }
+    # multiply in possible substituted characters
+    if ($self->{_CONFIG}->{substitution_probability} && $self->{_CONFIG}->{substitution_probability} > 0 && $self->{_CONFIG}->{substitution_probability} < 100) {
+        for my $n (1..$self->{_CONFIG}->{num_words}){
+            $b_seen_perms->bmul(Math::BigInt->new(2));
+        }
     }
     $ans{permutations_seen} = $b_seen_perms;
     _debug('got permutations_seen='.$ans{permutations_seen});
