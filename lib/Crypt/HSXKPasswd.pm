@@ -2445,9 +2445,11 @@ sub _calculate_entropy_stats{
         $num_padding_digits--;
     }
     # multiply in possible substituted characters
-    if ($self->{_CONFIG}->{substitution_probability} && $self->{_CONFIG}->{substitution_probability} > 0 && $self->{_CONFIG}->{substitution_probability} < 100) {
+    if ($self->{_CONFIG}->{substitution_probability} && $self->{_CONFIG}->{substitution_probability} > 0 && $self->{_CONFIG}->{substitution_probability} < 100 && $self->{_CONFIG}->{character_substitutions}) {
         for my $n (1..$self->{_CONFIG}->{num_words}){
-            $b_seen_perms->bmul(Math::BigInt->new(2));
+	    for my $m (1..scalar @{$self->{_CONFIG}->{character_substitutions}}) {
+		$b_seen_perms->bmul(Math::BigInt->new(2));
+	    }
         }
     }
     $ans{permutations_seen} = $b_seen_perms;
