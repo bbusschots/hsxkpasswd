@@ -450,14 +450,17 @@ $_KEYS->{character_substitutions}->{type} = Type::Tiny->new(
         return _config_key_message($_, 'character_substitutions', $_KEYS->{character_substitutions}->{expects});
     },
 );
-$_KEYS->{substitution_probability}->{type} = Type::Tiny->new(
-    type => Type::Tiny->new(
-    parent => $POSITIVE_INTEGER,
+$_KEYS->{substitution_mode} = {
+    required => 0,
+    expects => q{one of the values 'ALWAYS', NEVER, or 'RANDOM'},
+};
+$_KEYS->{substitution_mode}->{type} = Type::Tiny->new(
+    parent => Enum[qw( ALWAYS NEVER RANDOM )],
     message => sub {
-        return _config_key_message($_, 'substitution_probability', $POSITIVE_INTEGER_ENGLISH);
-        }
-    ),
+        return _config_key_message($_, 'substitution_mode', $_KEYS->{substitution_mode}->{expects});
+    }
 );
+
 
 # add a type for config key names
 my $CONFIG_KEY_NAME_ENGLISH = 'for a list of all defined config key names see the docs, or the output from the function Crypt::HSXKPasswd->defined_config_keys()';
