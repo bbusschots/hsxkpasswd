@@ -2213,16 +2213,16 @@ sub _substitute_characters{
     foreach my $i (0..((scalar @{$words_ref}) - 1)){
         my $word = $words_ref->[$i];
         my $prob = $self->{_CONFIG}->{substitution_mode} // 'ALWAYS';
-	if ($prob ne 'NEVER') {
-	    foreach my $char (keys %{$self->{_CONFIG}->{character_substitutions}}){
-		my $sub = $self->{_CONFIG}->{character_substitutions}->{$char};
-		if ($prob eq 'RANDOM') {
-		    next if $self->_random_int(100) >= 50;
-		}
-		$word =~ s/$char/$sub/sxg;
-	    }
-	    $words_ref->[$i] = $word;
-	}
+        if ($prob ne 'NEVER') {
+            foreach my $char (keys %{$self->{_CONFIG}->{character_substitutions}}){
+                my $sub = $self->{_CONFIG}->{character_substitutions}->{$char};
+                if ($prob eq 'RANDOM') {
+                    next if $self->_random_int(100) >= 50;
+                }
+                $word =~ s/$char/$sub/sxg;
+            }
+            $words_ref->[$i] = $word;
+        }
     }
     
     # always return 1 to keep PerlCritic happy
@@ -2449,9 +2449,9 @@ sub _calculate_entropy_stats{
     # multiply in possible substituted characters
     if ($self->{_CONFIG}->{substitution_mode} && $self->{_CONFIG}->{substitution_mode} eq 'RANDOM' && $self->{_CONFIG}->{character_substitutions}) {
         for my $n (1..$self->{_CONFIG}->{num_words}){
-	    for my $m (1..scalar keys %{$self->{_CONFIG}->{character_substitutions}}) {
-		$b_seen_perms->bmul(Math::BigInt->new(2));
-	    }
+            for my $m (1..scalar keys %{$self->{_CONFIG}->{character_substitutions}}) {
+                $b_seen_perms->bmul(Math::BigInt->new(2));
+            }
         }
     }
     $ans{permutations_seen} = $b_seen_perms;
