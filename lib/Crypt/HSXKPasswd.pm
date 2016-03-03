@@ -2466,7 +2466,7 @@ sub _calculate_entropy_stats{
         $num_padding_digits--;
     }
     # multiply in possible substituted characters
-    if ($self->{_CONFIG}->{character_substitutions} && $self->{_CONFIG}->{substitution_mode} ne 'NEVER') {
+    if ($self->{_CONFIG}->{character_substitutions} && ($self->{_CONFIG}->{substitution_mode} // 'ALWAYS') ne 'NEVER') {
         for my $n (1..$self->{_CONFIG}->{num_words}){
             for my $m (keys %{$self->{_CONFIG}->{character_substitutions}}) {
                 my $sb=$self->{_CONFIG}->{character_substitutions}->{$m};
