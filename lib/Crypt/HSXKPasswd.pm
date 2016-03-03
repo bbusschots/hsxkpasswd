@@ -2782,7 +2782,7 @@ This module uses words to make up the bulk of the passwords it generates, but
 it also adds carefully placed symbols and digits to add security without making
 the passwords difficult to remember, read, type, and speak.
 
-In shot, this module is for people who prefer passwords that look like this:
+In short, this module is for people who prefer passwords that look like this:
 
     !15.play.MAJOR.fresh.FLAT.23!
 
@@ -2987,7 +2987,7 @@ in the second scenario the seen entropy.
 The blind entropy is solely determined by the configuration settings, the seen
 entropy depends on both the settings and the dictionary file used.
 
-Calculating the bind entropy C<Eb> is quite straightforward, we just need to
+Calculating the blind entropy C<Eb> is quite straightforward, we just need to
 know the size of the alphabet resulting from the configuration C<A>, and the
 minimum length of passwords generated with the configuration C<L>, and plug
 those values into this formula:
