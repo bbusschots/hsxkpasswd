@@ -1007,9 +1007,19 @@ sub config_stats{
         if(defined $config->{character_substitutions}){
             CHAR_SUB:
             foreach my $char (keys %{$config->{character_substitutions}}){
-                if(length $config->{character_substitutions}->{$char} > 1){
-                    _warn('maximum length may be underestimated. The loaded config contains at least one character substitution which replaces a single character with multiple characters.');
-                    last CHAR_SUB;
+                if (ref $config->{character_substitutions}->{$char} eq 'ARRAY') {
+                    foreach my $sub (@{$config->{character_substitutions}->{$char}}) {
+                        if (length $sub > 1) {
+                            _warn('maximum length may be underestimated. The loaded config contains at least one character substitution which replaces a single character with multiple characters.');
+                            last CHAR_SUB;
+                        }
+                    }
+                }
+                else {
+                    if(length $config->{character_substitutions}->{$char} > 1){
+                        _warn('maximum length may be underestimated. The loaded config contains at least one character substitution which replaces a single character with multiple characters.');
+                        last CHAR_SUB;
+                    }
                 }
             }
         }
@@ -2216,6 +2226,15 @@ sub _substitute_characters{
         if ($prob ne 'NEVER') {
             foreach my $char (keys %{$self->{_CONFIG}->{character_substitutions}}){
                 my $sub = $self->{_CONFIG}->{character_substitutions}->{$char};
+                if (ref $sub eq 'ARRAY') {
+                    my $n = $self->_random_int($#$sub+2);
+                    if ($n > $#$sub) {
+                        $sub = $char;
+                    }
+                    else {
+                        $sub = $$sub[$n]
+                    }
+                }
                 if ($prob eq 'RANDOM') {
                     next if $self->_random_int(100) >= 50;
                 }
@@ -2447,10 +2466,18 @@ sub _calculate_entropy_stats{
         $num_padding_digits--;
     }
     # multiply in possible substituted characters
-    if ($self->{_CONFIG}->{substitution_mode} && $self->{_CONFIG}->{substitution_mode} eq 'RANDOM' && $self->{_CONFIG}->{character_substitutions}) {
+    if ($self->{_CONFIG}->{character_substitutions} && ($self->{_CONFIG}->{substitution_mode} // 'ALWAYS') ne 'NEVER') {
         for my $n (1..$self->{_CONFIG}->{num_words}){
-            for my $m (1..scalar keys %{$self->{_CONFIG}->{character_substitutions}}) {
-                $b_seen_perms->bmul(Math::BigInt->new(2));
+            for my $m (keys %{$self->{_CONFIG}->{character_substitutions}}) {
+                my $sb=$self->{_CONFIG}->{character_substitutions}->{$m};
+                if (ref $sb eq 'ARRAY') {
+                    $b_seen_perms->bmul(Math::BigInt->new($#$sb+2));
+                }
+                else {
+                    if ($self->{_CONFIG}->{substitution_mode} && $self->{_CONFIG}->{substitution_mode} eq 'RANDOM') {
+                        $b_seen_perms->bmul(Math::BigInt->new(2));
+                    }
+                }
             }
         }
     }
@@ -3440,6 +3467,11 @@ single letters. The substitutions can contain multiple characters. Specifying
 one or more substitutions with a length greater than one could lead to
 passwords being longer than expected, and to entropy calculations being under
 estimated. The module will issue a warning when such a config is loaded.
+
+A character substitution can also specify an I<array> as the substitution
+instead of a string.  In this case, an element is randomly chosen from the
+members of the array I<plus the original character> (i.e. no substitution
+at all) to be the substitution.
 
 =item *
 

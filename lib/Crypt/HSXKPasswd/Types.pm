@@ -445,7 +445,7 @@ $_KEYS->{character_substitutions} = {
     expects => 'a reference to a hash mapping zero or more Letters to their replacements which must be strings',
 };
 $_KEYS->{character_substitutions}->{type} = Type::Tiny->new(
-    parent => Map[$LETTER, Str],
+    parent => Map[$LETTER, Defined],
     message => sub {
         return _config_key_message($_, 'character_substitutions', $_KEYS->{character_substitutions}->{expects});
     },
