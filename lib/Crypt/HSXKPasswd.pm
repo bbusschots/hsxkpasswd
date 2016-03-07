@@ -2723,7 +2723,7 @@ __END__
 =head1 NAME
 
 C<Crypt::HSXKPasswd> - A secure memorable password generator inspired by Steve
-Gibson's Passord Haystacks (L<https://www.grc.com/haystack.htm>), and the
+Gibson's Password Haystacks (L<https://www.grc.com/haystack.htm>), and the
 famous XKCD password cartoon (L<https://xkcd.com/936/>).
 
 =head1 VERSION
