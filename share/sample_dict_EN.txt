@@ -3,6 +3,13 @@
 #
 # Copyright 2011 Bart Busschots T/A Bartificer Web Solutions. All rights reserved.
 #
+# Word list based on the work of Josh Kaufman, https://github.com/first20hours/google-10000-english
+# That repo contains LICENSE.MD, which states:
+# Data files are derived from the Google Web Trillion Word Corpus, as described by Thorsten Brants and Alex Franz, and 
+# distributed by the Linguistic Data Consortium. Subsets of this corpus distributed by Peter Novig. Corpus editing and 
+# cleanup by Josh Kaufman
+#
+#
 # Redistribution and use in source and binary forms, with or without modification, are
 # permitted provided that the following conditions are met:
 #
