@@ -227,6 +227,9 @@ GetOptions(
             $cmd_args{rcdata} = load_rcfile($val);
         }
     },
+    'show-entropy|e' => sub{
+        $cmd_args{show_entropy} = 1;
+    },
     'verbose' => \$verbose,
     'warn|w=s' => sub{
         my ($opt_name, $val) = @_;
@@ -459,6 +462,13 @@ if($verbose){
 
 # genereate and print the passwords
 say join "\n", $hsxkpwd_obj->passwords($num_pwds);
+my %pwdstats=$hsxkpwd_obj->stats;
+if ($cmd_args{show_entropy}) {
+    say "-------------------------------------------------------";
+    printf "Entropy blind: %d(min), %d(max); Entropy seen: %d\n",
+        $pwdstats{password_entropy_blind_min}, $pwdstats{password_entropy_blind_max},
+        $pwdstats{password_entropy_seen};
+}
 
 #
 # === Helper Functions ========================================================#
@@ -637,6 +647,7 @@ Available Options:
     -p|--preset PRESET_NAME
     -r|--rng-pkg PERL_PACKAGE_NAME
     --rng-pkg-args JSON_STRING
+    -e|--show-entropy
     
 Information/Utility Functions:
 
@@ -764,6 +775,10 @@ available on the system.
 A JSON string representing an array of arguments to pass to the constructor of
 the package specified with B<-r>/B<--rng-pkg>.
 
+=item B<-w>, B<--show-entropy>
+
+If present, display a line containing information about the amount of entropy
+in the passwords generated at the bottom of the list of passwords.
 
 =item B<-w>, B<--warn>
 
