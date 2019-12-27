@@ -1007,9 +1007,19 @@ sub config_stats{
         if(defined $config->{character_substitutions}){
             CHAR_SUB:
             foreach my $char (keys %{$config->{character_substitutions}}){
-                if(length $config->{character_substitutions}->{$char} > 1){
-                    _warn('maximum length may be underestimated. The loaded config contains at least one character substitution which replaces a single character with multiple characters.');
-                    last CHAR_SUB;
+                if (ref $config->{character_substitutions}->{$char} eq 'ARRAY') {
+                    foreach my $sub (@{$config->{character_substitutions}->{$char}}) {
+                        if (length $sub > 1) {
+                            _warn('maximum length may be underestimated. The loaded config contains at least one character substitution which replaces a single character with multiple characters.');
+                            last CHAR_SUB;
+                        }
+                    }
+                }
+                else {
+                    if(length $config->{character_substitutions}->{$char} > 1){
+                        _warn('maximum length may be underestimated. The loaded config contains at least one character substitution which replaces a single character with multiple characters.');
+                        last CHAR_SUB;
+                    }
                 }
             }
         }
@@ -2212,11 +2222,26 @@ sub _substitute_characters{
     # If we got here, go ahead and apply the substitutions
     foreach my $i (0..((scalar @{$words_ref}) - 1)){
         my $word = $words_ref->[$i];
-        foreach my $char (keys %{$self->{_CONFIG}->{character_substitutions}}){
-            my $sub = $self->{_CONFIG}->{character_substitutions}->{$char};
-            $word =~ s/$char/$sub/sxg;
+        my $prob = $self->{_CONFIG}->{substitution_mode} // 'ALWAYS';
+        if ($prob ne 'NEVER') {
+            foreach my $char (keys %{$self->{_CONFIG}->{character_substitutions}}){
+                my $sub = $self->{_CONFIG}->{character_substitutions}->{$char};
+                if (ref $sub eq 'ARRAY') {
+                    my $n = $self->_random_int($#$sub+2);
+                    if ($n > $#$sub) {
+                        $sub = $char;
+                    }
+                    else {
+                        $sub = $$sub[$n]
+                    }
+                }
+                if ($prob eq 'RANDOM') {
+                    next if $self->_random_int(100) >= 50;
+                }
+                $word =~ s/$char/$sub/sxg;
+            }
+            $words_ref->[$i] = $word;
         }
-        $words_ref->[$i] = $word;
     }
     
     # always return 1 to keep PerlCritic happy
@@ -2439,6 +2464,22 @@ sub _calculate_entropy_stats{
     while($num_padding_digits > 0){
         $b_seen_perms->bmul(Math::BigInt->new('10'));
         $num_padding_digits--;
+    }
+    # multiply in possible substituted characters
+    if ($self->{_CONFIG}->{character_substitutions} && ($self->{_CONFIG}->{substitution_mode} // 'ALWAYS') ne 'NEVER') {
+        for my $n (1..$self->{_CONFIG}->{num_words}){
+            for my $m (keys %{$self->{_CONFIG}->{character_substitutions}}) {
+                my $sb=$self->{_CONFIG}->{character_substitutions}->{$m};
+                if (ref $sb eq 'ARRAY') {
+                    $b_seen_perms->bmul(Math::BigInt->new($#$sb+2));
+                }
+                else {
+                    if ($self->{_CONFIG}->{substitution_mode} && $self->{_CONFIG}->{substitution_mode} eq 'RANDOM') {
+                        $b_seen_perms->bmul(Math::BigInt->new(2));
+                    }
+                }
+            }
+        }
     }
     $ans{permutations_seen} = $b_seen_perms;
     _debug('got permutations_seen='.$ans{permutations_seen});
@@ -2682,7 +2723,7 @@ __END__
 =head1 NAME
 
 C<Crypt::HSXKPasswd> - A secure memorable password generator inspired by Steve
-Gibson's Passord Haystacks (L<https://www.grc.com/haystack.htm>), and the
+Gibson's Password Haystacks (L<https://www.grc.com/haystack.htm>), and the
 famous XKCD password cartoon (L<https://xkcd.com/936/>).
 
 =head1 VERSION
@@ -2768,7 +2809,7 @@ This module uses words to make up the bulk of the passwords it generates, but
 it also adds carefully placed symbols and digits to add security without making
 the passwords difficult to remember, read, type, and speak.
 
-In shot, this module is for people who prefer passwords that look like this:
+In short, this module is for people who prefer passwords that look like this:
 
     !15.play.MAJOR.fresh.FLAT.23!
 
@@ -2973,7 +3014,7 @@ in the second scenario the seen entropy.
 The blind entropy is solely determined by the configuration settings, the seen
 entropy depends on both the settings and the dictionary file used.
 
-Calculating the bind entropy C<Eb> is quite straightforward, we just need to
+Calculating the blind entropy C<Eb> is quite straightforward, we just need to
 know the size of the alphabet resulting from the configuration C<A>, and the
 minimum length of passwords generated with the configuration C<L>, and plug
 those values into this formula:
@@ -3426,6 +3467,39 @@ single letters. The substitutions can contain multiple characters. Specifying
 one or more substitutions with a length greater than one could lead to
 passwords being longer than expected, and to entropy calculations being under
 estimated. The module will issue a warning when such a config is loaded.
+
+A character substitution can also specify an I<array> as the substitution
+instead of a string.  In this case, an element is randomly chosen from the
+members of the array I<plus the original character> (i.e. no substitution
+at all) to be the substitution.
+
+=item *
+
+C<substitution_mode> (optional) - a string defining whether or not the
+C<character_substitution> table should be applied.  The value specified
+must be one of the following:
+
+=over 4
+
+=item *
+
+C<ALWAYS> - apply the substitutions to every word in every generated
+passphrase.  This is the default.
+
+=item *
+
+C<NEVER> - do not apply the substitutions at all.  This is another way to
+override the substitutions from a preset.
+
+=item *
+
+C<RANDOM> - for each word in each passphrase, and each character
+substitution in C<character_substitutions>, apply the substitution to all
+affected characters in the word with 50% probability.  That is, flip a coin
+to see whether I<all> the "o"s in I<this one word> will be replaced with
+"0"s, for example.
+
+=back
 
 =item *
 
