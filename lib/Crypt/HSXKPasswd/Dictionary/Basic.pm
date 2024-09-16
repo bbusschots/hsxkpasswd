@@ -216,7 +216,7 @@ sub add_words{
     # validate args
     state $args_check = multisig(
         [NonEmptyString, Optional[Maybe[NonEmptyString]]],
-        [ArrayRef[Str]], Optional[Item],
+        [ArrayRef[Str], Optional[Item]],
     );
     my ($dict_source, $encoding) = $args_check->(@args);
     
