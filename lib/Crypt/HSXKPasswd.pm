@@ -2007,7 +2007,7 @@ sub _increment_random_cache{
     }
     foreach my $num (@random_numbers){
         unless($num =~ m/^1|(0([.]\d+)?)$/sx){
-            _error("random function returned and invalid value ($num)");
+            _error("random function returned an invalid value ($num)");
         }
     }
     
