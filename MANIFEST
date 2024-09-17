@@ -25,7 +25,7 @@ LICENSE				The License the code is released under
 MANIFEST			This list of files
 META.json
 META.yml
-README
+README.md
 share/sample_config.json	A sample JSON config file for use with the hsxkpasswd terminal command
 share/sample_dict_DE.txt	A sample dictionary file for use with Crypt::HSXKPasswd::Dictionary::Basic containing German words
 share/sample_dict_EN.txt	A sample dictionary file for use with Crypt::HSXKPasswd::Dictionary::Basic containing English words
