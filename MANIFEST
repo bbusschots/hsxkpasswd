@@ -12,7 +12,7 @@ lib/Crypt/HSXKPasswd/Dictionary/IT.pm	A source of Italian words
 lib/Crypt/HSXKPasswd/Dictionary/NL.pm	A source of Dutch/Flemish words
 lib/Crypt/HSXKPasswd/Dictionary/PT.pm	A source of Portuguese words
 lib/Crypt/HSXKPasswd/Dictionary/System.pm	A word source that reads from the Unix words file (if present)
-lib/Crypt/HSXKPasswd/Helper.pm	A helper module contianing useful functions for IO and invocation checking
+lib/Crypt/HSXKPasswd/Helper.pm	A helper module containing useful functions for IO and invocation checking
 lib/Crypt/HSXKPasswd/RNG.pm	The superclass for all random number generators (RNGs)
 lib/Crypt/HSXKPasswd/RNG/Basic.pm	An RNG that uses rand()
 lib/Crypt/HSXKPasswd/RNG/Data_Entropy.pm	An RNG that uses Data::Entropy::Algorythms::rand()
@@ -20,7 +20,7 @@ lib/Crypt/HSXKPasswd/RNG/DevUrandom.pm	An RNG that uses /dev/urandom (if present
 lib/Crypt/HSXKPasswd/RNG/Math_Random_Secure.pm	An RNG that uses Math::Random::Secure::rand()
 lib/Crypt/HSXKPasswd/RNG/RandomDotOrg.pm	An TNG that uses the Random.Org HTTP API
 lib/Crypt/HSXKPasswd/Types.pm	A Type::Library type library of project-specific Type::Tiny type definitions
-lib/Crypt/HSXKPasswd/Util.pm	A colleciton of utility functions
+lib/Crypt/HSXKPasswd/Util.pm	A collection of utility functions
 LICENSE				The License the code is released under
 MANIFEST			This list of files
 META.json
@@ -34,7 +34,7 @@ share/sample_dict_FR.txt	A sample dictionary file for use with Crypt::HSXKPasswd
 share/sample_dict_IT.txt	A sample dictionary file for use with Crypt::HSXKPasswd::Dictionary::Basic containing Italian words
 share/sample_dict_NL.txt	A sample dictionary file for use with Crypt::HSXKPasswd::Dictionary::Basic containing Dutch/Flemish words
 share/sample_dict_PT.txt	A sample dictionary file for use with Crypt::HSXKPasswd::Dictionary::Basic containing Portuguese words
-share/sample_hsxkpasswdrc	A sample hsxkpasswdrc file for use with teh hsxkpasswd terminal command
+share/sample_hsxkpasswdrc	A sample hsxkpasswdrc file for use with the hsxkpasswd terminal command
 t/00-load.t
 t/01-defined-constants.t
 t/02-generate-passwords.t
